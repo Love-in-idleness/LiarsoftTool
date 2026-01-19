@@ -1,175 +1,227 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <dirent.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 #include <string>
+#include <algorithm>
+#include <filesystem>
+#include <regex>
+#include <cctype>
 
-// 替换 Windows 类型定义
+namespace fs = std::filesystem;
+
+// 兼容 Windows/Linux 的类型定义
 typedef uint32_t DWORD;
 typedef unsigned char BYTE;
 typedef uint32_t ULONG;
 
-// 文件头结构体（使用 packed 对齐）
+// 文件头结构体（紧凑对齐）
+#pragma pack(push, 1)
 typedef struct Header {
     DWORD Magic;          // 固定为 0x0001424c
     DWORD ChunkSize;      // ChunkItem 数组总大小
     DWORD ChunkCount;     // 文件数量
-} __attribute__((packed)) Header;
+} Header;
+#pragma pack(pop)
 
-// 文件项结构体（使用 packed 对齐）
+// 文件项结构体
+#pragma pack(push, 1)
 typedef struct ChunkItem {
-    char FileName[0x20];  // 文件名（需以 \0 结尾）
-    DWORD Offset;         // 文件数据相对于 PostOffset 的偏移
+    char FileName[0x20];  // 文件名（31字符+1终止符）
+    DWORD Offset;         // 相对于数据块起始的偏移
     DWORD Size;           // 文件大小
-} __attribute__((packed)) ChunkItem;
+} ChunkItem;
+#pragma pack(pop)
 
-// 获取目录下的所有文件列表
-std::vector<std::string> get_files_in_dir(const char* dir_path) {
-    std::vector<std::string> files;
-    DIR* dir = opendir(dir_path);
-    if (!dir) {
-        perror("Failed to open directory");
-        return files;
-    }
+// 自然排序比较函数（Human sorting）
+bool natural_sort_compare(const std::string& a, const std::string& b) {
+    static const std::regex re("(\\d+)");
+    
+    auto it_a = std::sregex_token_iterator(a.begin(), a.end(), re, 0);
+    auto it_b = std::sregex_token_iterator(b.begin(), b.end(), re, 0);
+    auto end = std::sregex_token_iterator();
 
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        if (entry->d_type == DT_REG) { // 普通文件
-            files.push_back(entry->d_name);
+    while (it_a != end && it_b != end) {
+        std::string part_a = *it_a++;
+        std::string part_b = *it_b++;
+        
+        // 如果两部分都是数字，按数值比较
+        if (std::all_of(part_a.begin(), part_a.end(), ::isdigit) &&
+            std::all_of(part_b.begin(), part_b.end(), ::isdigit)) {
+            int num_a = std::stoi(part_a);
+            int num_b = std::stoi(part_b);
+            if (num_a != num_b) return num_a < num_b;
+        } 
+        // 否则按字符串比较
+        else if (part_a != part_b) {
+            return part_a < part_b;
         }
     }
-    closedir(dir);
-    return files;
+    
+    // 处理剩余部分
+    return (it_a == end && it_b != end) || a < b;
 }
 
-// 读取文件内容到内存
-BYTE* read_file(const char* path, size_t* out_size) {
-    FILE* fp = fopen(path, "rb");
-    if (!fp) return nullptr;
-
-    fseek(fp, 0, SEEK_END);
-    *out_size = ftell(fp);
-    rewind(fp);
-
-    BYTE* buffer = new BYTE[*out_size];
-    if (!buffer) {
-        fclose(fp);
-        return nullptr;
+// 获取目录下所有文件（按自然顺序排序）
+std::vector<fs::path> get_sorted_files(const fs::path& dir_path) {
+    std::vector<fs::path> files;
+    
+    // 遍历目录
+    for (const auto& entry : fs::directory_iterator(dir_path)) {
+        if (fs::is_regular_file(entry.status())) {
+            files.push_back(entry.path().filename());
+        }
     }
-
-    if (fread(buffer, 1, *out_size, fp) != *out_size) {
-        delete[] buffer;
-        fclose(fp);
-        return nullptr;
+    
+    // 检测是否需要数字模式（检查是否有4位数字文件）
+    bool use_numeric_mode = false;
+    for (const auto& file : files) {
+        std::string name = file.string();
+        if (name.length() >= 8 && 
+            std::regex_match(name, std::regex("\\d{4}\\.[a-zA-Z0-9]{3}"))) {
+            use_numeric_mode = true;
+            break;
+        }
     }
-
-    fclose(fp);
-    return buffer;
+    
+    // 排序逻辑
+    if (use_numeric_mode) {
+        // 严格数字模式：0000~9999
+        std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
+            std::string sa = a.string();
+            std::string sb = b.string();
+            if (sa.length() < 8 || sb.length() < 8) return sa < sb;
+            
+            // 提取4位数字前缀
+            int num_a = std::stoi(sa.substr(0, 4));
+            int num_b = std::stoi(sb.substr(0, 4));
+            return num_a < num_b;
+        });
+    } else {
+        // 通用自然排序
+        std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
+            return natural_sort_compare(a.string(), b.string());
+        });
+    }
+    
+    return files;
 }
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        fprintf(stderr, "Usage: %s <input_dir> <output_file>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <input_dir> <output.xfl>\n", argv[0]);
         return 1;
     }
 
-    const char* input_dir = argv[1];
-    const char* output_file = argv[2];
+    fs::path input_dir = argv[1];
+    fs::path output_file = argv[2];
 
-    // 获取文件列表
-    std::vector<std::string> files = get_files_in_dir(input_dir);
-    if (files.empty()) {
-        fprintf(stderr, "No files found in directory\n");
+    // 验证输入目录
+    if (!fs::exists(input_dir) || !fs::is_directory(input_dir)) {
+        fprintf(stderr, "Error: Input directory '%s' does not exist or is not a directory.\n", 
+                input_dir.string().c_str());
         return 1;
     }
 
-    ULONG chunk_count = files.size();
-    ULONG chunk_size = chunk_count * sizeof(ChunkItem);
-    ULONG total_data_size = 0;
-
-    // 计算总数据大小
-    for (const auto& file : files) {
-        std::string full_path = std::string(input_dir) + "/" + file;
-        FILE* fp = fopen(full_path.c_str(), "rb");
-        if (!fp) continue;
-
-        fseek(fp, 0, SEEK_END);
-        total_data_size += ftell(fp);
-        fclose(fp);
-    }
-
-    // 分配内存
-    Header header = {
-        .Magic = 0x0001424c,
-        .ChunkSize = chunk_size,
-        .ChunkCount = chunk_count
-    };
-
-    BYTE* chunk_data = new BYTE[chunk_size];
-    BYTE* file_data = new BYTE[total_data_size];
-
-    if (!chunk_data || !file_data) {
-        fprintf(stderr, "Memory allocation failed\n");
-        delete[] chunk_data;
-        delete[] file_data;
+    // 获取排序后的文件列表
+    std::vector<fs::path> sorted_files = get_sorted_files(input_dir);
+    
+    if (sorted_files.empty()) {
+        fprintf(stderr, "No valid files found in directory.\n");
         return 1;
     }
 
-    // 填充 ChunkItem 数据
-    ULONG current_offset = 0;
-    BYTE* file_data_ptr = file_data;
-    for (ULONG i = 0; i < chunk_count; ++i) {
-        ChunkItem* item = (ChunkItem*)(chunk_data + i * sizeof(ChunkItem));
-        const std::string& file_name = files[i];
-        std::string full_path = std::string(input_dir) + "/" + file_name;
-
-        // 填充文件名
-        strncpy(item->FileName, file_name.c_str(), 0x1f);
-        item->FileName[0x1f] = '\0';
-
-        // 读取文件内容
-        size_t file_size;
-        BYTE* file_content = read_file(full_path.c_str(), &file_size);
-        if (!file_content) {
-            fprintf(stderr, "Failed to read file: %s\n", full_path.c_str());
+    // 计算总大小
+    size_t total_data_size = 0;
+    std::vector<size_t> file_sizes;
+    
+    for (const auto& filename : sorted_files) {
+        fs::path full_path = input_dir / filename;
+        if (!fs::exists(full_path)) continue;
+        
+        uintmax_t size = fs::file_size(full_path);
+        if (size > UINT32_MAX) {
+            fprintf(stderr, "Warning: Skipping '%s' (too large: %zu bytes)\n", 
+                    filename.string().c_str(), size);
             continue;
         }
+        
+        file_sizes.push_back(static_cast<size_t>(size));
+        total_data_size += size;
+    }
 
-        // 填充偏移和大小
+    if (file_sizes.empty()) {
+        fprintf(stderr, "No valid files after size validation.\n");
+        return 1;
+    }
+
+    ULONG chunk_count = static_cast<ULONG>(sorted_files.size());
+    ULONG chunk_size = chunk_count * sizeof(ChunkItem);
+
+    // 构造 Header
+    Header header = {
+        0x0001424c,    // Magic
+        chunk_size,    // ChunkSize
+        chunk_count    // ChunkCount
+    };
+
+    // 分配缓冲区
+    std::vector<BYTE> chunk_data(chunk_size, 0);
+    std::vector<BYTE> file_data(total_data_size, 0);
+
+    // 填充 ChunkItems 和文件数据
+    ULONG current_offset = 0;
+    BYTE* data_ptr = file_data.data();
+
+    for (size_t i = 0; i < sorted_files.size(); ++i) {
+        fs::path filename = sorted_files[i];
+        fs::path full_path = input_dir / filename;
+        size_t file_size = file_sizes[i];
+
+        // 填充 ChunkItem
+        ChunkItem* item = reinterpret_cast<ChunkItem*>(chunk_data.data() + i * sizeof(ChunkItem));
+        
+        // 安全复制文件名（截断至31字符+1终止符）
+        std::string name_str = filename.string();
+        size_t copy_len = std::min(name_str.length(), static_cast<size_t>(0x1F));
+        strncpy(item->FileName, name_str.c_str(), copy_len);
+        item->FileName[copy_len] = '\0';
+        
         item->Offset = current_offset;
-        item->Size = file_size;
+        item->Size = static_cast<DWORD>(file_size);
 
-        // 复制文件数据
-        memcpy(file_data_ptr, file_content, file_size);
-        current_offset += file_size;
-        file_data_ptr += file_size;
-        delete[] file_content;
+        // 读取文件内容
+        FILE* fp = fopen(full_path.string().c_str(), "rb");
+        if (!fp) {
+            fprintf(stderr, "Error: Failed to open '%s'\n", full_path.string().c_str());
+            return 1;
+        }
+
+        if (fread(data_ptr, 1, file_size, fp) != file_size) {
+            fclose(fp);
+            fprintf(stderr, "Error: Incomplete read from '%s'\n", full_path.string().c_str());
+            return 1;
+        }
+        fclose(fp);
+
+        current_offset += static_cast<ULONG>(file_size);
+        data_ptr += file_size;
     }
 
     // 写入输出文件
-    FILE* fout = fopen(output_file, "wb");
+    FILE* fout = fopen(output_file.string().c_str(), "wb");
     if (!fout) {
-        fprintf(stderr, "Failed to create output file\n");
-        delete[] chunk_data;
-        delete[] file_data;
+        perror("Failed to create output file");
         return 1;
     }
 
-    // 写入头部
     fwrite(&header, 1, sizeof(header), fout);
-
-    // 写入 ChunkItem 数据
-    fwrite(chunk_data, 1, chunk_size, fout);
-
-    // 写入文件数据
-    fwrite(file_data, 1, total_data_size, fout);
-
+    fwrite(chunk_data.data(), 1, chunk_size, fout);
+    fwrite(file_data.data(), 1, total_data_size, fout);
     fclose(fout);
-    delete[] chunk_data;
-    delete[] file_data;
 
-    printf("Successfully packed %u files into %s\n", chunk_count, output_file);
+    printf("Successfully packed %zu files in sorted order into '%s'.\n",
+           sorted_files.size(), output_file.string().c_str());
     return 0;
 }
