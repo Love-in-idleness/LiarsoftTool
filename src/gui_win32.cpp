@@ -22,6 +22,7 @@
 #include "lim_decoder.h"
 #include "lwg_decoder.h"
 #include "wav_ogg.h"
+#include "exe_patch.h"
 #include "stb_image.h"
 
 #pragma comment(lib, "comctl32.lib")
@@ -61,6 +62,7 @@ static std::string guessOutput(const std::string& in, const std::string& outDir)
     if (ext == ".txt") return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
     if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
+    if (ext == ".exe") return (base / (stem + ".gbk.exe")).string();
     if (ext == ".wav") return (base / (stem + ".ogg")).string();
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return (base / (stem + ".wcg")).string();
@@ -76,6 +78,7 @@ static std::string guessType(const std::string& path) {
     if (ext == ".wcg") return "WCG -> PNG";
     if (ext == ".lim") return "LIM -> PNG";
     if (ext == ".wav") return "WAV -> OGG";
+    if (ext == ".exe") return "EXE SJIS->GBK";
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") return "IMG -> WCG";
     if (fs::is_directory(path)) return "DIR -> XFL/LWG";
     return "?";
@@ -84,7 +87,7 @@ static std::string guessType(const std::string& path) {
 static bool isSupported(const std::string& path) {
     std::string ext = getExtension(path);
     return ext == ".gsc" || ext == ".txt" || ext == ".xfl" || ext == ".lwg" ||
-           ext == ".wcg" || ext == ".lim" || ext == ".wav" ||
+           ext == ".wcg" || ext == ".lim" || ext == ".wav" || ext == ".exe" ||
            ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
            fs::is_directory(path);
 }
@@ -198,6 +201,8 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 stbi_image_free(px);
                 std::ofstream fout(out, std::ios::binary);
                 fout.write((char*)d.data(), d.size());
+            } else if (ext == ".exe") {
+                liarsoft::exeConvertFile(in, out, encoding);
             }
             lvSetStatus((int)i, "OK");
         } catch (const std::exception& e) {

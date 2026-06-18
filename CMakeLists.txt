@@ -30,6 +30,7 @@ set(COMMON_SOURCES
     src/lim_decoder.cpp
     src/lwg_decoder.cpp
     src/wav_ogg.cpp
+    src/exe_patch.cpp
     src/stb_impl.cpp
     src/stb_image_impl.cpp
 )

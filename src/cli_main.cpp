@@ -5,6 +5,7 @@
 #include "lim_decoder.h"
 #include "lwg_decoder.h"
 #include "wav_ogg.h"
+#include "exe_patch.h"
 #include "stb_image.h"
 #include <iostream>
 #include <fstream>
@@ -36,7 +37,8 @@ static void printUsage(const char* prog) {
               << "  .wav  -> .ogg         Extract embedded Ogg Vorbis from WAV\n"
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
               << "  directory -> .xfl     Pack a folder into an XFL archive\n"
-              << "  directory -> .lwg     Pack folder with .meta.xml into LWG\n\n"
+              << "  directory -> .lwg     Pack folder with .meta.xml into LWG\n"
+              << "  .exe  -> .gbk.exe     Convert EXE encoding (SJIS⇄GBK)\n\n"
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
               << "  " << prog << " -e shift_jis scenario.gsc\n"
@@ -45,7 +47,9 @@ static void printUsage(const char* prog) {
               << "  " << prog << " -e gbk archive.xfl\n"
               << "  " << prog << " image.wcg\n"
               << "  " << prog << " cgview.lwg\n"
-              << "  " << prog << " 0*.png              # batch convert all matching PNGs\n"
+              << "  " << prog << " -e gbk game.exe          # SJIS→GBK\n"
+              << "  " << prog << " -e shift_jis game.exe    # GBK→SJIS\n"
+              << "  " << prog << " 0*.png                  # batch convert all matching PNGs\n"
               << "  " << prog << " -e gbk ./extracted_dir\n"
               << std::endl;
 }
@@ -252,6 +256,16 @@ static bool processOne(const std::string& inputPath,
         std::ofstream fout(out, std::ios::binary);
         fout.write(reinterpret_cast<const char*>(wcgData.data()), wcgData.size());
         std::cout << "Saved " << w << "x" << h << " WCG to: " << out << std::endl;
+
+    } else if (ext == ".exe") {
+        std::string dir = (encoding == "GBK") ? "SJIS→GBK" : "GBK→SJIS";
+        std::cout << "Converting EXE (" << dir << "): " << inputPath << std::endl;
+        if (out.empty()) {
+            out = (encoding == "GBK") ? replaceExtension(inputPath, ".gbk.exe")
+                                      : replaceExtension(inputPath, ".sjis.exe");
+        }
+        liarsoft::exeConvertFile(inputPath, out, encoding);
+        std::cout << "Saved patched EXE to: " << out << std::endl;
 
     } else {
         std::cerr << "Error: unsupported file extension '" << ext

@@ -15,6 +15,7 @@
 #include "lim_decoder.h"
 #include "lwg_decoder.h"
 #include "wav_ogg.h"
+#include "exe_patch.h"
 #include "stb_image.h"
 
 namespace fs = std::filesystem;
@@ -66,6 +67,7 @@ static Glib::ustring guessOutput(const std::string& inputPath, const std::string
     if (ext == ".txt")      return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
     if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
+    if (ext == ".exe") return (base / (stem + ".gbk.exe")).string();
     if (ext == ".wav")      return (base / (stem + ".ogg")).string();
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return (base / (stem + ".wcg")).string();
@@ -80,6 +82,7 @@ static Glib::ustring guessType(const std::string& path) {
     if (ext == ".lwg") return "LWG → DIR";
     if (ext == ".wcg") return "WCG → PNG";
     if (ext == ".lim") return "LIM → PNG";
+    if (ext == ".exe") return "EXE SJIS→GBK";
     if (ext == ".wav") return "WAV → OGG";
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return "IMG → WCG";
@@ -90,7 +93,7 @@ static Glib::ustring guessType(const std::string& path) {
 static bool isSupported(const std::string& path) {
     std::string ext = getExtension(path);
     return ext == ".gsc" || ext == ".txt" || ext == ".xfl" || ext == ".lwg" ||
-           ext == ".wcg" || ext == ".lim" || ext == ".wav" ||
+           ext == ".wcg" || ext == ".lim" || ext == ".wav" || ext == ".exe" ||
            ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
            fs::is_directory(path);
 }
@@ -197,6 +200,8 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 stbi_image_free(px);
                 std::ofstream fout(out, std::ios::binary);
                 fout.write(reinterpret_cast<const char*>(wcgData.data()), wcgData.size());
+            } else if (ext == ".exe") {
+                liarsoft::exeConvertFile(in, out, encoding);
             } else {
                 throw std::runtime_error("Unsupported format");
             }
