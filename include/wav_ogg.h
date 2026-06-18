@@ -27,6 +27,11 @@ public:
 
     /// Extract from file and save to .ogg file.
     static void extractToFile(const std::string& wavPath, const std::string& oggPath);
+
+    /// Embed Ogg Vorbis data into a WAV container.
+    /// Uses the first 66 bytes of `refWavPath` as the WAV header template.
+    static void embedToFile(const std::string& oggPath, const std::string& refWavPath,
+                            const std::string& wavPath);
 };
 
 } // namespace liarsoft

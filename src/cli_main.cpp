@@ -35,6 +35,7 @@ static void printUsage(const char* prog) {
               << "  .wcg  -> .png         Convert WCG image to PNG\n"
               << "  .lim  -> .png         Convert LIM image to PNG\n"
               << "  .wav  -> .ogg         Extract embedded Ogg Vorbis from WAV\n"
+              << "  .ogg  -> .wav         Embed Ogg Vorbis into WAV (needs -r template.wav)\n"
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
               << "  directory -> .xfl     Pack a folder into an XFL archive\n"
               << "  directory -> .lwg     Pack folder with .meta.xml into LWG\n"
@@ -49,6 +50,7 @@ static void printUsage(const char* prog) {
               << "  " << prog << " cgview.lwg\n"
               << "  " << prog << " -e gbk game.exe          # SJIS→GBK\n"
               << "  " << prog << " -e shift_jis game.exe    # GBK→SJIS\n"
+              << "  " << prog << " -r template.wav audio.ogg\n"
               << "  " << prog << " 0*.png                  # batch convert all matching PNGs\n"
               << "  " << prog << " -e gbk ./extracted_dir\n"
               << std::endl;
@@ -230,6 +232,15 @@ static bool processOne(const std::string& inputPath,
         if (out.empty()) out = replaceExtension(inputPath, ".ogg");
         liarsoft::WavOggExtractor::extractToFile(inputPath, out);
         std::cout << "Extracted OGG to: " << out << std::endl;
+
+    } else if (ext == ".ogg") {
+        std::string ref = referencePath;
+        if (ref.empty()) ref = replaceExtension(inputPath, ".wav");
+        std::cout << "Embedding OGG into WAV: " << inputPath << std::endl;
+        std::cout << "Using WAV template: " << ref << std::endl;
+        if (out.empty()) out = replaceExtension(inputPath, ".wav");
+        liarsoft::WavOggExtractor::embedToFile(inputPath, ref, out);
+        std::cout << "Saved WAV to: " << out << std::endl;
 
     } else if (ext == ".wcg") {
         std::cout << "Converting WCG: " << inputPath << std::endl;

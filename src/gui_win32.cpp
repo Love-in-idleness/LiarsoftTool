@@ -78,6 +78,7 @@ static std::string guessType(const std::string& path) {
     if (ext == ".wcg") return "WCG -> PNG";
     if (ext == ".lim") return "LIM -> PNG";
     if (ext == ".wav") return "WAV -> OGG";
+    if (ext == ".ogg") return "OGG -> WAV";
     if (ext == ".exe") return "EXE SJIS->GBK";
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") return "IMG -> WCG";
     if (fs::is_directory(path)) return "DIR -> XFL/LWG";
@@ -87,7 +88,7 @@ static std::string guessType(const std::string& path) {
 static bool isSupported(const std::string& path) {
     std::string ext = getExtension(path);
     return ext == ".gsc" || ext == ".txt" || ext == ".xfl" || ext == ".lwg" ||
-           ext == ".wcg" || ext == ".lim" || ext == ".wav" || ext == ".exe" ||
+           ext == ".wcg" || ext == ".lim" || ext == ".wav" || ext == ".ogg" || ext == ".exe" ||
            ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
            fs::is_directory(path);
 }
@@ -193,6 +194,9 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 liarsoft::limSavePng(liarsoft::limDecode(raw), out);
             } else if (ext == ".wav") {
                 liarsoft::WavOggExtractor::extractToFile(in, out);
+            } else if (ext == ".ogg") {
+                std::string ref = refPath.empty() ? replaceExtension(in, ".wav") : refPath;
+                liarsoft::WavOggExtractor::embedToFile(in, ref, out);
             } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
                 int w, h, ch;
                 unsigned char* px = stbi_load(in.c_str(), &w, &h, &ch, 4);

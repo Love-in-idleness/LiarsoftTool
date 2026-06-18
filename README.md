@@ -28,7 +28,8 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | WCG 转 PNG | `liarsofttool image.wcg` |
 | LIM 转 PNG | `liarsofttool image.lim` |
 | PNG 转 WCG | `liarsofttool image.png` |
-| 提取内嵌 OGG | `liarsofttool audio.wav` |
+| WAV 提取 OGG | `liarsofttool audio.wav` |
+| OGG 嵌入 WAV | `liarsofttool -r template.wav audio.ogg` |
 | 打包目录→XFL | `liarsofttool -e shift_jis ./dir` |
 | 打包目录→LWG | `liarsofttool -e shift_jis ./dir_with_meta` |
 | EXE 编码转换 | `liarsofttool -e gbk game.exe` |
@@ -84,6 +85,7 @@ sudo cp liarsofttool /usr/local/bin/
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
 | EXE | `.exe` | SJIS⇄GBK | 修改引擎内部编码参数（`push 0x80` ⇄ `push 0x86`），`-e gbk` 转 GBK，`-e shift_jis` 转回 |
 | WAV | `.wav` | → OGG | 偏移 66 处嵌入 Ogg Vorbis |
+| OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
 
 GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空格）和多行。
 
@@ -109,11 +111,14 @@ liarsofttool cgview/                               # → cgview.lwg
 liarsofttool -e gbk game.exe        # Shift-JIS EXE → GBK EXE
 liarsofttool -e shift_jis game.exe  # GBK EXE → Shift-JIS EXE
 # 默认输出为 name.gbk.exe 或 name.sjis.exe，不覆盖原文件
+
+# --- 音频往返 ---
+liarsofttool audio.wav                         # → audio.ogg
+liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 ```
 
 ### 已知限制
 
-- **OGG → WAV**：尚未实现 Ogg 嵌入 WAV 的反向操作。
 - **多级目录**：XFL/LWG 中文件均扁平存放。
 
 ---
@@ -131,7 +136,8 @@ liarsofttool -e shift_jis game.exe  # GBK EXE → Shift-JIS EXE
 | WCG to PNG | `liarsofttool image.wcg` |
 | LIM to PNG | `liarsofttool image.lim` |
 | PNG to WCG | `liarsofttool image.png` |
-| Extract embedded OGG | `liarsofttool audio.wav` |
+| WAV extract OGG | `liarsofttool audio.wav` |
+| OGG embed to WAV | `liarsofttool -r template.wav audio.ogg` |
 | Pack directory → XFL | `liarsofttool -e shift_jis ./dir` |
 | Pack directory → LWG | `liarsofttool -e shift_jis ./dir_with_meta` |
 | EXE encoding convert | `liarsofttool -e gbk game.exe` |
@@ -188,6 +194,7 @@ When exactly two args have different extensions, the second is treated as output
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
 | EXE | `.exe` | SJIS⇄GBK | Patches engine code-page parameter (`push 0x80` ⇄ `push 0x86`). `-e gbk`→GBK, `-e shift_jis`→revert |
 | WAV | `.wav` | → OGG | Embedded Ogg Vorbis at offset 66 |
+| OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
 GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and multi-line.
 
@@ -213,11 +220,14 @@ liarsofttool cgview/                               # → cgview.lwg
 liarsofttool -e gbk game.exe        # Shift-JIS EXE → GBK EXE
 liarsofttool -e shift_jis game.exe  # GBK EXE → Shift-JIS EXE
 # Output defaults to name.gbk.exe or name.sjis.exe; original is never overwritten
+
+# --- Audio roundtrip ---
+liarsofttool audio.wav                         # → audio.ogg
+liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
 ```
 
 ### Known Limitations
 
-- **OGG → WAV**: reverse embedding not yet implemented.
 - **Subdirectories**: all files in XFL/LWG archives are flat (no nesting).
 
 ---
