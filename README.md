@@ -52,6 +52,30 @@ sudo cp liarsofttool /usr/local/bin/
 # 直接运行 build/liarsofttool-gui 或双击 EXE
 ```
 
+#### Windows 原生编译 (MSYS2)
+
+```bash
+# 在 MSYS2 UCRT64 终端中
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make}
+cd LiarsoftTool
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
+make -j$(nproc)
+# 产出 liarsofttool.exe 和 liarsofttool-gui.exe
+```
+
+#### 从 Linux 交叉编译 Windows 版
+
+```bash
+sudo apt install g++-mingw-w64-x86-64
+mkdir build/win && cd build/win
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+      -DCMAKE_SYSTEM_NAME=Windows ../..
+make -j$(nproc)
+# 产出 liarsofttool.exe 和 liarsofttool-gui.exe
+```
+
 ### GUI 图形界面
 
 直接运行 `liarsofttool-gui` 或双击可执行文件启动：
@@ -159,6 +183,30 @@ make -j$(nproc)
 sudo cp liarsofttool /usr/local/bin/
 # GUI version (Linux: GTKmm 3 required; Windows: native Win32, no extra deps)
 # Run build/liarsofttool-gui directly or double-click the EXE
+```
+
+#### Native Windows build (MSYS2)
+
+```bash
+# In MSYS2 UCRT64 terminal
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make}
+cd LiarsoftTool
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
+make -j$(nproc)
+# Produces liarsofttool.exe and liarsofttool-gui.exe
+```
+
+#### Cross-compile Windows from Linux
+
+```bash
+sudo apt install g++-mingw-w64-x86-64
+mkdir build/win && cd build/win
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+      -DCMAKE_SYSTEM_NAME=Windows ../..
+make -j$(nproc)
+# Produces liarsofttool.exe and liarsofttool-gui.exe
 ```
 
 ### GUI
