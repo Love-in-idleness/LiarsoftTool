@@ -20,6 +20,7 @@ namespace liarsoft {
 static UINT codePageFromName(const std::string& name) {
     if (name == "SHIFT_JIS" || name == "SHIFT-JIS" || name == "SJIS") return 932;
     if (name == "GBK" || name == "GB2312" || name == "GB18030") return 936;
+    if (name == "CP1251" || name == "WINDOWS-1251" || name == "CYRILLIC") return 1251;
     if (name == "UTF-8" || name == "UTF8") return CP_UTF8;
     throw std::runtime_error("Unsupported encoding: " + name);
 }

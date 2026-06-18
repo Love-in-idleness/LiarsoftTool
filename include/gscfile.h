@@ -12,14 +12,14 @@ namespace liarsoft {
 /**
  * Represents a GSC (Game Script) file used by Liar-soft visual novels.
  *
- * GSC binary layout (all integers big-endian):
- *   HEADER (9 x int32):
+ * GSC binary layout (all integers little-endian):
+ *   HEADER (headerLength bytes, typically 36 = 9×int32; non-standard may be 28):
  *     [0] FileLength
  *     [1] HeaderLength
  *     [2] CommandLength
  *     [3] StringDeclarationLength
  *     [4] StringDefinitionLength
- *     [5..8] Unknown1..4
+ *     [5..N] Optional extra int32 fields (up to 4 unknowns)
  *
  *   CommandSection: raw bytes of length CommandLength
  *

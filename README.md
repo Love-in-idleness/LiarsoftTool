@@ -35,7 +35,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | EXE 编码转换 | `liarsofttool -e gbk game.exe` |
 | 批量转换 | `liarsofttool *.png` 或 `liarsofttool * -e gbk` |
 
-> **提示**：中文版游戏用 `-e gbk`，日文版用默认 `shift_jis`。省略输出路径时自动推导到输入文件所在目录。
+> **提示**：日文版用 `shift_jis`，中文版用 `-e gbk`，西里尔/英文版用 `-e cp1251`。CP1251 也是引擎默认正确显示英语的编码。
 
 ### 编译
 
@@ -81,7 +81,7 @@ make -j$(nproc)
 直接运行 `liarsofttool-gui` 或双击可执行文件启动：
 
 - **拖放文件**到窗口即可添加到转换列表
-- 支持编码选择（Shift-JIS / GBK）、参考 GSC 指定、输出目录
+- 编码选择（Shift-JIS / GBK / CP1251）、参考 GSC 指定、输出目录
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
 - Linux 使用 GTK3，Windows 使用原生 Win32 API（零额外 DLL 依赖）
@@ -90,7 +90,7 @@ make -j$(nproc)
 
 | 参数 | 说明 |
 |------|------|
-| `-e, --encoding <enc>` | 文本编码，默认 `shift_jis`，可选 `gbk` |
+| `-e, --encoding <enc>` | 编码：`shift_jis`（日文，默认）/ `gbk`（中文）/ `cp1251`（西里尔及英文） |
 | `-r, --reference <path>` | TXT→GSC 时所需的参考 GSC 文件 |
 | `-o, --output <path>` | 显式指定输出路径 |
 | `-h, --help` | 显示帮助 |
@@ -104,10 +104,10 @@ make -j$(nproc)
 |------|--------|------|------|
 | XFL | `.xfl` | 解包/打包 | 通用资源封包，Magic: `LB\x01\x00` |
 | LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
-| GSC | `.gsc` | 提取/注回 | 游戏脚本，小端序，9 字段头+命令段+字符串段 |
+| GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容标准头（36B）及非标准头（28B，部分翻译工具产出），自动按 HeaderLength 适配 |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
-| EXE | `.exe` | SJIS⇄GBK | 修改引擎内部编码参数（`push 0x80` ⇄ `push 0x86`），`-e gbk` 转 GBK，`-e shift_jis` 转回 |
+| EXE | `.exe` | SJIS⇄GBK/CP1251 | 修改引擎编码参数 (`0x80`⇄`0x86`⇄`0xCC`)，`-e gbk/cp1251` 前向，`-e shift_jis` 还原 |
 | WAV | `.wav` | → OGG | 偏移 66 处嵌入 Ogg Vorbis |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
 
@@ -132,9 +132,10 @@ liarsofttool cgview/bg.png                         # → bg.wcg
 liarsofttool cgview/                               # → cgview.lwg
 
 # --- EXE 编码转换 ---
-liarsofttool -e gbk game.exe        # Shift-JIS EXE → GBK EXE
-liarsofttool -e shift_jis game.exe  # GBK EXE → Shift-JIS EXE
-# 默认输出为 name.gbk.exe 或 name.sjis.exe，不覆盖原文件
+liarsofttool -e gbk game.exe        # SJIS→GBK
+liarsofttool -e cp1251 game.exe     # SJIS→CP1251 (Russian)
+liarsofttool -e shift_jis game.exe  # revert GBK/CP1251→SJIS
+# 输出 name.gbk.exe / name.cp1251.exe / name.sjis.exe，不覆盖原文件
 
 # --- 音频往返 ---
 liarsofttool audio.wav                         # → audio.ogg
@@ -167,7 +168,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 | EXE encoding convert | `liarsofttool -e gbk game.exe` |
 | Batch convert | `liarsofttool *.png` or `liarsofttool * -e gbk` |
 
-> **Tip:** Use `-e gbk` for Chinese releases, default `shift_jis` for Japanese.
+> **Tip:** Use `shift_jis` for Japanese, `-e gbk` for Chinese, `-e cp1251` for Cyrillic/English texts. CP1251 is also the engine's default for correct English rendering.
 > Output paths default to the input file's directory when omitted.
 
 ### Build
@@ -214,7 +215,7 @@ make -j$(nproc)
 Run `liarsofttool-gui` or double-click the executable:
 
 - **Drag & drop** files onto the window to add them
-- Encoding selector (Shift-JIS / GBK), optional reference GSC, output directory
+- Encoding selector (Shift-JIS / GBK / CP1251), optional reference GSC, output directory
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Linux: GTK3 backend. Windows: native Win32 API (zero extra DLL dependencies)
@@ -223,7 +224,7 @@ Run `liarsofttool-gui` or double-click the executable:
 
 | Option | Description |
 |--------|-------------|
-| `-e, --encoding <enc>` | Text encoding: `shift_jis` (default) or `gbk` |
+| `-e, --encoding <enc>` | Encoding: `shift_jis` (JP, default) / `gbk` (CN) / `cp1251` (Cyrillic & English) |
 | `-r, --reference <path>` | Reference GSC for TXT→GSC injection |
 | `-o, --output <path>` | Explicit output path |
 | `-h, --help` | Show help |
@@ -237,10 +238,10 @@ When exactly two args have different extensions, the second is treated as output
 |--------|-----------|-----------|-------|
 | XFL | `.xfl` | unpack/pack | Resource archive, Magic: `LB\x01\x00` |
 | LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
-| GSC | `.gsc` | extract/inject | Game script, LE binary, 9-field header + command + string sections |
+| GSC | `.gsc` | extract/inject | Game script. Compatible with standard 36B header and non-standard 28B header (from some translation tools), auto-adapts to HeaderLength |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
-| EXE | `.exe` | SJIS⇄GBK | Patches engine code-page parameter (`push 0x80` ⇄ `push 0x86`). `-e gbk`→GBK, `-e shift_jis`→revert |
+| EXE | `.exe` | SJIS⇄GBK/CP1251 | Patches code-page byte (`0x80`⇄`0x86`⇄`0xCC`). `-e gbk/cp1251` forward, `-e shift_jis` reverse |
 | WAV | `.wav` | → OGG | Embedded Ogg Vorbis at offset 66 |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
@@ -265,9 +266,10 @@ liarsofttool cgview/bg.png                         # → bg.wcg
 liarsofttool cgview/                               # → cgview.lwg
 
 # --- EXE encoding conversion ---
-liarsofttool -e gbk game.exe        # Shift-JIS EXE → GBK EXE
-liarsofttool -e shift_jis game.exe  # GBK EXE → Shift-JIS EXE
-# Output defaults to name.gbk.exe or name.sjis.exe; original is never overwritten
+liarsofttool -e gbk game.exe        # SJIS→GBK
+liarsofttool -e cp1251 game.exe     # SJIS→CP1251 (Russian)
+liarsofttool -e shift_jis game.exe  # revert GBK/CP1251→SJIS
+# Output: name.gbk.exe / name.cp1251.exe / name.sjis.exe; original untouched
 
 # --- Audio roundtrip ---
 liarsofttool audio.wav                         # → audio.ogg

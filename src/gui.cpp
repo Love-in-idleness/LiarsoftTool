@@ -350,6 +350,7 @@ int runGui(int argc, char* argv[]) {
     g_encodingCombo = Gtk::manage(new Gtk::ComboBoxText());
     g_encodingCombo->append("SHIFT_JIS", "Shift-JIS (Japanese)");
     g_encodingCombo->append("GBK", "GBK (Chinese)");
+    g_encodingCombo->append("CP1251", "CP1251 (Cyrillic / English)");
     g_encodingCombo->set_active(0);
 
     auto refLabel = Gtk::manage(new Gtk::Label("Ref GSC:"));

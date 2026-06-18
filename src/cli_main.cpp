@@ -23,7 +23,7 @@ static void printUsage(const char* prog) {
               << "Usage: " << prog << " [options] <input...> [output]\n\n"
               << "Options:\n"
               << "  -e, --encoding <enc>  Text encoding (default: shift_jis)\n"
-              << "                        Supported: shift_jis, gbk\n"
+              << "                        Supported: shift_jis, gbk, cp1251\n"
               << "  -r, --reference <path> Reference GSC file for TXT->GSC conversion\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
               << "  -h, --help            Show this help message\n\n"
@@ -39,7 +39,7 @@ static void printUsage(const char* prog) {
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
               << "  directory -> .xfl     Pack a folder into an XFL archive\n"
               << "  directory -> .lwg     Pack folder with .meta.xml into LWG\n"
-              << "  .exe  -> .gbk.exe     Convert EXE encoding (SJIS⇄GBK)\n\n"
+              << "  .exe  -> .gbk.exe/.cp1251.exe  Convert EXE encoding\n\n"
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
               << "  " << prog << " -e shift_jis scenario.gsc\n"
@@ -49,7 +49,8 @@ static void printUsage(const char* prog) {
               << "  " << prog << " image.wcg\n"
               << "  " << prog << " cgview.lwg\n"
               << "  " << prog << " -e gbk game.exe          # SJIS→GBK\n"
-              << "  " << prog << " -e shift_jis game.exe    # GBK→SJIS\n"
+              << "  " << prog << " -e cp1251 game.exe       # SJIS→CP1251\n"
+              << "  " << prog << " -e shift_jis game.exe    # revert to SJIS\n"
               << "  " << prog << " -r template.wav audio.ogg\n"
               << "  " << prog << " 0*.png                  # batch convert all matching PNGs\n"
               << "  " << prog << " -e gbk ./extracted_dir\n"
@@ -77,6 +78,8 @@ static std::string normalizeEncoding(const std::string& enc) {
         return "SHIFT_JIS";
     if (lower == "gbk" || lower == "gb2312" || lower == "gb18030")
         return "GBK";
+    if (lower == "cp1251" || lower == "windows-1251" || lower == "cyrillic")
+        return "CP1251";
     return enc;
 }
 
@@ -269,11 +272,13 @@ static bool processOne(const std::string& inputPath,
         std::cout << "Saved " << w << "x" << h << " WCG to: " << out << std::endl;
 
     } else if (ext == ".exe") {
-        std::string dir = (encoding == "GBK") ? "SJIS→GBK" : "GBK→SJIS";
+        std::string dir = (encoding == "GBK") ? "SJIS→GBK" :
+                          (encoding == "CP1251") ? "SJIS→CP1251" : "→SJIS";
         std::cout << "Converting EXE (" << dir << "): " << inputPath << std::endl;
         if (out.empty()) {
-            out = (encoding == "GBK") ? replaceExtension(inputPath, ".gbk.exe")
-                                      : replaceExtension(inputPath, ".sjis.exe");
+            out = (encoding == "GBK") ? replaceExtension(inputPath, ".gbk.exe") :
+                  (encoding == "CP1251") ? replaceExtension(inputPath, ".cp1251.exe") :
+                                           replaceExtension(inputPath, ".sjis.exe");
         }
         liarsoft::exeConvertFile(inputPath, out, encoding);
         std::cout << "Saved patched EXE to: " << out << std::endl;

@@ -294,7 +294,7 @@ static void onConvert() {
     char enc[64], ref[1024];
     GetWindowTextA(g_hCboEnc, enc, sizeof(enc));
     GetWindowTextA(g_hEditRef, ref, sizeof(ref));
-    std::string encoding = (strcmp(enc, "GBK") == 0) ? "GBK" : "SHIFT_JIS";
+    std::string encoding = (strcmp(enc, "GBK") == 0) ? "GBK" : (strcmp(enc, "CP1251") == 0) ? "CP1251" : "SHIFT_JIS";
     std::string refPath = ref;
     std::thread t(convertAll, encoding, refPath);
     t.detach();
@@ -324,6 +324,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
             70, 10, 120, 200, hWnd, NULL, NULL, NULL);
         SendMessageA(g_hCboEnc, CB_ADDSTRING, 0, (LPARAM)"SHIFT_JIS");
         SendMessageA(g_hCboEnc, CB_ADDSTRING, 0, (LPARAM)"GBK");
+    SendMessageA(g_hCboEnc, CB_ADDSTRING, 0, (LPARAM)"CP1251 (Cyrillic/English)");
         SendMessageA(g_hCboEnc, CB_SETCURSEL, 0, 0);
         
         CreateWindowA("STATIC", "Ref GSC:", WS_VISIBLE | WS_CHILD, 200, 12, 50, 20, hWnd, NULL, NULL, NULL);

@@ -35,16 +35,21 @@ GscFile GscFile::fromBytes(const std::vector<uint8_t>& bytes, const std::string&
     gsc.encoding = enc;
     BigEndianReader reader(bytes);
 
-    // -- HEADER (9 x int32)
+    // -- HEADER (always starts with 5 mandatory int32 fields)
     gsc.fileLength              = reader.readInt32();
     gsc.headerLength            = reader.readInt32();
     gsc.commandLength           = reader.readInt32();
     gsc.stringDeclarationLength = reader.readInt32();
     gsc.stringDefinitionLength  = reader.readInt32();
-    gsc.unknown1                = reader.readInt32();
-    gsc.unknown2                = reader.readInt32();
-    gsc.unknown3                = reader.readInt32();
-    gsc.unknown4                = reader.readInt32();
+
+    // Read remaining header int32s based on headerLength
+    // Standard header is 36 bytes (9 fields). Non-standard may be 28 (7 fields) or other.
+    int totalHeaderFields = gsc.headerLength / 4;
+    int extraFields = totalHeaderFields - 5; // beyond the 5 mandatory ones
+    if (extraFields > 0) gsc.unknown1 = reader.readInt32(); else gsc.unknown1 = 0;
+    if (extraFields > 1) gsc.unknown2 = reader.readInt32(); else gsc.unknown2 = 0;
+    if (extraFields > 2) gsc.unknown3 = reader.readInt32(); else gsc.unknown3 = 0;
+    if (extraFields > 3) gsc.unknown4 = reader.readInt32(); else gsc.unknown4 = 0;
 
     // -- COMMAND SECTION
     gsc.commandSection = reader.readBytes(gsc.commandLength);
@@ -134,10 +139,12 @@ std::vector<uint8_t> GscFile::toBytes() const {
     writer.writeInt32(commandLength);
     writer.writeInt32(stringDeclarationLength);
     writer.writeInt32(calcStrDefLen);
-    writer.writeInt32(unknown1);
-    writer.writeInt32(unknown2);
-    writer.writeInt32(unknown3);
-    writer.writeInt32(unknown4);
+    // Write remaining header fields only if original header had them
+    int totalFields = headerLength / 4;
+    if (totalFields > 5) writer.writeInt32(unknown1);
+    if (totalFields > 6) writer.writeInt32(unknown2);
+    if (totalFields > 7) writer.writeInt32(unknown3);
+    if (totalFields > 8) writer.writeInt32(unknown4);
 
     // -- COMMAND SECTION
     writer.writeBytes(commandSection);
