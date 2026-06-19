@@ -1,11 +1,14 @@
 # LiarsoftTool &nbsp; [中文](#中文) | [English](#english)
 
+http://www.codex.jp
+![alt text](image.png)
+
 A comprehensive toolkit for visual novels powered by the **Codex RScript** engine,
-developed by circles including **Liar-soft (骗子社)**, **rail-soft**, and
+developed by circles including **CodeX**, **Liar-soft (骗子社)**, **rail-soft**, and
 **スタジオ奪トランス (Studio Ubai Trans)**. Handles archive packing/unpacking,
 image decoding/encoding, script extraction/injection, and audio extraction.
 
-针对 **Liar-soft（骗子社）**、**rail-soft**、**スタジオ奪トランス**
+针对 **CodeX**, **Liar-soft（骗子社）**、**rail-soft**、**スタジオ奪トランス**
 等社团使用 **Codex RScript** 引擎开发的视觉小说/文字游戏的综合资源处理工具。支持封包解包、图像编解码、脚本提取/注入、音频提取。
 
 **References / 参考项目：**
