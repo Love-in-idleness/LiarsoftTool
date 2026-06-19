@@ -325,7 +325,7 @@ static void onClear() {
 }
 
 // ---- Remove selected ----
-static void onRemoveSelected(Glib::RefPtr<Gtk::TreeView> treeView) {
+static void onRemoveSelected(Gtk::TreeView* treeView) {
     auto sel = treeView->get_selection();
     if (auto it = sel->get_selected()) {
         g_store->erase(it);
@@ -401,7 +401,7 @@ int runGui(int argc, char* argv[]) {
     auto addBtn = Gtk::manage(new Gtk::Button("Add Files"));
     addBtn->signal_clicked().connect([&]() { onAddFiles(&window); });
     auto removeBtn = Gtk::manage(new Gtk::Button("Remove"));
-    removeBtn->signal_clicked().connect([tv = treeView]() { onRemoveSelected(Glib::RefPtr<Gtk::TreeView>(tv)); });
+    removeBtn->signal_clicked().connect([tv = treeView]() { onRemoveSelected(tv); });
     auto clearBtn = Gtk::manage(new Gtk::Button("Clear"));
     clearBtn->signal_clicked().connect(sigc::ptr_fun(&onClear));
 
