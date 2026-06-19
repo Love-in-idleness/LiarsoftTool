@@ -42,6 +42,8 @@ add_executable(liarsofttool
 )
 if(NOT WIN32)
     target_link_libraries(liarsofttool PRIVATE Iconv::Iconv)
+else()
+    target_link_options(liarsofttool PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
 # ---- GUI target ----
@@ -53,6 +55,7 @@ if(WIN32)
         ${COMMON_SOURCES}
     )
     target_link_libraries(liarsofttool-gui PRIVATE comctl32 comdlg32 ole32)
+    target_link_options(liarsofttool-gui PRIVATE -static-libgcc -static-libstdc++)
 elseif(GTKMM_FOUND)
     # Linux: use GTKmm GUI
     add_executable(liarsofttool-gui
