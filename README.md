@@ -215,7 +215,7 @@ make -j$(nproc)
 Run `liarsofttool-gui` or double-click the executable:
 
 - **Drag & drop** files onto the window to add them
-- Encoding selector (Shift-JIS / GBK / CP1251), optional reference GSC, output directory
+- Encoding selector (Shift-JIS / GBK / CP1251), optional reference, output directory
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Linux: GTK3 backend. Windows: native Win32 API (zero extra DLL dependencies)
@@ -225,7 +225,7 @@ Run `liarsofttool-gui` or double-click the executable:
 | Option | Description |
 |--------|-------------|
 | `-e, --encoding <enc>` | Encoding: `shift_jis` (JP, default) / `gbk` (CN) / `cp1251` (Cyrillic & English) |
-| `-r, --reference <path>` | Reference GSC for TXT→GSC injection |
+| `-r, --reference <path>` | Reference GSC or WAV for injection |
 | `-o, --output <path>` | Explicit output path |
 | `-h, --help` | Show help |
 

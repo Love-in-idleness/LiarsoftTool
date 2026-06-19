@@ -24,7 +24,7 @@ static void printUsage(const char* prog) {
               << "Options:\n"
               << "  -e, --encoding <enc>  Text encoding (default: shift_jis)\n"
               << "                        Supported: shift_jis, gbk, cp1251\n"
-              << "  -r, --reference <path> Reference GSC file for TXT->GSC conversion\n"
+              << "  -r, --reference <path> Reference GSC or WAV file for conversion\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"

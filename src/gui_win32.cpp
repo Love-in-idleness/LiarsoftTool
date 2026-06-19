@@ -331,7 +331,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         SendMessageA(g_hCboEnc, CB_SETCURSEL, 0, 0);
         SendMessageA(g_hCboEnc, CB_SETDROPPEDWIDTH, 260, 0);
         
-        g_hLblRef = CreateWindowA("STATIC", "Ref GSC:", WS_VISIBLE | WS_CHILD, 315, 12, 124, 20, hWnd, (HMENU)202, NULL, NULL);
+        g_hLblRef = CreateWindowA("STATIC", "Reference:", WS_VISIBLE | WS_CHILD, 315, 12, 124, 20, hWnd, (HMENU)202, NULL, NULL);
         g_hEditRef = CreateWindowA("EDIT", NULL, WS_VISIBLE | WS_CHILD | WS_BORDER,
             444, 10, 316, 22, hWnd, (HMENU)203, NULL, NULL);
         g_hBtnRef = CreateWindowA("BUTTON", "...", WS_VISIBLE | WS_CHILD,

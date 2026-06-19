@@ -287,9 +287,9 @@ static void onChooseOutDir(Gtk::Window* parent) {
     }
 }
 
-// ---- Choose reference GSC ----
+// ---- Choose reference GSC or WAV----
 static void onChooseRef(Gtk::Window* parent) {
-    auto dialog = Gtk::FileChooserDialog("Select Reference GSC",
+    auto dialog = Gtk::FileChooserDialog("Select Reference GSC or WAV",
         Gtk::FILE_CHOOSER_ACTION_OPEN);
     dialog.set_transient_for(*parent);
     dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
@@ -353,9 +353,9 @@ int runGui(int argc, char* argv[]) {
     g_encodingCombo->append("CP1251", "CP1251 (Cyrillic / English)");
     g_encodingCombo->set_active(0);
 
-    auto refLabel = Gtk::manage(new Gtk::Label("Ref GSC:"));
+    auto refLabel = Gtk::manage(new Gtk::Label("Reference:"));
     g_refEntry = Gtk::manage(new Gtk::Entry());
-    g_refEntry->set_placeholder_text("Reference GSC for TXT→GSC");
+    g_refEntry->set_placeholder_text("Reference GSC or WAV file");
     g_refEntry->set_width_chars(20);
     auto refBtn = Gtk::manage(new Gtk::Button("..."));
     refBtn->signal_clicked().connect([&]() { onChooseRef(&window); });
