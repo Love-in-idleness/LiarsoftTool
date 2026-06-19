@@ -18,6 +18,25 @@ endif()
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+# Windows resource file (manifest for visual styles + DPI awareness)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    # Find windres (prefixed with cross-compiler triplet, e.g. x86_64-w64-mingw32-windres)
+    get_filename_component(_MINGW_DIR ${CMAKE_CXX_COMPILER} DIRECTORY)
+    get_filename_component(_MINGW_CXX ${CMAKE_CXX_COMPILER} NAME)
+    string(REGEX REPLACE "-g\\+\\+$" "" _MINGW_PFX "${_MINGW_CXX}")
+    find_program(WINDRES NAMES ${_MINGW_PFX}-windres windres
+        HINTS ${_MINGW_DIR}
+        REQUIRED)
+    message(STATUS "Windows resource compiler: ${WINDRES}")
+    set(RESOURCE_OBJ ${CMAKE_CURRENT_BINARY_DIR}/app.res.o)
+    add_custom_command(
+        OUTPUT ${RESOURCE_OBJ}
+        COMMAND ${WINDRES} -O coff -I${CMAKE_CURRENT_SOURCE_DIR} -i ${CMAKE_CURRENT_SOURCE_DIR}/app.rc -o ${RESOURCE_OBJ}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/app.rc ${CMAKE_CURRENT_SOURCE_DIR}/app.manifest
+        COMMENT "Compiling Windows resources (app.rc -> app.res.o)"
+    )
+endif()
+
 # Common source files (shared between CLI and GUI)
 set(COMMON_SOURCES
     src/bigendian.cpp
@@ -43,6 +62,7 @@ add_executable(liarsofttool
 if(NOT WIN32)
     target_link_libraries(liarsofttool PRIVATE Iconv::Iconv)
 else()
+    target_sources(liarsofttool PRIVATE ${RESOURCE_OBJ})
     target_link_options(liarsofttool PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
@@ -55,6 +75,7 @@ if(WIN32)
         ${COMMON_SOURCES}
     )
     target_link_libraries(liarsofttool-gui PRIVATE comctl32 comdlg32 ole32)
+    target_sources(liarsofttool-gui PRIVATE ${RESOURCE_OBJ})
     target_link_options(liarsofttool-gui PRIVATE -static-libgcc -static-libstdc++)
 elseif(GTKMM_FOUND)
     # Linux: use GTKmm GUI

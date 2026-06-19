@@ -378,9 +378,14 @@ int runGui(int argc, char* argv[]) {
     treeView->append_column("Output", g_columns.outputPath);
     treeView->append_column("Type", g_columns.fileType);
     treeView->append_column("Status", g_columns.status);
+    // Input + Output split remaining space 50/50
     treeView->get_column(0)->set_expand(true);
     treeView->get_column(1)->set_expand(true);
-    treeView->get_column(3)->set_min_width(120);
+    // Type + Status fixed width, rightmost; Type wider than Status
+    treeView->get_column(2)->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+    treeView->get_column(2)->set_fixed_width(140);
+    treeView->get_column(3)->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
+    treeView->get_column(3)->set_fixed_width(96);
 
     // Drag & drop
     std::vector<Gtk::TargetEntry> targets; targets.emplace_back("text/uri-list");

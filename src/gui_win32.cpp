@@ -1,6 +1,7 @@
 #ifdef _WIN32
 
 #include "gui_win32.h"
+#define _WIN32_WINNT 0x0600
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <commctrl.h>
@@ -32,7 +33,9 @@ namespace fs = std::filesystem;
 
 // ---- Globals ----
 static HWND g_hWnd, g_hListView, g_hBtnAdd, g_hBtnRemove, g_hBtnClear, g_hBtnConvert;
+static HWND g_hBtnRef, g_hBtnOutDir;
 static HWND g_hCboEnc, g_hEditRef, g_hEditOutDir, g_hProgress, g_hStatus;
+static HWND g_hLblEnc, g_hLblRef, g_hLblOutDir;
 static std::vector<std::string> g_inputs;
 static std::vector<std::string> g_outputs;
 static std::vector<std::string> g_statuses;
@@ -319,31 +322,32 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         InitCommonControlsEx(&icc);
         
         // --- Top controls ---
-        CreateWindowA("STATIC", "Encoding:", WS_VISIBLE | WS_CHILD, 10, 12, 60, 20, hWnd, NULL, NULL, NULL);
+        g_hLblEnc = CreateWindowA("STATIC", "Encoding:", WS_VISIBLE | WS_CHILD, 10, 12, 85, 20, hWnd, (HMENU)201, NULL, NULL);
         g_hCboEnc = CreateWindowA("COMBOBOX", NULL, WS_VISIBLE | WS_CHILD | CBS_DROPDOWNLIST,
-            70, 10, 120, 200, hWnd, NULL, NULL, NULL);
+            100, 10, 205, 22, hWnd, (HMENU)200, NULL, NULL);
         SendMessageA(g_hCboEnc, CB_ADDSTRING, 0, (LPARAM)"SHIFT_JIS");
         SendMessageA(g_hCboEnc, CB_ADDSTRING, 0, (LPARAM)"GBK");
-    SendMessageA(g_hCboEnc, CB_ADDSTRING, 0, (LPARAM)"CP1251 (Cyrillic/English)");
+        SendMessageA(g_hCboEnc, CB_ADDSTRING, 0, (LPARAM)"CP1251 (Cyrillic/English)");
         SendMessageA(g_hCboEnc, CB_SETCURSEL, 0, 0);
+        SendMessageA(g_hCboEnc, CB_SETDROPPEDWIDTH, 260, 0);
         
-        CreateWindowA("STATIC", "Ref GSC:", WS_VISIBLE | WS_CHILD, 200, 12, 50, 20, hWnd, NULL, NULL, NULL);
+        g_hLblRef = CreateWindowA("STATIC", "Ref GSC:", WS_VISIBLE | WS_CHILD, 315, 12, 124, 20, hWnd, (HMENU)202, NULL, NULL);
         g_hEditRef = CreateWindowA("EDIT", NULL, WS_VISIBLE | WS_CHILD | WS_BORDER,
-            250, 10, 180, 22, hWnd, NULL, NULL, NULL);
-        HWND btnRef = CreateWindowA("BUTTON", "...", WS_VISIBLE | WS_CHILD,
-            435, 10, 25, 22, hWnd, (HMENU)101, NULL, NULL);
+            444, 10, 316, 22, hWnd, (HMENU)203, NULL, NULL);
+        g_hBtnRef = CreateWindowA("BUTTON", "...", WS_VISIBLE | WS_CHILD,
+            765, 10, 25, 22, hWnd, (HMENU)101, NULL, NULL);
         
         // --- ListView ---
         g_hListView = CreateWindowA(WC_LISTVIEWA, NULL,
             WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_SINGLESEL | WS_BORDER,
             10, 40, 760, 320, hWnd, NULL, NULL, NULL);
-        ListView_SetExtendedListViewStyle(g_hListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+        ListView_SetExtendedListViewStyle(g_hListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
         
-        LVCOLUMN col = {LVCF_TEXT | LVCF_WIDTH};
-        col.cx = 220; col.pszText = (LPSTR)"Input";   ListView_InsertColumn(g_hListView, 0, &col);
-        col.cx = 220; col.pszText = (LPSTR)"Output";  ListView_InsertColumn(g_hListView, 1, &col);
-        col.cx = 100; col.pszText = (LPSTR)"Type";    ListView_InsertColumn(g_hListView, 2, &col);
-        col.cx = 200; col.pszText = (LPSTR)"Status";  ListView_InsertColumn(g_hListView, 3, &col);
+        LVCOLUMN col = {LVCF_TEXT | LVCF_WIDTH | LVCF_FMT};
+        col.cx = 260; col.pszText = (LPSTR)"Input";   col.fmt = LVCFMT_LEFT;  ListView_InsertColumn(g_hListView, 0, &col);
+        col.cx = 260; col.pszText = (LPSTR)"Output";  col.fmt = LVCFMT_LEFT;  ListView_InsertColumn(g_hListView, 1, &col);
+        col.cx = 140; col.pszText = (LPSTR)"Type";    col.fmt = LVCFMT_LEFT;  ListView_InsertColumn(g_hListView, 2, &col);
+        col.cx =  96; col.pszText = (LPSTR)"Status";  col.fmt = LVCFMT_LEFT;  ListView_InsertColumn(g_hListView, 3, &col);
         
         // Drag & drop support
         DragAcceptFiles(hWnd, TRUE);
@@ -352,15 +356,15 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         g_hBtnAdd = CreateWindowA("BUTTON", "Add Files", WS_VISIBLE | WS_CHILD,
             10, 370, 80, 26, hWnd, (HMENU)102, NULL, NULL);
         g_hBtnRemove = CreateWindowA("BUTTON", "Remove", WS_VISIBLE | WS_CHILD,
-            95, 370, 60, 26, hWnd, (HMENU)103, NULL, NULL);
+            100, 370, 78, 26, hWnd, (HMENU)103, NULL, NULL);
         g_hBtnClear = CreateWindowA("BUTTON", "Clear", WS_VISIBLE | WS_CHILD,
-            160, 370, 50, 26, hWnd, (HMENU)104, NULL, NULL);
+            188, 370, 50, 26, hWnd, (HMENU)104, NULL, NULL);
         
-        CreateWindowA("STATIC", "Out Dir:", WS_VISIBLE | WS_CHILD, 220, 374, 45, 20, hWnd, NULL, NULL, NULL);
+        g_hLblOutDir = CreateWindowA("STATIC", "Out Dir:", WS_VISIBLE | WS_CHILD, 248, 374, 110, 20, hWnd, (HMENU)205, NULL, NULL);
         g_hEditOutDir = CreateWindowA("EDIT", NULL, WS_VISIBLE | WS_CHILD | WS_BORDER,
-            265, 372, 180, 22, hWnd, NULL, NULL, NULL);
-        HWND btnOutDir = CreateWindowA("BUTTON", "...", WS_VISIBLE | WS_CHILD,
-            450, 370, 25, 22, hWnd, (HMENU)105, NULL, NULL);
+            365, 372, 165, 22, hWnd, (HMENU)206, NULL, NULL);
+        g_hBtnOutDir = CreateWindowA("BUTTON", "...", WS_VISIBLE | WS_CHILD,
+            535, 370, 25, 22, hWnd, (HMENU)105, NULL, NULL);
         
         g_hBtnConvert = CreateWindowA("BUTTON", "Convert All", WS_VISIBLE | WS_CHILD,
             570, 370, 100, 30, hWnd, (HMENU)106, NULL, NULL);
@@ -390,21 +394,95 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         }
         return 0;
     
+    case WM_NOTIFY: {
+        LPNMHDR nm = (LPNMHDR)lParam;
+        if (nm->hwndFrom == g_hListView && nm->code == NM_CUSTOMDRAW) {
+            LPNMLVCUSTOMDRAW lvcd = (LPNMLVCUSTOMDRAW)lParam;
+            switch (lvcd->nmcd.dwDrawStage) {
+            case CDDS_PREPAINT:
+                SetWindowLongPtr(hWnd, DWLP_MSGRESULT, CDRF_NOTIFYITEMDRAW);
+                return TRUE;
+            case CDDS_ITEMPREPAINT: {
+                // Alternating row colors
+                if (lvcd->nmcd.dwItemSpec & 1)
+                    lvcd->clrTextBk = RGB(240, 246, 255);  // light blue
+                else
+                    lvcd->clrTextBk = RGB(255, 255, 255);  // white
+                // Selected row highlight
+                if (ListView_GetItemState(g_hListView, (int)lvcd->nmcd.dwItemSpec, LVIS_SELECTED) & LVIS_SELECTED) {
+                    lvcd->clrTextBk = RGB(0, 120, 215);
+                    lvcd->clrText  = RGB(255, 255, 255);
+                }
+                SetWindowLongPtr(hWnd, DWLP_MSGRESULT, CDRF_NEWFONT);
+                return TRUE;
+            }
+            }
+        }
+        return 0;
+    }
+    
     case WM_DROPFILES:
         onDropFiles((HDROP)wParam);
         return 0;
     
     case WM_SIZE: {
         int w = LOWORD(lParam), h = HIWORD(lParam);
-        SetWindowPos(g_hListView, NULL, 0, 0, w - 20, h - 140, SWP_NOMOVE | SWP_NOZORDER);
-        // Move bottom controls
-        int y = h - 125;
-        SetWindowPos(g_hBtnAdd, NULL, 10, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-        SetWindowPos(g_hBtnRemove, NULL, 95, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-        SetWindowPos(g_hBtnClear, NULL, 160, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-        SetWindowPos(g_hEditOutDir, NULL, 265, y+2, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-        SetWindowPos(g_hBtnConvert, NULL, 570, y-2, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-        SetWindowPos(g_hProgress, NULL, 10, y+35, w-20, 18, SWP_NOZORDER);
+        if (w == 0 || h == 0) return 0;  // minimized
+        int m = 10, by = (h < 200) ? 60 : h - 115;
+        if (by < 60) by = 60;
+
+        // --- Top row: fixed y, ref edit stretches to fill space ---
+        // Encoding label + combo (fixed pos/size)
+        SetWindowPos(g_hLblEnc,   NULL, m,      12, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+        SetWindowPos(g_hCboEnc,   NULL, 100,    10, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+        // Ref label (fixed), edit (stretches), button (right-anchored)
+        SetWindowPos(g_hLblRef,   NULL, 315,    12, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+        int rbx = w - 35;                               // ref button right edge
+        int refEditW = rbx - 449;                        // edit fills from 444 to rbx-5
+        if (refEditW < 60) refEditW = 60;
+        SetWindowPos(g_hEditRef,  NULL, 0, 0, refEditW, 22, SWP_NOZORDER | SWP_NOMOVE);
+        SetWindowPos(g_hBtnRef,   NULL, rbx,    10, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+
+        // --- ListView fills between top row and bottom controls ---
+        int lvH = by - 50;
+        if (lvH < 40) lvH = 40;
+        SetWindowPos(g_hListView, NULL, m, 40, w - 2*m, lvH, SWP_NOZORDER);
+
+        // --- Resize ListView columns: Type+Status fixed, Input+Output split 50/50 ---
+        int sbW = GetSystemMetrics(SM_CXVSCROLL) + 6;   // scrollbar + border
+        int avail = (w - 2*m) - sbW;
+        if (avail < 300) avail = 300;
+        int fixedCols = 140 + 96;                        // Type + Status
+        int half = (avail - fixedCols) / 2;
+        if (half < 80) half = 80;
+        ListView_SetColumnWidth(g_hListView, 0, half);
+        ListView_SetColumnWidth(g_hListView, 1, half);
+        ListView_SetColumnWidth(g_hListView, 2, 140);
+        ListView_SetColumnWidth(g_hListView, 3,  96);
+
+        // --- Bottom button row ---
+        SetWindowPos(g_hBtnAdd,     NULL, m,      by, 80, 26, SWP_NOZORDER);
+        SetWindowPos(g_hBtnRemove,  NULL, 100,    by, 78, 26, SWP_NOZORDER);
+        SetWindowPos(g_hBtnClear,   NULL, 188,    by, 50, 26, SWP_NOZORDER);
+
+        // OutDir label + edit + button (no overlap with Convert)
+        SetWindowPos(g_hLblOutDir,  NULL, 248,    by+4, 110, 20, SWP_NOZORDER);
+        int cnvX = w - 120;                               // Convert button left edge
+        int btnX = cnvX - 30;                             // "..." button (25w + 5 gap)
+        int edW  = btnX - 370;                            // edit fills from 365 to btnX-5
+        if (edW < 40) edW = 40;
+        SetWindowPos(g_hEditOutDir, NULL, 365,    by+2, edW, 22, SWP_NOZORDER);
+        SetWindowPos(g_hBtnOutDir,  NULL, btnX,   by,   25,  22, SWP_NOZORDER);
+
+        // Convert button (right-anchored)
+        SetWindowPos(g_hBtnConvert, NULL, w-m-110, by-2, 100, 30, SWP_NOZORDER);
+
+        // Progress bar + status
+        SetWindowPos(g_hProgress,   NULL, m, by+32, w-2*m, 18, SWP_NOZORDER);
+        SetWindowPos(g_hStatus,     NULL, m, by+54, w-2*m, 20, SWP_NOZORDER);
+
+        // Force full repaint to eliminate black artefacts
+        InvalidateRect(hWnd, NULL, TRUE);
         return 0;
     }
     
@@ -420,11 +498,12 @@ int runGuiWin32(const char* /*cmdLine*/) {
     wc.lpfnWndProc = WndProc;
     wc.hInstance = GetModuleHandle(NULL);
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = "LiarsoftToolWin";
     RegisterClassA(&wc);
     
-    HWND hWnd = CreateWindowA("LiarsoftToolWin", "LiarsoftTool",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 520,
+    HWND hWnd = CreateWindowExA(0, "LiarsoftToolWin", "LiarsoftTool",
+        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 800, 520,
         NULL, NULL, wc.hInstance, NULL);
     
     ShowWindow(hWnd, SW_SHOW);
