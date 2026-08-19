@@ -1,4 +1,5 @@
 #include "transfile.h"
+#include "fileio.h"
 #include <fstream>
 #include <sstream>
 #include <regex>
@@ -82,15 +83,12 @@ GscFile TransFile::toGsc(const std::string& refGscPath,
 // ---- Save ----
 
 void TransFile::save(const std::string& path) const {
-    std::ofstream stream(path);
-    if (!stream) {
-        throw std::runtime_error("Cannot write file: " + path);
-    }
-
+    std::string content;
     for (const auto& str : strings) {
-        stream << "#" << convertToExternal(str) << "\n";
-        stream << ">\n"; // blank translation line
+        content += "#" + convertToExternal(str) + "\n";
+        content += ">\n"; // blank translation line
     }
+    writeTextFileIfChanged(path, content);
 }
 
 // ---- Private helpers ----

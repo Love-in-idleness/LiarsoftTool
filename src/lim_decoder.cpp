@@ -1,10 +1,27 @@
 #include "lim_decoder.h"
 #include "cg_decompress.h"
+#include "fileio.h"
 #include "stb_image_write.h"
 #include <stdexcept>
 #include <cstring>
 
 namespace liarsoft {
+
+namespace {
+
+// stbi_write callback that appends encoded bytes to a memory buffer so the
+// PNG can be compared against the existing file before writing.
+struct PngBuffer {
+    std::vector<uint8_t> bytes;
+};
+
+void appendPngBytes(void* context, void* data, int size) {
+    auto* buf = static_cast<PngBuffer*>(context);
+    auto* bytes = static_cast<const uint8_t*>(data);
+    buf->bytes.insert(buf->bytes.end(), bytes, bytes + size);
+}
+
+} // namespace
 
 LimImage limDecode(const std::vector<uint8_t>& data) {
     if (data.size() < 16 || data[0] != 'L' || data[1] != 'M')
@@ -96,8 +113,12 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
 }
 
 void limSavePng(const LimImage& img, const std::string& path) {
-    if (!stbi_write_png(path.c_str(), img.width, img.height, 4, img.pixels.data(), img.width*4))
-        throw std::runtime_error("Failed to write PNG: " + path);
+    PngBuffer buf;
+    if (!stbi_write_png_to_func(appendPngBytes, &buf, img.width, img.height, 4,
+                                img.pixels.data(), img.width * 4))
+        throw std::runtime_error("Failed to encode PNG: " + path);
+    // Identical content already on disk is left untouched (mtime preserved).
+    writeFileIfChanged(path, buf.bytes);
 }
 
 } // namespace liarsoft

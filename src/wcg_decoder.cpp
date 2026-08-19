@@ -1,5 +1,6 @@
 #include "wcg_decoder.h"
 #include "cg_decompress.h"
+#include "fileio.h"
 #include "stb_image_write.h"
 #include <stdexcept>
 #include <cstring>
@@ -9,6 +10,22 @@
 #include <vector>
 
 namespace liarsoft {
+
+namespace {
+
+// stbi_write callback that appends encoded bytes to a memory buffer so the
+// PNG can be compared against the existing file before writing.
+struct PngBuffer {
+    std::vector<uint8_t> bytes;
+};
+
+void appendPngBytes(void* context, void* data, int size) {
+    auto* buf = static_cast<PngBuffer*>(context);
+    auto* bytes = static_cast<const uint8_t*>(data);
+    buf->bytes.insert(buf->bytes.end(), bytes, bytes + size);
+}
+
+} // namespace
 
 // ---- Decode (matches GARbro Reader / arc_unpacker wcg_image_decoder) ----
 
@@ -58,8 +75,12 @@ void wcgSavePng(const WcgImage& img, const std::string& path) {
         rgba[i*4+2] = img.pixels[i*4+0]; // R→B
         rgba[i*4+3] = img.pixels[i*4+3]; // A→A
     }
-    if (!stbi_write_png(path.c_str(), img.width, img.height, 4, rgba.data(), img.width*4))
-        throw std::runtime_error("Failed to write PNG: " + path);
+    PngBuffer buf;
+    if (!stbi_write_png_to_func(appendPngBytes, &buf, img.width, img.height, 4,
+                                rgba.data(), img.width * 4))
+        throw std::runtime_error("Failed to encode PNG: " + path);
+    // Identical content already on disk is left untouched (mtime preserved).
+    writeFileIfChanged(path, buf.bytes);
 }
 
 // ---- Encode (matches GARbro Writer.Pack) ----

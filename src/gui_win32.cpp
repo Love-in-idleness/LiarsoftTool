@@ -24,6 +24,7 @@
 #include "lwg_decoder.h"
 #include "wav_ogg.h"
 #include "exe_patch.h"
+#include "fileio.h"
 #include "stb_image.h"
 
 #pragma comment(lib, "comctl32.lib")
@@ -206,8 +207,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 if (!px) throw std::runtime_error("Failed to load");
                 auto d = liarsoft::wcgEncode(px, (uint32_t)w, (uint32_t)h);
                 stbi_image_free(px);
-                std::ofstream fout(out, std::ios::binary);
-                fout.write((char*)d.data(), d.size());
+                liarsoft::writeFileIfChanged(out, d);
             } else if (ext == ".exe") {
                 liarsoft::exeConvertFile(in, out, encoding);
             }

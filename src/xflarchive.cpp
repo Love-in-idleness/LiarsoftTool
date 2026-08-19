@@ -1,5 +1,6 @@
 #include "xflarchive.h"
 #include "bigendian.h"
+#include "fileio.h"
 #include <algorithm>
 #include <cstring>
 #include <filesystem>
@@ -167,12 +168,7 @@ void XflArchive::addDirectory(const std::string& dirPath) {
 }
 
 void XflArchive::save(const std::string& path) const {
-    auto bytes = toBytes();
-    std::ofstream stream(path, std::ios::binary);
-    if (!stream) {
-        throw std::runtime_error("Cannot write file: " + path);
-    }
-    stream.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    writeFileIfChanged(path, toBytes());
 }
 
 std::vector<uint8_t> XflArchive::toBytes() const {
@@ -230,11 +226,8 @@ void XflArchive::extractToDirectory(const std::string& dirPath) const {
 
     for (const auto& entry : entries) {
         fs::path outPath = fs::path(dirPath) / entry.fileName;
-        std::ofstream out(outPath, std::ios::binary);
-        if (!out) {
-            throw std::runtime_error("Cannot create file: " + outPath.string());
-        }
-        out.write(reinterpret_cast<const char*>(entry.data.data()), entry.data.size());
+        // Identical content already on disk is left untouched (mtime preserved).
+        writeFileIfChanged(outPath.string(), entry.data);
     }
 }
 

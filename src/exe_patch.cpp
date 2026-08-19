@@ -1,4 +1,5 @@
 #include "exe_patch.h"
+#include "fileio.h"
 #include <fstream>
 #include <stdexcept>
 #include <cstring>
@@ -79,9 +80,8 @@ void exeConvertFile(const std::string& inputPath, const std::string& outputPath,
 
     auto patched = exeConvertEncoding(data, fromByte, toByte);
 
-    std::ofstream out(outputPath, std::ios::binary);
-    if (!out) throw std::runtime_error("Cannot write: " + outputPath);
-    out.write(reinterpret_cast<const char*>(patched.data()), patched.size());
+    // Identical content already on disk is left untouched (mtime preserved).
+    writeFileIfChanged(outputPath, patched);
 }
 
 } // namespace liarsoft

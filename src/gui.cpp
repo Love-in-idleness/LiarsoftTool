@@ -16,6 +16,7 @@
 #include "lwg_decoder.h"
 #include "wav_ogg.h"
 #include "exe_patch.h"
+#include "fileio.h"
 #include "stb_image.h"
 
 namespace fs = std::filesystem;
@@ -202,8 +203,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 if (!px) throw std::runtime_error("Failed to load image");
                 auto wcgData = liarsoft::wcgEncode(px, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
                 stbi_image_free(px);
-                std::ofstream fout(out, std::ios::binary);
-                fout.write(reinterpret_cast<const char*>(wcgData.data()), wcgData.size());
+                liarsoft::writeFileIfChanged(out, wcgData);
             } else if (ext == ".exe") {
                 liarsoft::exeConvertFile(in, out, encoding);
             } else {

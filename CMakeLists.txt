@@ -41,6 +41,7 @@ endif()
 set(COMMON_SOURCES
     src/bigendian.cpp
     src/encoding.cpp
+    src/fileio.cpp
     src/gscfile.cpp
     src/transfile.cpp
     src/xflarchive.cpp

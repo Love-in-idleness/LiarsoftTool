@@ -145,6 +145,8 @@ liarsofttool audio.wav                         # → audio.ogg
 liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 ```
 
+> 提示：所有输出文件采用"内容相同则不重写"策略——若生成结果与磁盘上已有文件二进制完全一致，将跳过写入以保留原文件的修改时间，方便增量/批量转换时避免无关文件被标记为已修改。
+
 ### 已知限制
 
 - **多级目录**：XFL/LWG 中文件均扁平存放。
@@ -278,6 +280,11 @@ liarsofttool -e shift_jis game.exe  # revert GBK/CP1251→SJIS
 liarsofttool audio.wav                         # → audio.ogg
 liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
 ```
+
+> Tip: all outputs use a "skip if identical" policy — when the generated
+> result is byte-identical to the file already on disk, the write is skipped
+> so the existing file's modification time is preserved. This keeps
+> incremental/batch conversions from touching unchanged files.
 
 ### Known Limitations
 

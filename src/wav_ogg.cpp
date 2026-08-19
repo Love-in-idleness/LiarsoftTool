@@ -1,4 +1,5 @@
 #include "wav_ogg.h"
+#include "fileio.h"
 #include <fstream>
 #include <stdexcept>
 #include <cstring>
@@ -90,9 +91,7 @@ void WavOggExtractor::extractToFile(const std::string& wavPath, const std::strin
     if (ogg.empty())
         throw std::runtime_error("No embedded Ogg Vorbis found in: " + wavPath);
 
-    std::ofstream out(oggPath, std::ios::binary);
-    if (!out) throw std::runtime_error("Cannot write: " + oggPath);
-    out.write(reinterpret_cast<const char*>(ogg.data()), ogg.size());
+    writeFileIfChanged(oggPath, ogg);
 }
 
 void WavOggExtractor::embedToFile(const std::string& oggPath, const std::string& refWavPath,
@@ -121,11 +120,12 @@ void WavOggExtractor::embedToFile(const std::string& oggPath, const std::string&
     hdr[6] = (riffSize >> 16) & 0xFF;
     hdr[7] = (riffSize >> 24) & 0xFF;
 
-    // Write output
-    std::ofstream out(wavPath, std::ios::binary);
-    if (!out) throw std::runtime_error("Cannot write: " + wavPath);
-    out.write(reinterpret_cast<const char*>(hdr), 66);
-    out.write(reinterpret_cast<const char*>(ogg.data()), oggSz);
+    // Write output (identical content is left untouched, mtime preserved)
+    std::vector<uint8_t> out;
+    out.reserve(66 + oggSz);
+    out.insert(out.end(), hdr, hdr + 66);
+    out.insert(out.end(), ogg.begin(), ogg.end());
+    writeFileIfChanged(wavPath, out);
 }
 
 } // namespace liarsoft

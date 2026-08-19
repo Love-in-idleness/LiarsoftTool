@@ -1,5 +1,6 @@
 #include "lwg_decoder.h"
 #include "encoding.h"
+#include "fileio.h"
 #include <cerrno>
 #include <cstring>
 #include <filesystem>
@@ -105,34 +106,34 @@ void LwgDecoder::extractToDirectory(const Archive& archive, const std::string& d
     fs::create_directories(dirPath, ec);
     if (ec) throw std::runtime_error("Cannot create directory: " + dirPath);
 
-    // Write .meta.xml
+    // Write .meta.xml (identical content is left untouched, mtime preserved)
     {
-        std::ofstream meta(dirPath + "/.meta.xml");
-        meta << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
-        meta << "<Canvas>\n";
-        meta << "  <Width>" << archive.width << "</Width>\n";
-        meta << "  <Height>" << archive.height << "</Height>\n";
-        meta << "  <Items>\n";
+        std::string meta;
+        meta += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+        meta += "<Canvas>\n";
+        meta += "  <Width>" + std::to_string(archive.width) + "</Width>\n";
+        meta += "  <Height>" + std::to_string(archive.height) + "</Height>\n";
+        meta += "  <Items>\n";
         for (const auto& e : archive.entries) {
             // Write metadata for non-empty entries
             if (!e.data.empty()) {
-                meta << "    <Item x=\"" << e.x << "\" y=\"" << e.y
-                     << "\" flag=\"" << static_cast<int>(e.flag) << "\">"
-                     << e.name << "</Item>\n";
+                meta += "    <Item x=\"" + std::to_string(e.x) + "\" y=\""
+                      + std::to_string(e.y) + "\" flag=\""
+                      + std::to_string(static_cast<int>(e.flag)) + "\">"
+                      + e.name + "</Item>\n";
             }
         }
-        meta << "  </Items>\n";
-        meta << "</Canvas>\n";
+        meta += "  </Items>\n";
+        meta += "</Canvas>\n";
+        writeTextFileIfChanged(dirPath + "/.meta.xml", meta);
     }
 
-    // Extract files
+    // Extract files (identical content is left untouched, mtime preserved)
     for (const auto& entry : archive.entries) {
         if (entry.data.empty()) continue;
         std::string ext = guessExt(entry.data);
         fs::path outPath = fs::path(dirPath) / (sanitizeFilename(entry.name) + ext);
-        std::ofstream out(outPath, std::ios::binary);
-        if (!out) throw std::runtime_error("Cannot create file: " + outPath.string());
-        out.write(reinterpret_cast<const char*>(entry.data.data()), entry.data.size());
+        writeFileIfChanged(outPath.string(), entry.data);
     }
 }
 
@@ -314,9 +315,7 @@ std::vector<uint8_t> LwgPacker::pack(const std::string& dirPath, const std::stri
 void LwgPacker::packToFile(const std::string& dirPath, const std::string& outputPath,
                             const std::string& encoding) {
     auto data = pack(dirPath, encoding);
-    std::ofstream f(outputPath, std::ios::binary);
-    if (!f) throw std::runtime_error("Cannot write: " + outputPath);
-    f.write(reinterpret_cast<const char*>(data.data()), data.size());
+    writeFileIfChanged(outputPath, data);
 }
 
 } // namespace liarsoft

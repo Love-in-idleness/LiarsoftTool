@@ -1,5 +1,6 @@
 #include "gscfile.h"
 #include "encoding.h"
+#include "fileio.h"
 #include <cerrno>
 #include <cstring>
 #include <iostream>
@@ -119,13 +120,7 @@ int32_t GscFile::calcStringDefinitionLength() const {
 }
 
 void GscFile::save(const std::string& path) const {
-    auto bytes = toBytes();
-
-    std::ofstream stream(path, std::ios::binary);
-    if (!stream) {
-        throw std::runtime_error("Cannot write file: " + path);
-    }
-    stream.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    writeFileIfChanged(path, toBytes());
 }
 
 std::vector<uint8_t> GscFile::toBytes() const {

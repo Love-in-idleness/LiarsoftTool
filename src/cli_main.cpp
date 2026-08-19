@@ -6,6 +6,7 @@
 #include "lwg_decoder.h"
 #include "wav_ogg.h"
 #include "exe_patch.h"
+#include "fileio.h"
 #include "stb_image.h"
 #include <iostream>
 #include <fstream>
@@ -267,8 +268,7 @@ static bool processOne(const std::string& inputPath,
         auto wcgData = liarsoft::wcgEncode(px, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
         stbi_image_free(px);
         if (out.empty()) out = replaceExtension(inputPath, ".wcg");
-        std::ofstream fout(out, std::ios::binary);
-        fout.write(reinterpret_cast<const char*>(wcgData.data()), wcgData.size());
+        liarsoft::writeFileIfChanged(out, wcgData);
         std::cout << "Saved " << w << "x" << h << " WCG to: " << out << std::endl;
 
     } else if (ext == ".exe") {
