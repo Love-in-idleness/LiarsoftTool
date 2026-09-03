@@ -15,10 +15,22 @@ bool isPackableFile(const std::string& path);
 /// Whether a directory contains a .meta.xml file (case-insensitive).
 bool isLwgDirectory(const std::string& path);
 
-/// Pack subdirectories from the deepest level upward (LWG when they have
-/// .meta.xml, XFL otherwise), then pack `dirPath` by the same rule.
-void packDirectoryToFile(const std::string& dirPath, const std::string& outputPath,
-                         const std::string& encoding);
+/// Whether an input belongs to the selected packing/unpacking direction.
+/// Enabling both filters intentionally matches no input.
+bool matchesOperationMode(const std::string& path, bool packOnly,
+                          bool unpackOnly);
+
+/// Pack `dirPath`. With `recursive`, editable files are converted first and
+/// subdirectories are packed from the deepest level upward.
+/// Recoverable per-file failures are returned as warnings.
+std::vector<std::string> packDirectoryToFile(
+    const std::string& dirPath, const std::string& outputPath,
+    const std::string& encoding, bool recursive = false);
+
+/// Recursively unpack nested XFL/LWG files and convert extracted resources to
+/// editable formats. Recoverable failures are returned as warnings.
+std::vector<std::string> unpackDirectoryRecursively(
+    const std::string& dirPath, const std::string& encoding);
 
 /// Represents a single file entry inside an XFL archive.
 struct XflEntry {

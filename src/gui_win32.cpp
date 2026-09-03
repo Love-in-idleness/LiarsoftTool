@@ -37,6 +37,7 @@ static HWND g_hWnd, g_hListView, g_hBtnAdd, g_hBtnRemove, g_hBtnClear, g_hBtnCon
 static HWND g_hBtnRef, g_hBtnOutDir;
 static HWND g_hCboEnc, g_hEditRef, g_hEditOutDir, g_hProgress, g_hStatus;
 static HWND g_hLblEnc, g_hLblRef, g_hLblOutDir;
+static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly;
 static std::vector<std::string> g_inputs;
 static std::vector<std::string> g_outputs;
 static std::vector<std::string> g_statuses;
@@ -158,21 +159,28 @@ static void rebuildOutputs() {
 }
 
 // ---- Conversion worker ----
-static void convertAll(const std::string& encoding, const std::string& refPath) {
+static void convertAll(const std::string& encoding, const std::string& refPath,
+                       bool recursive, bool packOnly, bool unpackOnly) {
     g_running = true;
     EnableWindow(g_hBtnConvert, FALSE);
+    std::vector<std::string> allWarnings;
     
     for (size_t i = 0; i < g_inputs.size(); ++i) {
         if (!g_running) break;
         std::string in = g_inputs[i];
         std::string out = g_outputs[i];
         std::string ext = getExtension(in);
+        std::vector<std::string> warnings;
         
         SendMessage(g_hProgress, PBM_SETPOS, (WPARAM)(i * 100 / g_inputs.size()), 0);
+        if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly)) {
+            lvSetStatus((int)i, "SKIPPED");
+            continue;
+        }
         
         try {
             if (fs::is_directory(in)) {
-                liarsoft::packDirectoryToFile(in, out, encoding);
+                warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
             } else if (ext == ".gsc") {
                 auto gsc = liarsoft::GscFile::fromFile(in, encoding);
                 liarsoft::TransFile::fromGsc(gsc).save(out);
@@ -181,12 +189,16 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 liarsoft::TransFile::fromFile(in).toGsc(ref, encoding).save(out);
             } else if (ext == ".xfl") {
                 liarsoft::XflArchive::fromFile(in, encoding).extractToDirectory(out);
+                if (recursive)
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
             } else if (ext == ".lwg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end); size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
                 std::vector<uint8_t> raw(sz); fs.read((char*)raw.data(), sz);
                 auto arch = liarsoft::LwgDecoder::decode(raw, encoding);
                 liarsoft::LwgDecoder::extractToDirectory(arch, out, encoding);
+                if (recursive)
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
             } else if (ext == ".wcg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end); size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
@@ -212,14 +224,26 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
             } else if (ext == ".exe") {
                 liarsoft::exeConvertFile(in, out, encoding);
             }
-            lvSetStatus((int)i, "OK");
+            allWarnings.insert(allWarnings.end(), warnings.begin(), warnings.end());
+            lvSetStatus((int)i, warnings.empty()
+                ? "OK" : "WARN (" + std::to_string(warnings.size()) + ")");
         } catch (const std::exception& e) {
             lvSetStatus((int)i, std::string("FAIL: ") + e.what());
         }
     }
     
     SendMessage(g_hProgress, PBM_SETPOS, 100, 0);
-    SetWindowTextA(g_hStatus, "Done.");
+    SetWindowTextA(g_hStatus, allWarnings.empty() ? "Done." : "Done with warnings.");
+    if (!allWarnings.empty()) {
+        std::string message;
+        size_t shown = std::min<size_t>(allWarnings.size(), 20);
+        for (size_t i = 0; i < shown; ++i)
+            message += "- " + allWarnings[i] + "\r\n";
+        if (shown < allWarnings.size())
+            message += "... and " + std::to_string(allWarnings.size() - shown) + " more.";
+        MessageBoxA(g_hWnd, message.c_str(), "Completed with warnings",
+                    MB_OK | MB_ICONWARNING);
+    }
     EnableWindow(g_hBtnConvert, TRUE);
     g_running = false;
 }
@@ -300,7 +324,10 @@ static void onConvert() {
     GetWindowTextA(g_hEditRef, ref, sizeof(ref));
     std::string encoding = (strcmp(enc, "GBK") == 0) ? "GBK" : (strcmp(enc, "CP1251") == 0) ? "CP1251" : "SHIFT_JIS";
     std::string refPath = ref;
-    std::thread t(convertAll, encoding, refPath);
+    bool recursive = SendMessage(g_hChkRecursive, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    bool packOnly = SendMessage(g_hChkPackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    bool unpackOnly = SendMessage(g_hChkUnpackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    std::thread t(convertAll, encoding, refPath, recursive, packOnly, unpackOnly);
     t.detach();
 }
 
@@ -337,11 +364,21 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
             444, 10, 316, 22, hWnd, (HMENU)203, NULL, NULL);
         g_hBtnRef = CreateWindowA("BUTTON", "...", WS_VISIBLE | WS_CHILD,
             765, 10, 25, 22, hWnd, (HMENU)101, NULL, NULL);
+
+        g_hChkRecursive = CreateWindowA("BUTTON", "Recursive",
+            WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
+            10, 42, 95, 20, hWnd, (HMENU)107, NULL, NULL);
+        g_hChkPackOnly = CreateWindowA("BUTTON", "Pack only",
+            WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
+            110, 42, 95, 20, hWnd, (HMENU)108, NULL, NULL);
+        g_hChkUnpackOnly = CreateWindowA("BUTTON", "Unpack only",
+            WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
+            210, 42, 105, 20, hWnd, (HMENU)109, NULL, NULL);
         
         // --- ListView ---
         g_hListView = CreateWindowA(WC_LISTVIEWA, NULL,
             WS_VISIBLE | WS_CHILD | LVS_REPORT | LVS_SINGLESEL | WS_BORDER,
-            10, 40, 760, 320, hWnd, NULL, NULL, NULL);
+            10, 65, 760, 295, hWnd, NULL, NULL, NULL);
         ListView_SetExtendedListViewStyle(g_hListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_DOUBLEBUFFER);
         
         LVCOLUMN col = {LVCF_TEXT | LVCF_WIDTH | LVCF_FMT};
@@ -366,9 +403,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
             365, 372, 165, 22, hWnd, (HMENU)206, NULL, NULL);
         g_hBtnOutDir = CreateWindowA("BUTTON", "...", WS_VISIBLE | WS_CHILD,
             535, 370, 25, 22, hWnd, (HMENU)105, NULL, NULL);
-        
+
         g_hBtnConvert = CreateWindowA("BUTTON", "Convert All", WS_VISIBLE | WS_CHILD,
-            570, 370, 100, 30, hWnd, (HMENU)106, NULL, NULL);
+            680, 370, 100, 30, hWnd, (HMENU)106, NULL, NULL);
         EnableWindow(g_hBtnConvert, FALSE);
         
         // --- Progress & Status ---
@@ -445,9 +482,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         SetWindowPos(g_hBtnRef,   NULL, rbx,    10, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 
         // --- ListView fills between top row and bottom controls ---
-        int lvH = by - 50;
+        int lvH = by - 75;
         if (lvH < 40) lvH = 40;
-        SetWindowPos(g_hListView, NULL, m, 40, w - 2*m, lvH, SWP_NOZORDER);
+        SetWindowPos(g_hChkRecursive,  NULL, 10,  42,  95, 20, SWP_NOZORDER);
+        SetWindowPos(g_hChkPackOnly,   NULL, 110, 42,  95, 20, SWP_NOZORDER);
+        SetWindowPos(g_hChkUnpackOnly, NULL, 210, 42, 105, 20, SWP_NOZORDER);
+        SetWindowPos(g_hListView, NULL, m, 65, w - 2*m, lvH, SWP_NOZORDER);
 
         // --- Resize ListView columns: Type+Status fixed, Input+Output split 50/50 ---
         int sbW = GetSystemMetrics(SM_CXVSCROLL) + 6;   // scrollbar + border
@@ -474,7 +514,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         if (edW < 40) edW = 40;
         SetWindowPos(g_hEditOutDir, NULL, 365,    by+2, edW, 22, SWP_NOZORDER);
         SetWindowPos(g_hBtnOutDir,  NULL, btnX,   by,   25,  22, SWP_NOZORDER);
-
         // Convert button (right-anchored)
         SetWindowPos(g_hBtnConvert, NULL, w-m-110, by-2, 100, 30, SWP_NOZORDER);
 

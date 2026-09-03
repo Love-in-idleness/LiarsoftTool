@@ -39,7 +39,7 @@ file(WRITE "${TEST_ROOT}/root/project.cpp" "not-packed")
 file(WRITE "${TEST_ROOT}/root/source.PNG" "not-packed")
 
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Packing test directory failed: ${error}")
@@ -84,6 +84,13 @@ if(result OR NOT EXISTS "${TEST_ROOT}/nested_unpacked/scene.lwg")
 endif()
 
 execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/recursive_unpacked" "${TEST_ROOT}/root.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/recursive_unpacked/nested/scene/.meta.xml")
+    message(FATAL_ERROR "Nested archives were not recursively unpacked: ${error}")
+endif()
+
+execute_process(
     COMMAND "${TOOL}" -o "${TEST_ROOT}/good_unpacked" "${TEST_ROOT}/root/good.lwg"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/good_unpacked/image.wcg" OR
@@ -106,4 +113,129 @@ execute_process(
     RESULT_VARIABLE result)
 if(NOT result)
     message(FATAL_ERROR "Empty LWG directory unexpectedly succeeded")
+endif()
+
+# Recursive conversions: PNG -> WCG with LIM backup, OGG -> WAV, warnings for
+# missing references, followed by recursive unpacking back to editable files.
+file(MAKE_DIRECTORY "${TEST_ROOT}/convert")
+configure_file("${SOURCE_DIR}/image.png" "${TEST_ROOT}/convert/image.png" COPYONLY)
+file(WRITE "${TEST_ROOT}/convert/image.lim" "old-lim")
+file(WRITE "${TEST_ROOT}/convert/orphan.txt" "#original\n>translation\n")
+file(WRITE "${TEST_ROOT}/convert/orphan.ogg" "missing-template")
+file(WRITE "${TEST_ROOT}/convert/broken.png" "not-an-image")
+file(WRITE "${TEST_ROOT}/convert/broken.wcg" "stale-conversion")
+file(WRITE "${TEST_ROOT}/convert/audio.wav"
+    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+string(ASCII 1 one)
+file(WRITE "${TEST_ROOT}/convert/audio.ogg"
+    "OggSAAAAAAAAAAAAAAAAAAAAAA${one}${one}Z")
+
+execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/convert.xfl" "${TEST_ROOT}/convert"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result)
+    message(FATAL_ERROR "Recursive conversion packing failed: ${error}")
+endif()
+if(NOT EXISTS "${TEST_ROOT}/convert/image.lim.old" OR
+   EXISTS "${TEST_ROOT}/convert/image.lim" OR
+   NOT EXISTS "${TEST_ROOT}/convert/image.wcg" OR
+   NOT error MATCHES "same-name reference GSC not found" OR
+   NOT error MATCHES "same-name WAV template not found" OR
+   NOT error MATCHES "failed to load image")
+    message(FATAL_ERROR "Recursive conversion or warnings are incorrect: ${error}")
+endif()
+
+execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/convert_unpacked" "${TEST_ROOT}/convert.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/convert_unpacked/image.png" OR
+   NOT EXISTS "${TEST_ROOT}/convert_unpacked/audio.ogg" OR
+   EXISTS "${TEST_ROOT}/convert_unpacked/broken.wcg")
+    message(FATAL_ERROR "Recursive resource unpacking failed: ${error}")
+endif()
+
+# Existing .lim.old protects the backup and skips image conversion. Any stale
+# WCG target must not leak into the newly packed archive.
+file(MAKE_DIRECTORY "${TEST_ROOT}/backup_collision")
+configure_file("${SOURCE_DIR}/image.png"
+               "${TEST_ROOT}/backup_collision/item.png" COPYONLY)
+file(WRITE "${TEST_ROOT}/backup_collision/item.lim" "original-lim")
+file(WRITE "${TEST_ROOT}/backup_collision/item.lim.old" "protected-backup")
+file(WRITE "${TEST_ROOT}/backup_collision/item.wcg" "stale-conversion")
+file(WRITE "${TEST_ROOT}/backup_collision/layout.xml" "resource")
+execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/backup_collision.xfl"
+            "${TEST_ROOT}/backup_collision"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT error MATCHES "backup already exists" OR
+   NOT EXISTS "${TEST_ROOT}/backup_collision/item.lim" OR
+   NOT EXISTS "${TEST_ROOT}/backup_collision/item.lim.old")
+    message(FATAL_ERROR "Existing LIM backup was not protected: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" -o "${TEST_ROOT}/backup_collision_unpacked"
+            "${TEST_ROOT}/backup_collision.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/backup_collision_unpacked/item.lim" OR
+   NOT EXISTS "${TEST_ROOT}/backup_collision_unpacked/layout.xml" OR
+   EXISTS "${TEST_ROOT}/backup_collision_unpacked/item.wcg")
+    message(FATAL_ERROR "LIM backup collision filtering failed: ${error}")
+endif()
+
+# Without -R, editable files and child directories are left alone.
+file(MAKE_DIRECTORY "${TEST_ROOT}/flat/child")
+file(WRITE "${TEST_ROOT}/flat/layout.xml" "resource")
+file(WRITE "${TEST_ROOT}/flat/source.png" "not-converted")
+file(WRITE "${TEST_ROOT}/flat/child/data.gsc" "child")
+execute_process(
+    COMMAND "${TOOL}" -o "${TEST_ROOT}/flat.xfl" "${TEST_ROOT}/flat"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR EXISTS "${TEST_ROOT}/flat/source.wcg" OR
+   EXISTS "${TEST_ROOT}/flat/child.xfl")
+    message(FATAL_ERROR "Non-recursive packing did recursive work: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" -o "${TEST_ROOT}/flat_unpacked" "${TEST_ROOT}/flat.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/flat_unpacked/layout.xml" OR
+   EXISTS "${TEST_ROOT}/flat_unpacked/source.png")
+    message(FATAL_ERROR "Non-recursive packing filter failed: ${error}")
+endif()
+
+# Operation filters: either direction works alone; enabling both matches no
+# operation and must leave every requested output untouched.
+execute_process(
+    COMMAND "${TOOL}" --pack-only -o "${TEST_ROOT}/pack_only.xfl"
+            "${TEST_ROOT}/flat"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/pack_only.xfl")
+    message(FATAL_ERROR "Pack-only mode did not pack a directory: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" --unpack-only -o "${TEST_ROOT}/unpack_only"
+            "${TEST_ROOT}/pack_only.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/unpack_only/layout.xml")
+    message(FATAL_ERROR "Unpack-only mode did not unpack an archive: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" --unpack-only -o "${TEST_ROOT}/must_not_pack.xfl"
+            "${TEST_ROOT}/flat"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR EXISTS "${TEST_ROOT}/must_not_pack.xfl")
+    message(FATAL_ERROR "Unpack-only mode performed packing: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" --pack-only -o "${TEST_ROOT}/must_not_unpack"
+            "${TEST_ROOT}/pack_only.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR EXISTS "${TEST_ROOT}/must_not_unpack")
+    message(FATAL_ERROR "Pack-only mode performed unpacking: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" --pack-only --unpack-only
+            -o "${TEST_ROOT}/both_enabled.xfl" "${TEST_ROOT}/flat"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR EXISTS "${TEST_ROOT}/both_enabled.xfl")
+    message(FATAL_ERROR "Both operation filters enabled still did work: ${error}")
 endif()

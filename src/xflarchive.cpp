@@ -1,13 +1,18 @@
 #include "xflarchive.h"
 #include "bigendian.h"
+#include "gscfile.h"
 #include "fileio.h"
+#include "lim_decoder.h"
 #include "lwg_decoder.h"
+#include "stb_image.h"
+#include "transfile.h"
+#include "wav_ogg.h"
+#include "wcg_decoder.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstring>
 #include <filesystem>
-#include <iostream>
 #include <set>
 #include "encoding.h"
 #include <regex>
@@ -43,8 +48,157 @@ bool isLwgDirectory(const std::string& path) {
     return fs::is_directory(path) && !metaFile(path).empty();
 }
 
+bool matchesOperationMode(const std::string& path, bool packOnly,
+                          bool unpackOnly) {
+    if (!packOnly && !unpackOnly) return true;
+    const bool directory = fs::is_directory(path);
+    const auto ext = lower(fs::path(path).extension().string());
+    const bool packing = directory || ext == ".txt" || ext == ".ogg" ||
+                         ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
+                         ext == ".bmp";
+    const bool unpacking = !directory && (ext == ".xfl" || ext == ".lwg" ||
+                           ext == ".gsc" || ext == ".wcg" || ext == ".lim" ||
+                           ext == ".wav");
+    return (!packOnly || packing) && (!unpackOnly || unpacking);
+}
+
 static std::string normalized(const fs::path& path) {
     return fs::absolute(path).lexically_normal().string();
+}
+
+static std::vector<uint8_t> readFile(const fs::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("Cannot open: " + path.string());
+    in.seekg(0, std::ios::end);
+    size_t size = in.tellg();
+    in.seekg(0, std::ios::beg);
+    std::vector<uint8_t> data(size);
+    in.read(reinterpret_cast<char*>(data.data()), size);
+    if (!in && size != 0) throw std::runtime_error("Cannot read: " + path.string());
+    return data;
+}
+
+static fs::path findFile(const fs::path& directory, const std::string& stem,
+                         const std::string& extension) {
+    const auto wantedStem = lower(stem);
+    const auto wantedExt = lower(extension);
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (!entry.is_symlink() && entry.is_regular_file() &&
+            lower(entry.path().stem().string()) == wantedStem &&
+            lower(entry.path().extension().string()) == wantedExt)
+            return entry.path();
+    }
+    return {};
+}
+
+static fs::path outputFile(const fs::path& source, const std::string& extension) {
+    auto existing = findFile(source.parent_path(), source.stem().string(), extension);
+    return existing.empty()
+        ? source.parent_path() / (source.stem().string() + extension)
+        : existing;
+}
+
+static std::vector<fs::path> editableFiles(const fs::path& directory) {
+    static constexpr std::array<const char*, 6> extensions = {
+        ".txt", ".ogg", ".png", ".jpg", ".jpeg", ".bmp"
+    };
+    std::vector<fs::path> files;
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (!entry.is_symlink() && entry.is_regular_file()) {
+            auto ext = lower(entry.path().extension().string());
+            if (std::find(extensions.begin(), extensions.end(), ext) != extensions.end())
+                files.push_back(entry.path());
+        }
+    }
+    auto rank = [](const fs::path& path) {
+        const auto ext = lower(path.extension().string());
+        if (ext == ".txt") return 0;
+        if (ext == ".ogg") return 1;
+        if (ext == ".png") return 2;
+        if (ext == ".jpg") return 3;
+        if (ext == ".jpeg") return 4;
+        return 5;
+    };
+    std::sort(files.begin(), files.end(), [&](const fs::path& a, const fs::path& b) {
+        const auto aStem = lower(a.stem().string()), bStem = lower(b.stem().string());
+        if (aStem != bStem) return aStem < bStem;
+        return rank(a) < rank(b);
+    });
+    return files;
+}
+
+static void prepareDirectoryForPacking(const fs::path& directory,
+                                       const std::string& encoding,
+                                       std::set<std::string>& excludedPaths,
+                                       std::vector<std::string>& warnings) {
+    std::set<std::string> convertedTargets;
+    for (const auto& source : editableFiles(directory)) {
+        const auto ext = lower(source.extension().string());
+        fs::path target;
+        if (ext == ".txt") target = outputFile(source, ".gsc");
+        else if (ext == ".ogg") target = outputFile(source, ".wav");
+        else target = outputFile(source, ".wcg");
+
+        const auto targetKey = normalized(target);
+        if (convertedTargets.count(targetKey)) {
+            warnings.push_back("Skipped duplicate source '" + source.string() +
+                               "' for '" + target.string() + "'");
+            continue;
+        }
+
+        try {
+            if (ext == ".txt") {
+                if (!fs::is_regular_file(target))
+                    throw std::runtime_error("same-name reference GSC not found");
+                TransFile::fromFile(source.string()).toGsc(target.string(), encoding)
+                    .save(target.string());
+            } else if (ext == ".ogg") {
+                if (!fs::is_regular_file(target))
+                    throw std::runtime_error("same-name WAV template not found");
+                WavOggExtractor::embedToFile(source.string(), target.string(),
+                                             target.string());
+            } else {
+                int width, height, channels;
+                unsigned char* pixels = stbi_load(source.string().c_str(), &width,
+                                                  &height, &channels, 4);
+                if (!pixels)
+                    throw std::runtime_error("failed to load image");
+                std::vector<uint8_t> wcg;
+                try {
+                    wcg = wcgEncode(pixels, static_cast<uint32_t>(width),
+                                    static_cast<uint32_t>(height));
+                } catch (...) {
+                    stbi_image_free(pixels);
+                    throw;
+                }
+                stbi_image_free(pixels);
+
+                auto lim = findFile(directory, source.stem().string(), ".lim");
+                fs::path oldLim;
+                if (!lim.empty()) {
+                    oldLim = lim.string() + ".old";
+                    if (fs::exists(oldLim))
+                        throw std::runtime_error("backup already exists: " +
+                                                 oldLim.string());
+                    fs::rename(lim, oldLim);
+                }
+                try {
+                    writeFileIfChanged(target.string(), wcg);
+                } catch (...) {
+                    if (!oldLim.empty()) {
+                        std::error_code ec;
+                        fs::rename(oldLim, lim, ec);
+                    }
+                    throw;
+                }
+            }
+            convertedTargets.insert(targetKey);
+            excludedPaths.erase(targetKey);
+        } catch (const std::exception& e) {
+            excludedPaths.insert(targetKey);
+            warnings.push_back("Skipped '" + source.string() + "': " + e.what());
+        }
+    }
 }
 
 static void packOneDirectory(const fs::path& directory, const fs::path& output,
@@ -74,7 +228,8 @@ static void packOneDirectory(const fs::path& directory, const fs::path& output,
 
 static void packSubdirectories(const fs::path& directory,
                                const std::string& encoding,
-                               std::set<std::string>& excludedPaths) {
+                               std::set<std::string>& excludedPaths,
+                               std::vector<std::string>& warnings) {
     std::vector<fs::path> subdirectories;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (!entry.is_symlink() && entry.is_directory())
@@ -83,7 +238,8 @@ static void packSubdirectories(const fs::path& directory,
     std::sort(subdirectories.begin(), subdirectories.end());
 
     for (const auto& subdirectory : subdirectories) {
-        packSubdirectories(subdirectory, encoding, excludedPaths);
+        packSubdirectories(subdirectory, encoding, excludedPaths, warnings);
+        prepareDirectoryForPacking(subdirectory, encoding, excludedPaths, warnings);
         const bool isLwg = isLwgDirectory(subdirectory.string());
         fs::path output = subdirectory;
         output += isLwg ? ".lwg" : ".xfl";
@@ -95,22 +251,123 @@ static void packSubdirectories(const fs::path& directory,
             excludedPaths.erase(normalized(output));
         } catch (const std::exception& e) {
             excludedPaths.insert(normalized(output));
-            std::cerr << "Warning: skipped " << (isLwg ? "LWG" : "XFL")
-                      << " directory '" << subdirectory.string() << "': "
-                      << e.what() << std::endl;
+            warnings.push_back("Skipped " + std::string(isLwg ? "LWG" : "XFL") +
+                               " directory '" + subdirectory.string() + "': " +
+                               e.what());
         }
     }
 }
 
-void packDirectoryToFile(const std::string& dirPath, const std::string& outputPath,
-                         const std::string& encoding) {
+std::vector<std::string> packDirectoryToFile(
+    const std::string& dirPath, const std::string& outputPath,
+    const std::string& encoding, bool recursive) {
     if (!fs::is_directory(dirPath))
         throw std::runtime_error("Directory not found: " + dirPath);
 
+    std::vector<std::string> warnings;
     std::set<std::string> excludedPaths;
     excludedPaths.insert(normalized(outputPath));
-    packSubdirectories(dirPath, encoding, excludedPaths);
+    if (recursive) {
+        packSubdirectories(dirPath, encoding, excludedPaths, warnings);
+        prepareDirectoryForPacking(dirPath, encoding, excludedPaths, warnings);
+    }
     packOneDirectory(dirPath, outputPath, encoding, excludedPaths);
+    return warnings;
+}
+
+static void unpackDirectory(const fs::path& directory, const std::string& encoding,
+                            unsigned depth, std::vector<std::string>& warnings) {
+    // ponytail: depth cap prevents malicious self-nesting; raise it if real
+    // archives are ever observed deeper than 32 levels.
+    if (depth > 32) {
+        warnings.push_back("Stopped unpacking below '" + directory.string() +
+                           "': nesting exceeds 32 levels");
+        return;
+    }
+
+    std::vector<fs::path> archives;
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (entry.is_symlink() || !entry.is_regular_file()) continue;
+        auto ext = lower(entry.path().extension().string());
+        if (ext == ".xfl" || ext == ".lwg") archives.push_back(entry.path());
+    }
+    std::sort(archives.begin(), archives.end());
+
+    std::set<std::string> extractedTargets;
+    for (const auto& archivePath : archives) {
+        auto target = archivePath.parent_path() / archivePath.stem();
+        if (!extractedTargets.insert(normalized(target)).second) {
+            warnings.push_back("Skipped duplicate archive target: " +
+                               archivePath.string());
+            continue;
+        }
+        try {
+            if (lower(archivePath.extension().string()) == ".xfl") {
+                XflArchive::fromFile(archivePath.string(), encoding)
+                    .extractToDirectory(target.string());
+            } else {
+                auto archive = LwgDecoder::decode(readFile(archivePath), encoding);
+                LwgDecoder::extractToDirectory(archive, target.string(), encoding);
+            }
+            unpackDirectory(target, encoding, depth + 1, warnings);
+        } catch (const std::exception& e) {
+            warnings.push_back("Skipped archive '" + archivePath.string() +
+                               "': " + e.what());
+        }
+    }
+
+    struct Conversion { fs::path source; int rank; };
+    std::vector<Conversion> conversions;
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (entry.is_symlink() || !entry.is_regular_file()) continue;
+        const auto ext = lower(entry.path().extension().string());
+        int rank = ext == ".gsc" ? 0 : ext == ".wcg" ? 1 :
+                   ext == ".lim" ? 2 : ext == ".wav" ? 3 : -1;
+        if (rank >= 0) conversions.push_back({entry.path(), rank});
+    }
+    std::sort(conversions.begin(), conversions.end(), [](const Conversion& a,
+                                                          const Conversion& b) {
+        auto aStem = lower(a.source.stem().string());
+        auto bStem = lower(b.source.stem().string());
+        if (aStem != bStem) return aStem < bStem;
+        return a.rank < b.rank;
+    });
+
+    std::set<std::string> convertedTargets;
+    for (const auto& conversion : conversions) {
+        const auto& source = conversion.source;
+        const auto ext = lower(source.extension().string());
+        auto target = outputFile(source, ext == ".gsc" ? ".txt" :
+                                         ext == ".wav" ? ".ogg" : ".png");
+        if (!convertedTargets.insert(normalized(target)).second) {
+            warnings.push_back("Skipped duplicate conversion target: " +
+                               source.string());
+            continue;
+        }
+        try {
+            if (ext == ".gsc") {
+                auto gsc = GscFile::fromFile(source.string(), encoding);
+                TransFile::fromGsc(gsc).save(target.string());
+            } else if (ext == ".wcg") {
+                wcgSavePng(wcgDecode(readFile(source)), target.string());
+            } else if (ext == ".lim") {
+                limSavePng(limDecode(readFile(source)), target.string());
+            } else {
+                WavOggExtractor::extractToFile(source.string(), target.string());
+            }
+        } catch (const std::exception& e) {
+            warnings.push_back("Skipped '" + source.string() + "': " + e.what());
+        }
+    }
+}
+
+std::vector<std::string> unpackDirectoryRecursively(
+    const std::string& dirPath, const std::string& encoding) {
+    if (!fs::is_directory(dirPath))
+        throw std::runtime_error("Directory not found: " + dirPath);
+    std::vector<std::string> warnings;
+    unpackDirectory(dirPath, encoding, 0, warnings);
+    return warnings;
 }
 
 

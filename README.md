@@ -35,6 +35,10 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | OGG 嵌入 WAV | `liarsofttool -r template.wav audio.ogg` |
 | 打包目录→XFL | `liarsofttool -e shift_jis ./dir` |
 | 打包目录→LWG | `liarsofttool -e shift_jis ./dir_with_meta` |
+| 递归解包并转换 | `liarsofttool -R -e shift_jis archive.xfl` |
+| 转换并递归打包 | `liarsofttool -R -e shift_jis ./dir` |
+| 只执行封包方向 | `liarsofttool --pack-only <输入...>` |
+| 只执行解包方向 | `liarsofttool --unpack-only <输入...>` |
 | EXE 编码转换 | `liarsofttool -e gbk game.exe` |
 | 批量转换 | `liarsofttool *.png` 或 `liarsofttool * -e gbk` |
 
@@ -84,7 +88,7 @@ make -j$(nproc)
 直接运行 `liarsofttool-gui` 或双击可执行文件启动：
 
 - **拖放文件**到窗口即可添加到转换列表
-- 编码选择（Shift-JIS / GBK / CP1251）、参考 GSC 指定、输出目录
+- 编码选择（Shift-JIS / GBK / CP1251）、参考 GSC 指定、输出目录，以及递归/仅封包/仅解包开关
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
 - Linux 使用 GTK3，Windows 使用原生 Win32 API（零额外 DLL 依赖）
@@ -96,6 +100,9 @@ make -j$(nproc)
 | `-e, --encoding <enc>` | 编码：`shift_jis`（日文，默认）/ `gbk`（中文）/ `cp1251`（西里尔及英文） |
 | `-r, --reference <path>` | TXT→GSC 时所需的参考 GSC 文件 |
 | `-o, --output <path>` | 显式指定输出路径 |
+| `-R, --recursive` | 递归处理子封包，并在打包/解包时自动转换资源 |
+| `--pack-only` | 只执行封包及编码方向的输入 |
+| `--unpack-only` | 只执行解包及解码方向的输入 |
 | `-h, --help` | 显示帮助 |
 
 支持多个输入文件及 shell 通配符：`liarsofttool *.wcg`、`liarsofttool * -e gbk`。
@@ -147,7 +154,13 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 
 > 提示：所有输出文件采用"内容相同则不重写"策略——若生成结果与磁盘上已有文件二进制完全一致，将跳过写入以保留原文件的修改时间，方便增量/批量转换时避免无关文件被标记为已修改。
 
-目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写）。打包前会自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余目录生成同名 XFL。失败的子目录会跳过，其旧 LWG/XFL 也不会进入本次父封包。PNG 等工程文件不会直接打包，请先转换为 WCG。没有有效资源时不会生成空封包。
+目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写），PNG 等工程文件不会直接进入封包。默认只处理指定目录或封包的当前层。
+
+启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、OGG→WAV（需同名 WAV 作为模板）。图像转换遇到同名 LIM 时，会先将它改名为 `.lim.old`；如果备份已存在，则警告并跳过该图像。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
+
+递归解包会继续解开内嵌 XFL/LWG，并自动执行 GSC→TXT、WCG/LIM→PNG、WAV→OGG；单个文件失败只会产生警告，不会中断其余处理。
+
+“仅封包”包括目录→XFL/LWG、TXT→GSC、图片→WCG、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG/LIM→PNG、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
 
 ### 已知限制
 
@@ -172,6 +185,10 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 | OGG embed to WAV | `liarsofttool -r template.wav audio.ogg` |
 | Pack directory → XFL | `liarsofttool -e shift_jis ./dir` |
 | Pack directory → LWG | `liarsofttool -e shift_jis ./dir_with_meta` |
+| Recursively unpack and convert | `liarsofttool -R -e shift_jis archive.xfl` |
+| Convert and recursively pack | `liarsofttool -R -e shift_jis ./dir` |
+| Only pack/encode | `liarsofttool --pack-only <inputs...>` |
+| Only unpack/decode | `liarsofttool --unpack-only <inputs...>` |
 | EXE encoding convert | `liarsofttool -e gbk game.exe` |
 | Batch convert | `liarsofttool *.png` or `liarsofttool * -e gbk` |
 
@@ -222,7 +239,7 @@ make -j$(nproc)
 Run `liarsofttool-gui` or double-click the executable:
 
 - **Drag & drop** files onto the window to add them
-- Encoding selector (Shift-JIS / GBK / CP1251), optional reference, output directory
+- Encoding selector (Shift-JIS / GBK / CP1251), optional reference, output directory, and recursive/pack-only/unpack-only toggles
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Linux: GTK3 backend. Windows: native Win32 API (zero extra DLL dependencies)
@@ -234,6 +251,9 @@ Run `liarsofttool-gui` or double-click the executable:
 | `-e, --encoding <enc>` | Encoding: `shift_jis` (JP, default) / `gbk` (CN) / `cp1251` (Cyrillic & English) |
 | `-r, --reference <path>` | Reference GSC or WAV for injection |
 | `-o, --output <path>` | Explicit output path |
+| `-R, --recursive` | Process nested archives and convert resources while packing/unpacking |
+| `--pack-only` | Only process packing and encoding inputs |
+| `--unpack-only` | Only process unpacking and decoding inputs |
 | `-h, --help` | Show help |
 
 Multiple inputs and shell wildcards are supported: `liarsofttool *.wcg`, `liarsofttool * -e gbk`.
@@ -288,7 +308,13 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
 > so the existing file's modification time is preserved. This keeps
 > incremental/batch conversions from touching unchanged files.
 
-Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive). Before packing, subdirectories are processed from the deepest level upward: directories containing `.meta.xml` become sibling LWG files, while all others become sibling XFL files. Failed child conversions and their stale LWG/XFL outputs are excluded. Project files such as PNG are not packed directly; convert them to WCG first. Empty archives are rejected.
+Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive); project files such as PNG are never stored directly. By default, only the current level of the selected directory or archive is processed.
+
+With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, and OGG→WAV (requiring a same-name WAV template). Before converting an image, a same-name LIM is renamed to `.lim.old`; if that backup already exists, the image is skipped with a warning. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
+
+Recursive unpacking opens nested XFL/LWG archives and performs GSC→TXT, WCG/LIM→PNG, and WAV→OGG. Failure of one file produces a warning without stopping the remaining work.
+
+**Pack only** covers directory→XFL/LWG, TXT→GSC, images→WCG, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG/LIM→PNG, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
 
 ### Known Limitations
 

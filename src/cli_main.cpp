@@ -27,6 +27,9 @@ static void printUsage(const char* prog) {
               << "                        Supported: shift_jis, gbk, cp1251\n"
               << "  -r, --reference <path> Reference GSC or WAV file for conversion\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
+              << "  -R, --recursive        Recursively pack/unpack and convert resources\n"
+              << "      --pack-only        Only pack/encode inputs\n"
+              << "      --unpack-only      Only unpack/decode inputs\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
@@ -53,6 +56,8 @@ static void printUsage(const char* prog) {
               << "  " << prog << " -e cp1251 game.exe       # SJIS→CP1251\n"
               << "  " << prog << " -e shift_jis game.exe    # revert to SJIS\n"
               << "  " << prog << " -r template.wav audio.ogg\n"
+              << "  " << prog << " -R archive.xfl         # recursive unpack + conversion\n"
+              << "  " << prog << " -R ./extracted_dir      # conversion + recursive pack\n"
               << "  " << prog << " 0*.png                  # batch convert all matching PNGs\n"
               << "  " << prog << " -e gbk ./extracted_dir\n"
               << std::endl;
@@ -149,8 +154,13 @@ static std::vector<std::string> globPattern(const std::string& pattern) {
 static bool processOne(const std::string& inputPath,
                        const std::string& outputPath,
                        const std::string& encoding,
-                       const std::string& referencePath)
+                       const std::string& referencePath,
+                       bool recursive)
 {
+    auto printWarnings = [](const std::vector<std::string>& warnings) {
+        for (const auto& warning : warnings)
+            std::cerr << "Warning: " << warning << std::endl;
+    };
     // Resolve absolute path
     std::error_code ec;
     std::string resolved = fs::absolute(inputPath, ec).string();
@@ -173,7 +183,9 @@ static bool processOne(const std::string& inputPath,
                       << " (encoding: " << encoding << ")" << std::endl;
             if (out.empty()) out = resolved + ".xfl";
         }
-        liarsoft::packDirectoryToFile(resolved, out, encoding);
+        auto warnings = liarsoft::packDirectoryToFile(resolved, out, encoding,
+                                                       recursive);
+        printWarnings(warnings);
         std::cout << "Packed to: " << out << std::endl;
         return true;
     }
@@ -217,6 +229,8 @@ static bool processOne(const std::string& inputPath,
         auto archive = liarsoft::XflArchive::fromFile(inputPath, encoding);
         if (out.empty()) out = replaceExtension(inputPath, "");
         archive.extractToDirectory(out);
+        if (recursive)
+            printWarnings(liarsoft::unpackDirectoryRecursively(out, encoding));
         std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
 
     } else if (ext == ".lwg") {
@@ -225,6 +239,8 @@ static bool processOne(const std::string& inputPath,
         auto archive = liarsoft::LwgDecoder::decode(raw, encoding);
         if (out.empty()) out = replaceExtension(inputPath, "");
         liarsoft::LwgDecoder::extractToDirectory(archive, out, encoding);
+        if (recursive)
+            printWarnings(liarsoft::unpackDirectoryRecursively(out, encoding));
         std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
 
     } else if (ext == ".wav") {
@@ -292,6 +308,9 @@ int main(int argc, char* argv[]) {
     std::string referencePath;
     std::vector<std::string> inputs;
     std::string explicitOutput;
+    bool recursive = false;
+    bool packOnly = false;
+    bool unpackOnly = false;
 
     // Parse arguments
     int i = 1;
@@ -309,6 +328,12 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-o" || arg == "--output") {
             if (i + 1 < argc) explicitOutput = argv[++i];
             else { std::cerr << "Error: --output requires a value" << std::endl; return 1; }
+        } else if (arg == "-R" || arg == "--recursive") {
+            recursive = true;
+        } else if (arg == "--pack-only") {
+            packOnly = true;
+        } else if (arg == "--unpack-only") {
+            unpackOnly = true;
         } else if (arg[0] == '-') {
             std::cerr << "Error: unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -361,6 +386,7 @@ int main(int argc, char* argv[]) {
     try {
         for (size_t fi = 0; fi < allFiles.size(); ++fi) {
             const auto& f = allFiles[fi];
+            if (!liarsoft::matchesOperationMode(f, packOnly, unpackOnly)) continue;
             std::string out;
             if (allFiles.size() == 1 && !outputPath.empty()) {
                 out = outputPath;  // explicit output for single file
@@ -373,7 +399,7 @@ int main(int argc, char* argv[]) {
 
             if (allFiles.size() > 1)
                 std::cout << "\n[" << (fi + 1) << "/" << allFiles.size() << "] ";
-            if (!processOne(f, out, encoding, referencePath))
+            if (!processOne(f, out, encoding, referencePath, recursive))
                 ++errors;
         }
     } catch (const std::exception& e) {

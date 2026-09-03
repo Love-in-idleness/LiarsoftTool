@@ -36,6 +36,9 @@ static Glib::RefPtr<Gtk::ListStore> g_store;
 static Gtk::ComboBoxText* g_encodingCombo = nullptr;
 static Gtk::Entry* g_refEntry = nullptr;
 static Gtk::Entry* g_outDirEntry = nullptr;
+static Gtk::CheckButton* g_recursiveCheck = nullptr;
+static Gtk::CheckButton* g_packOnlyCheck = nullptr;
+static Gtk::CheckButton* g_unpackOnlyCheck = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
@@ -123,34 +126,53 @@ static void addFiles(const std::vector<std::string>& paths, const std::string& o
 }
 
 // ---- Conversion worker thread ----
-static void convertAll(const std::string& encoding, const std::string& refPath) {
+static void convertAll(const std::string& encoding, const std::string& refPath,
+                       bool recursive, bool packOnly, bool unpackOnly) {
     g_running = true;
     g_convertBtn->set_sensitive(false);
 
     auto children = g_store->children();
     int total = children.size();
     int done = 0;
+    int totalWarnings = 0;
+    std::vector<std::string> allWarnings;
 
     for (auto& child : children) {
         if (!g_running) break;
 
         std::string in  = static_cast<Glib::ustring>(child[g_columns.inputPath]);
         std::string out = static_cast<Glib::ustring>(child[g_columns.outputPath]);
+        auto rowPath = g_store->get_path(child);
+        int processingNumber = done + 1;
+        std::string ext = getExtension(in);
 
-        Glib::signal_idle().connect_once([&child, &done, total]() {
-            child[g_columns.status] = "Processing...";
+        if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly)) {
+            done++;
+            Glib::signal_idle().connect_once([rowPath, done, total]() {
+                auto row = g_store->get_iter(rowPath);
+                if (row) (*row)[g_columns.status] = "SKIPPED";
+                g_progress->set_fraction(static_cast<double>(done) / total);
+                g_statusLabel->set_text(
+                    Glib::ustring::format("Done ", done, " of ", total));
+            });
+            continue;
+        }
+
+        Glib::signal_idle().connect_once([rowPath, done, total, processingNumber]() {
+            auto row = g_store->get_iter(rowPath);
+            if (row) (*row)[g_columns.status] = "Processing...";
             double frac = static_cast<double>(done) / total;
             g_progress->set_fraction(frac);
             g_statusLabel->set_text(
-                Glib::ustring::format("Processing ", done + 1, " of ", total));
+                Glib::ustring::format("Processing ", processingNumber, " of ", total));
         });
 
         // Process this file
-        std::string ext = getExtension(in);
+        std::vector<std::string> warnings;
 
         try {
             if (fs::is_directory(in)) {
-                liarsoft::packDirectoryToFile(in, out, encoding);
+                warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
             } else if (ext == ".gsc") {
                 auto gsc = liarsoft::GscFile::fromFile(in, encoding);
                 auto trans = liarsoft::TransFile::fromGsc(gsc);
@@ -163,6 +185,8 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
             } else if (ext == ".xfl") {
                 auto arch = liarsoft::XflArchive::fromFile(in, encoding);
                 arch.extractToDirectory(out);
+                if (recursive)
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
             } else if (ext == ".lwg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end);
@@ -171,6 +195,8 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 fs.read(reinterpret_cast<char*>(raw.data()), sz);
                 auto arch = liarsoft::LwgDecoder::decode(raw, encoding);
                 liarsoft::LwgDecoder::extractToDirectory(arch, out, encoding);
+                if (recursive)
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
             } else if (ext == ".wcg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end);
@@ -205,19 +231,31 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
                 throw std::runtime_error("Unsupported format");
             }
 
+            for (const auto& warning : warnings)
+                std::cerr << "Warning: " << warning << std::endl;
+            totalWarnings += static_cast<int>(warnings.size());
+            allWarnings.insert(allWarnings.end(), warnings.begin(), warnings.end());
+            std::string rowStatus = warnings.empty()
+                ? "OK" : "WARN (" + std::to_string(warnings.size()) + ")";
+            std::string detail = warnings.empty() ? "" : warnings.front();
             done++;
-            Glib::signal_idle().connect_once([&child, &done, total]() {
-                child[g_columns.status] = "OK";
+            Glib::signal_idle().connect_once([rowPath, done, total, rowStatus, detail]() {
+                auto row = g_store->get_iter(rowPath);
+                if (row) (*row)[g_columns.status] = rowStatus;
                 double frac = static_cast<double>(done) / total;
                 g_progress->set_fraction(frac);
-                g_statusLabel->set_text(
-                    Glib::ustring::format("Done ", done, " of ", total));
+                if (detail.empty())
+                    g_statusLabel->set_text(
+                        Glib::ustring::format("Done ", done, " of ", total));
+                else
+                    g_statusLabel->set_text("Warning: " + detail);
             });
         } catch (const std::exception& e) {
             done++;
             std::string err = e.what();
-            Glib::signal_idle().connect_once([&child, &done, total, err]() {
-                child[g_columns.status] = "FAILED: " + err;
+            Glib::signal_idle().connect_once([rowPath, done, total, err]() {
+                auto row = g_store->get_iter(rowPath);
+                if (row) (*row)[g_columns.status] = "FAILED: " + err;
                 double frac = static_cast<double>(done) / total;
                 g_progress->set_fraction(frac);
                 g_statusLabel->set_text(
@@ -226,9 +264,23 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
         }
     }
 
-    Glib::signal_idle().connect_once([]() {
+    Glib::signal_idle().connect_once([totalWarnings, allWarnings]() {
         g_progress->set_fraction(1.0);
-        g_statusLabel->set_text("All done.");
+        g_statusLabel->set_text(totalWarnings == 0
+            ? "All done."
+            : Glib::ustring::format("Done with ", totalWarnings, " warning(s)."));
+        if (!allWarnings.empty()) {
+            std::ostringstream message;
+            size_t shown = std::min<size_t>(allWarnings.size(), 20);
+            for (size_t i = 0; i < shown; ++i)
+                message << "- " << allWarnings[i] << '\n';
+            if (shown < allWarnings.size())
+                message << "... and " << allWarnings.size() - shown << " more.";
+            Gtk::MessageDialog dialog("Completed with warnings", false,
+                                      Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, true);
+            dialog.set_secondary_text(message.str());
+            dialog.run();
+        }
         g_convertBtn->set_sensitive(true);
         g_running = false;
     });
@@ -362,6 +414,17 @@ int runGui(int argc, char* argv[]) {
     topBar->pack_start(*refBtn, false, false);
     mainBox->pack_start(*topBar, false, false);
 
+    auto optionsBar = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 8));
+    g_recursiveCheck = Gtk::manage(new Gtk::CheckButton("Recursive"));
+    g_recursiveCheck->set_tooltip_text(
+        "Recursively pack/unpack archives and convert their resources");
+    g_packOnlyCheck = Gtk::manage(new Gtk::CheckButton("Pack only"));
+    g_unpackOnlyCheck = Gtk::manage(new Gtk::CheckButton("Unpack only"));
+    optionsBar->pack_start(*g_recursiveCheck, false, false);
+    optionsBar->pack_start(*g_packOnlyCheck, false, false);
+    optionsBar->pack_start(*g_unpackOnlyCheck, false, false);
+    mainBox->pack_start(*optionsBar, false, false);
+
     // --- File list ---
     auto scrolled = Gtk::manage(new Gtk::ScrolledWindow());
     scrolled->set_hexpand(true);
@@ -413,7 +476,10 @@ int runGui(int argc, char* argv[]) {
     g_convertBtn->signal_clicked().connect([&]() {
         std::string enc = g_encodingCombo->get_active_id();
         std::string ref = g_refEntry->get_text();
-        std::thread t(convertAll, enc, ref);
+        bool recursive = g_recursiveCheck->get_active();
+        bool packOnly = g_packOnlyCheck->get_active();
+        bool unpackOnly = g_unpackOnlyCheck->get_active();
+        std::thread t(convertAll, enc, ref, recursive, packOnly, unpackOnly);
         t.detach();
     });
 
