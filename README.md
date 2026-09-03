@@ -147,6 +147,8 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 
 > 提示：所有输出文件采用"内容相同则不重写"策略——若生成结果与磁盘上已有文件二进制完全一致，将跳过写入以保留原文件的修改时间，方便增量/批量转换时避免无关文件被标记为已修改。
 
+目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写）。打包前会自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余目录生成同名 XFL。失败的子目录会跳过，其旧 LWG/XFL 也不会进入本次父封包。PNG 等工程文件不会直接打包，请先转换为 WCG。没有有效资源时不会生成空封包。
+
 ### 已知限制
 
 - **多级目录**：XFL/LWG 中文件均扁平存放。
@@ -286,6 +288,8 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
 > so the existing file's modification time is preserved. This keeps
 > incremental/batch conversions from touching unchanged files.
 
+Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive). Before packing, subdirectories are processed from the deepest level upward: directories containing `.meta.xml` become sibling LWG files, while all others become sibling XFL files. Failed child conversions and their stale LWG/XFL outputs are excluded. Project files such as PNG are not packed directly; convert them to WCG first. Empty archives are rejected.
+
 ### Known Limitations
 
 - **Subdirectories**: all files in XFL/LWG archives are flat (no nesting).
@@ -299,4 +303,3 @@ GNU General Public License v3.0 (inherited from arc_unpacker's CG decompression 
 Third-party code:
 - [stb_image](https://github.com/nothings/stb) (public domain) — PNG read/write
 - CG decompression algorithm from [arc_unpacker](https://github.com/vn-tools/arc_unpacker) (GPLv3)
-

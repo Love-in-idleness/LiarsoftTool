@@ -62,6 +62,9 @@ static std::string guessOutput(const std::string& in, const std::string& outDir)
     fs::path p(in);
     fs::path base = outDir.empty() ? p.parent_path() : fs::path(outDir);
     std::string stem = p.stem().string();
+    if (fs::is_directory(in))
+        return (base / (p.filename().string() +
+                        (liarsoft::isLwgDirectory(in) ? ".lwg" : ".xfl"))).string();
     if (ext == ".gsc") return (base / (stem + ".txt")).string();
     if (ext == ".txt") return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
@@ -169,9 +172,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath) 
         
         try {
             if (fs::is_directory(in)) {
-                bool hasMeta = fs::exists(in + "/.meta.xml");
-                if (hasMeta) liarsoft::LwgPacker::packToFile(in, out, encoding);
-                else { liarsoft::XflArchive arch; arch.encoding = encoding; arch.addDirectory(in); arch.save(out); }
+                liarsoft::packDirectoryToFile(in, out, encoding);
             } else if (ext == ".gsc") {
                 auto gsc = liarsoft::GscFile::fromFile(in, encoding);
                 liarsoft::TransFile::fromGsc(gsc).save(out);

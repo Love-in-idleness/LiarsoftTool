@@ -162,22 +162,18 @@ static bool processOne(const std::string& inputPath,
         while (!resolved.empty() && (resolved.back() == '/' || resolved.back() == '\\'))
             resolved.pop_back();
 
-        bool hasMeta = fs::exists(resolved + "/.meta.xml");
+        bool hasMeta = liarsoft::isLwgDirectory(resolved);
         std::string out = outputPath;
         if (hasMeta) {
             std::cout << "Packing directory to LWG: " << resolved
                       << " (encoding: " << encoding << ")" << std::endl;
             if (out.empty()) out = resolved + ".lwg";
-            liarsoft::LwgPacker::packToFile(resolved, out, encoding);
         } else {
             std::cout << "Packing directory to XFL: " << resolved
                       << " (encoding: " << encoding << ")" << std::endl;
-            liarsoft::XflArchive archive;
-            archive.encoding = encoding;
-            archive.addDirectory(resolved);
             if (out.empty()) out = resolved + ".xfl";
-            archive.save(out);
         }
+        liarsoft::packDirectoryToFile(resolved, out, encoding);
         std::cout << "Packed to: " << out << std::endl;
         return true;
     }

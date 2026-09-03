@@ -1,6 +1,9 @@
 #include "lwg_decoder.h"
 #include "encoding.h"
 #include "fileio.h"
+#include "xflarchive.h"
+#include <array>
+#include <cctype>
 #include <cerrno>
 #include <cstring>
 #include <filesystem>
@@ -13,6 +16,24 @@ namespace fs = std::filesystem;
 
 namespace liarsoft {
 
+static std::string lower(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+static std::string normalized(const fs::path& path) {
+    return fs::absolute(path).lexically_normal().string();
+}
+
+static fs::path metaFile(const fs::path& directory) {
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (!entry.is_symlink() && entry.is_regular_file() &&
+            lower(entry.path().filename().string()) == ".meta.xml")
+            return entry.path();
+    }
+    return {};
+}
 
 static std::string encodeName(const std::string& utf8, const std::string& enc) {
     return convertEncoding(utf8, "UTF-8", enc);
@@ -218,13 +239,17 @@ static MetaInfo parseMetaXml(const std::string& filePath) {
     return info;
 }
 
-std::vector<uint8_t> LwgPacker::pack(const std::string& dirPath, const std::string& encoding) {
-    std::string metaPath = dirPath + "/.meta.xml";
-    if (!fs::exists(metaPath))
+std::vector<uint8_t> LwgPacker::pack(
+    const std::string& dirPath, const std::string& encoding,
+    const std::set<std::string>& excludedPaths) {
+    const auto metaPath = metaFile(dirPath);
+    if (metaPath.empty())
         throw std::runtime_error("No .meta.xml found in directory. "
                                  "Extract LWG first to generate one.");
 
-    MetaInfo meta = parseMetaXml(metaPath);
+    MetaInfo meta = parseMetaXml(metaPath.string());
+    if (meta.entries.empty())
+        throw std::runtime_error("No entries found in .meta.xml: " + metaPath.string());
 
     // Read file data for each entry
     struct PackEntry {
@@ -233,31 +258,60 @@ std::vector<uint8_t> LwgPacker::pack(const std::string& dirPath, const std::stri
     };
     std::vector<PackEntry> packEntries;
 
+    std::vector<fs::path> files;
+    for (const auto& entry : fs::directory_iterator(dirPath)) {
+        if (!entry.is_symlink() && entry.is_regular_file() &&
+            isPackableFile(entry.path().string()) &&
+            excludedPaths.count(normalized(entry.path())) == 0)
+            files.push_back(entry.path());
+    }
+    static constexpr std::array<const char*, 8> extensionOrder = {
+        ".wcg", ".msk", ".lim", ".gsc", ".wav", ".xml", ".lwg", ".xfl"
+    };
+    auto extensionRank = [&](const fs::path& path) {
+        const auto ext = lower(path.extension().string());
+        auto it = std::find(extensionOrder.begin(), extensionOrder.end(), ext);
+        return std::distance(extensionOrder.begin(), it);
+    };
+    std::sort(files.begin(), files.end(), [&](const fs::path& a, const fs::path& b) {
+        auto aRank = extensionRank(a), bRank = extensionRank(b);
+        if (aRank != bRank) return aRank < bRank;
+        return lower(a.filename().string()) < lower(b.filename().string());
+    });
+
     for (const auto& me : meta.entries) {
         PackEntry pe;
         pe.meta = me;
 
-        // Try extensions: .wcg, .msk, .png
-        bool found = false;
-        for (const auto& ext : {".wcg", ".msk", ".png"}) {
-            fs::path fp = fs::path(dirPath) / (me.name + ext);
-            if (fs::exists(fp)) {
-                std::ifstream in(fp, std::ios::binary);
-                in.seekg(0, std::ios::end);
-                size_t sz = in.tellg();
-                in.seekg(0, std::ios::beg);
-                pe.data.resize(sz);
-                in.read(reinterpret_cast<char*>(pe.data.data()), sz);
-                found = true;
-                break;
-            }
+        auto wanted = lower(me.name);
+        auto file = std::find_if(files.begin(), files.end(), [&](const fs::path& path) {
+            return lower(path.filename().string()) == wanted;
+        });
+        if (file == files.end()) {
+            file = std::find_if(files.begin(), files.end(), [&](const fs::path& path) {
+                return lower(path.stem().string()) == wanted;
+            });
         }
-        if (!found) {
+
+        if (file != files.end()) {
+            std::ifstream in(*file, std::ios::binary);
+            if (!in) throw std::runtime_error("Cannot read file: " + file->string());
+            in.seekg(0, std::ios::end);
+            size_t sz = in.tellg();
+            in.seekg(0, std::ios::beg);
+            pe.data.resize(sz);
+            in.read(reinterpret_cast<char*>(pe.data.data()), sz);
+        } else {
             // Entry with no file - possibly a string entry, still include with empty data
             pe.data.clear();
         }
         packEntries.push_back(std::move(pe));
     }
+
+    if (std::none_of(packEntries.begin(), packEntries.end(),
+                     [](const PackEntry& entry) { return !entry.data.empty(); }))
+        throw std::runtime_error("No packable files referenced by .meta.xml: " +
+                                 dirPath);
 
     // ---- Build LWG binary ----
     std::vector<uint8_t> out;
@@ -319,4 +373,3 @@ void LwgPacker::packToFile(const std::string& dirPath, const std::string& output
 }
 
 } // namespace liarsoft
-

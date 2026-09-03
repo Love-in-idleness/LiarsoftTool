@@ -8,6 +8,18 @@
 
 namespace liarsoft {
 
+/// Whether a regular file may be included while packing a directory.
+/// Supported extensions are matched case-insensitively.
+bool isPackableFile(const std::string& path);
+
+/// Whether a directory contains a .meta.xml file (case-insensitive).
+bool isLwgDirectory(const std::string& path);
+
+/// Pack subdirectories from the deepest level upward (LWG when they have
+/// .meta.xml, XFL otherwise), then pack `dirPath` by the same rule.
+void packDirectoryToFile(const std::string& dirPath, const std::string& outputPath,
+                         const std::string& encoding);
+
 /// Represents a single file entry inside an XFL archive.
 struct XflEntry {
     std::string fileName;  ///< File name (up to 31 chars in legacy encoding).
@@ -52,7 +64,7 @@ public:
 
     // ---- Pack ----
 
-    /// Add all files from a directory (flat, non-recursive).
+    /// Add supported resource files from a directory (flat, non-recursive).
     /// Files are sorted naturally (human sort).
     void addDirectory(const std::string& dirPath);
 

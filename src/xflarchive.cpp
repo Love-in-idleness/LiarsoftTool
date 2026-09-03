@@ -1,15 +1,117 @@
 #include "xflarchive.h"
 #include "bigendian.h"
 #include "fileio.h"
+#include "lwg_decoder.h"
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <cstring>
 #include <filesystem>
+#include <iostream>
+#include <set>
 #include "encoding.h"
 #include <regex>
 
 namespace fs = std::filesystem;
 
 namespace liarsoft {
+
+static std::string lower(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+bool isPackableFile(const std::string& path) {
+    static constexpr std::array<const char*, 8> extensions = {
+        ".lim", ".wcg", ".gsc", ".wav", ".xml", ".lwg", ".xfl", ".msk"
+    };
+    const auto ext = lower(fs::path(path).extension().string());
+    return std::find(extensions.begin(), extensions.end(), ext) != extensions.end();
+}
+
+static fs::path metaFile(const fs::path& directory) {
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (!entry.is_symlink() && entry.is_regular_file() &&
+            lower(entry.path().filename().string()) == ".meta.xml")
+            return entry.path();
+    }
+    return {};
+}
+
+bool isLwgDirectory(const std::string& path) {
+    return fs::is_directory(path) && !metaFile(path).empty();
+}
+
+static std::string normalized(const fs::path& path) {
+    return fs::absolute(path).lexically_normal().string();
+}
+
+static void packOneDirectory(const fs::path& directory, const fs::path& output,
+                             const std::string& encoding,
+                             const std::set<std::string>& excludedPaths) {
+    if (isLwgDirectory(directory.string())) {
+        auto data = LwgPacker::pack(directory.string(), encoding, excludedPaths);
+        writeFileIfChanged(output.string(), data);
+        return;
+    }
+
+    XflArchive archive;
+    archive.encoding = encoding;
+    archive.addDirectory(directory.string());
+    archive.entries.erase(
+        std::remove_if(archive.entries.begin(), archive.entries.end(),
+                       [&](const XflEntry& entry) {
+                           return excludedPaths.count(
+                               normalized(directory / entry.fileName)) != 0;
+                       }),
+        archive.entries.end());
+    if (archive.entries.empty())
+        throw std::runtime_error("No packable files found in directory: " +
+                                 directory.string());
+    archive.save(output.string());
+}
+
+static void packSubdirectories(const fs::path& directory,
+                               const std::string& encoding,
+                               std::set<std::string>& excludedPaths) {
+    std::vector<fs::path> subdirectories;
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (!entry.is_symlink() && entry.is_directory())
+            subdirectories.push_back(entry.path());
+    }
+    std::sort(subdirectories.begin(), subdirectories.end());
+
+    for (const auto& subdirectory : subdirectories) {
+        packSubdirectories(subdirectory, encoding, excludedPaths);
+        const bool isLwg = isLwgDirectory(subdirectory.string());
+        fs::path output = subdirectory;
+        output += isLwg ? ".lwg" : ".xfl";
+        fs::path obsolete = subdirectory;
+        obsolete += isLwg ? ".xfl" : ".lwg";
+        excludedPaths.insert(normalized(obsolete));
+        try {
+            packOneDirectory(subdirectory, output, encoding, excludedPaths);
+            excludedPaths.erase(normalized(output));
+        } catch (const std::exception& e) {
+            excludedPaths.insert(normalized(output));
+            std::cerr << "Warning: skipped " << (isLwg ? "LWG" : "XFL")
+                      << " directory '" << subdirectory.string() << "': "
+                      << e.what() << std::endl;
+        }
+    }
+}
+
+void packDirectoryToFile(const std::string& dirPath, const std::string& outputPath,
+                         const std::string& encoding) {
+    if (!fs::is_directory(dirPath))
+        throw std::runtime_error("Directory not found: " + dirPath);
+
+    std::set<std::string> excludedPaths;
+    excludedPaths.insert(normalized(outputPath));
+    packSubdirectories(dirPath, encoding, excludedPaths);
+    packOneDirectory(dirPath, outputPath, encoding, excludedPaths);
+}
 
 
 static std::vector<uint8_t> encodeFileName(const std::string& utf8Name,
@@ -138,7 +240,8 @@ void XflArchive::addDirectory(const std::string& dirPath) {
     // Collect and sort files
     std::vector<fs::path> files;
     for (const auto& entry : fs::directory_iterator(dirPath)) {
-        if (fs::is_regular_file(entry.status())) {
+        if (!entry.is_symlink() && entry.is_regular_file() &&
+            isPackableFile(entry.path().string())) {
             files.push_back(entry.path().filename());
         }
     }

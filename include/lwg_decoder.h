@@ -2,6 +2,7 @@
 #define LIARSOFTTOOL_LWG_DECODER_H
 
 #include <cstdint>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -66,7 +67,9 @@ public:
     /// Pack a directory into LWG binary data.
     /// The directory must contain a .meta.xml file.
     /// `encoding` is the filename encoding for the archive.
-    static std::vector<uint8_t> pack(const std::string& dirPath, const std::string& encoding);
+    static std::vector<uint8_t> pack(
+        const std::string& dirPath, const std::string& encoding,
+        const std::set<std::string>& excludedPaths = {});
 
     /// Pack and save to file.
     static void packToFile(const std::string& dirPath, const std::string& outputPath,

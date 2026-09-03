@@ -98,3 +98,12 @@ install(TARGETS liarsofttool DESTINATION bin)
 if(GTKMM_FOUND)
     install(TARGETS liarsofttool-gui DESTINATION bin)
 endif()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_test(NAME directory_packing
+        COMMAND ${CMAKE_COMMAND}
+            -DTOOL=$<TARGET_FILE:liarsofttool>
+            -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/directory_packing_test
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/directory_packing_test.cmake)
+endif()
