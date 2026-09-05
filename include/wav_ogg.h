@@ -25,6 +25,10 @@ public:
     /// Returns the extracted OGG data, or empty if no OGG found.
     static std::vector<uint8_t> extract(const std::vector<uint8_t>& wavData);
 
+    /// Wrap Ogg data using the 66-byte header from a reference WAV.
+    static std::vector<uint8_t> embed(const std::vector<uint8_t>& oggData,
+                                      const std::vector<uint8_t>& refWavData);
+
     /// Extract from file and save to .ogg file.
     static void extractToFile(const std::string& wavPath, const std::string& oggPath);
 
