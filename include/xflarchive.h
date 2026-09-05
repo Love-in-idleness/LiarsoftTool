@@ -57,7 +57,7 @@ struct XflEntry {
  */
 class XflArchive {
 public:
-    /// Encoding used for file names inside the archive (e.g. "SHIFT_JIS", "GBK").
+    /// Encoding used for file names inside the archive (e.g. "CP932", "GBK").
     std::string encoding;
 
     /// List of entries.
@@ -69,10 +69,10 @@ public:
     // ---- Factory methods ----
 
     /// Read an XFL archive from disk.
-    static XflArchive fromFile(const std::string& path, const std::string& enc = "SHIFT_JIS");
+    static XflArchive fromFile(const std::string& path, const std::string& enc = "CP932");
 
     /// Read an XFL archive from an in-memory buffer.
-    static XflArchive fromBytes(const std::vector<uint8_t>& data, const std::string& enc = "SHIFT_JIS");
+    static XflArchive fromBytes(const std::vector<uint8_t>& data, const std::string& enc = "CP932");
 
     // ---- Pack ----
 

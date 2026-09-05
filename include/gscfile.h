@@ -33,7 +33,7 @@ namespace liarsoft {
  */
 class GscFile {
 public:
-    /// The encoding identifier used internally (e.g. "SHIFT_JIS", "GBK").
+    /// The encoding identifier used internally (e.g. "CP932", "GBK").
     /// This is the encoding of the *strings* inside the GSC file.
     std::string encoding;
 
@@ -63,7 +63,7 @@ public:
 
     // ---- Factory methods ----
 
-    /// Read a GSC file from disk. `enc` is the encoding of the strings (e.g. "SHIFT_JIS", "GBK").
+    /// Read a GSC file from disk. `enc` is the encoding of the strings (e.g. "CP932", "GBK").
     static GscFile fromFile(const std::string& path, const std::string& enc);
 
     /// Read a GSC file from an in-memory buffer.

@@ -56,7 +56,7 @@ void exeConvertFile(const std::string& inputPath, const std::string& outputPath,
     // Map encoding to code-page byte:
     //   SJIS=0x80, GBK=0x86, CP1251=0xCC
     // Forward: always from 0x80 (SJIS default) to target
-    // Reverse (encoding=="SHIFT_JIS"): detect current byte and revert to 0x80
+    // Reverse (encoding=="CP932"): detect current byte and revert to 0x80
     uint8_t fromByte = 0x80;
     uint8_t toByte   = 0x80;
 
@@ -65,7 +65,7 @@ void exeConvertFile(const std::string& inputPath, const std::string& outputPath,
     } else if (encoding == "CP1251") {
         toByte = 0xCC;
     } else {
-        // SHIFT_JIS: detect and revert to 0x80
+        // CP932: detect and revert to 0x80
         // Search for the 2-byte marker in pattern 1 context
         uint8_t p1gbk[17] = {0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x68,0x86,0x00,0x00,0x00,0x6A,0x00,0x6A,0x00};
         uint8_t p1cp[17]  = {0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x68,0xCC,0x00,0x00,0x00,0x6A,0x00,0x6A,0x00};
@@ -85,4 +85,3 @@ void exeConvertFile(const std::string& inputPath, const std::string& outputPath,
 }
 
 } // namespace liarsoft
-

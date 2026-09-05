@@ -395,7 +395,7 @@ int runGui(int argc, char* argv[]) {
     auto topBar = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 8));
     auto encLabel = Gtk::manage(new Gtk::Label("Encoding:"));
     g_encodingCombo = Gtk::manage(new Gtk::ComboBoxText());
-    g_encodingCombo->append("SHIFT_JIS", "Shift-JIS (Japanese)");
+    g_encodingCombo->append("CP932", "CP932 / Windows-31J (Japanese)");
     g_encodingCombo->append("GBK", "GBK (Chinese)");
     g_encodingCombo->append("CP1251", "CP1251 (Cyrillic / English)");
     g_encodingCombo->set_active(0);

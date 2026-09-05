@@ -43,7 +43,7 @@ public:
 
     /// Convert this TransFile to a GSC, using a reference GSC file for structure.
     /// `refGscPath` is the path to the original/reference GSC file.
-    /// `encoding` is the encoding for the output GSC strings (e.g. "SHIFT_JIS", "GBK").
+    /// `encoding` is the encoding for the output GSC strings (e.g. "CP932", "GBK").
     GscFile toGsc(const std::string& refGscPath, const std::string& encoding) const;
 
     // ---- Save ----

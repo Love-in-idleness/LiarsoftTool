@@ -6,6 +6,7 @@
 #include "lwg_decoder.h"
 #include "wav_ogg.h"
 #include "exe_patch.h"
+#include "encoding.h"
 #include "fileio.h"
 #include "stb_image.h"
 #include <iostream>
@@ -23,8 +24,8 @@ static void printUsage(const char* prog) {
     std::cout << "LiarsoftTool - Liar-soft visual novel resource converter\n"
               << "Usage: " << prog << " [options] <input...> [output]\n\n"
               << "Options:\n"
-              << "  -e, --encoding <enc>  Text encoding (default: shift_jis)\n"
-              << "                        Supported: shift_jis, gbk, cp1251\n"
+              << "  -e, --encoding <enc>  Text encoding (default: cp932 / Windows-31J)\n"
+              << "                        Supported: cp932, gbk, cp1251\n"
               << "  -r, --reference <path> Reference GSC or WAV file for conversion\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
               << "  -R, --recursive        Recursively pack/unpack and convert resources\n"
@@ -46,15 +47,15 @@ static void printUsage(const char* prog) {
               << "  .exe  -> .gbk.exe/.cp1251.exe  Convert EXE encoding\n\n"
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
-              << "  " << prog << " -e shift_jis scenario.gsc\n"
+              << "  " << prog << " -e cp932 scenario.gsc\n"
               << "  " << prog << " -e gbk scenario.gsc output.txt\n"
-              << "  " << prog << " -e shift_jis -r original.gsc translation.txt\n"
+              << "  " << prog << " -e cp932 -r original.gsc translation.txt\n"
               << "  " << prog << " -e gbk archive.xfl\n"
               << "  " << prog << " image.wcg\n"
               << "  " << prog << " cgview.lwg\n"
               << "  " << prog << " -e gbk game.exe          # SJIS→GBK\n"
               << "  " << prog << " -e cp1251 game.exe       # SJIS→CP1251\n"
-              << "  " << prog << " -e shift_jis game.exe    # revert to SJIS\n"
+              << "  " << prog << " -e cp932 game.exe        # revert to CP932\n"
               << "  " << prog << " -r template.wav audio.ogg\n"
               << "  " << prog << " -R archive.xfl         # recursive unpack + conversion\n"
               << "  " << prog << " -R ./extracted_dir      # conversion + recursive pack\n"
@@ -78,15 +79,7 @@ static std::string replaceExtension(const std::string& path, const std::string& 
 }
 
 static std::string normalizeEncoding(const std::string& enc) {
-    std::string lower = enc;
-    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-    if (lower == "shift_jis" || lower == "shift-jis" || lower == "sjis" || lower == "shiftjis")
-        return "SHIFT_JIS";
-    if (lower == "gbk" || lower == "gb2312" || lower == "gb18030")
-        return "GBK";
-    if (lower == "cp1251" || lower == "windows-1251" || lower == "cyrillic")
-        return "CP1251";
-    return enc;
+    return liarsoft::normalizeEncodingName(enc);
 }
 
 // Simple wildcard match: supports * and ?
@@ -304,7 +297,7 @@ static bool processOne(const std::string& inputPath,
 }
 
 int main(int argc, char* argv[]) {
-    std::string encoding = "SHIFT_JIS";
+    std::string encoding = "CP932";
     std::string referencePath;
     std::vector<std::string> inputs;
     std::string explicitOutput;
