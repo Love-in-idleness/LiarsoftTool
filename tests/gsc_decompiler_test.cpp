@@ -58,6 +58,10 @@ int main() {
                       "liarsofttool_gsc_decompiler_test.gsc";
     save(temp, modern);
     const std::string listing = liarsoft::decompileGsc(temp.string());
+    if (liarsoft::restoreGscFromTsc(listing) != modern) {
+        std::cerr << "Modern GSC did not round-trip byte-for-byte" << std::endl;
+        return 1;
+    }
     std::remove(temp.string().c_str());
     for (const std::string expected : {
              "*if ((@1 == 0)) == 0", "*goto L_000032",
@@ -76,12 +80,26 @@ int main() {
     legacy.push_back('x'); legacy.push_back(0);
     save(temp, legacy);
     const std::string legacyListing = liarsoft::decompileGsc(temp.string());
+    if (liarsoft::restoreGscFromTsc(legacyListing) != legacy) {
+        std::cerr << "Legacy GSC did not round-trip byte-for-byte" << std::endl;
+        return 1;
+    }
     std::remove(temp.string().c_str());
     if (legacyListing.find("*goto L_000008 ; @000000") == std::string::npos ||
         legacyListing.find("*end ; @000006") == std::string::npos ||
         legacyListing.find(":L_000008") == std::string::npos) {
         std::cerr << "Legacy GSC was not decoded" << std::endl;
         return 1;
+    }
+
+    std::string damaged = listing;
+    const auto chunk = damaged.find(";@gsc-raw ");
+    damaged[chunk + 10] = damaged[chunk + 10] == '0' ? '1' : '0';
+    try {
+        liarsoft::restoreGscFromTsc(damaged);
+        std::cerr << "Damaged raw metadata was accepted" << std::endl;
+        return 1;
+    } catch (const std::runtime_error&) {
     }
     return 0;
 }

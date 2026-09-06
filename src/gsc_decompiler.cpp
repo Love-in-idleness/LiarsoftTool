@@ -57,6 +57,49 @@ std::vector<uint8_t> readFile(const std::string& path) {
     return data;
 }
 
+constexpr const char* RAW_HEADER = ";@gsc-raw-v1 ";
+constexpr const char* RAW_CHUNK = ";@gsc-raw ";
+constexpr const char* RAW_END = ";@gsc-raw-end";
+
+uint64_t fnv1a64(const std::vector<uint8_t>& data) {
+    uint64_t value = 14695981039346656037ull;
+    for (const auto byte : data) {
+        value ^= byte;
+        value *= 1099511628211ull;
+    }
+    return value;
+}
+
+std::string hex64(uint64_t value) {
+    std::ostringstream out;
+    out << std::hex << std::nouppercase << std::setw(16) << std::setfill('0')
+        << value;
+    return out.str();
+}
+
+std::string rawEnvelope(const std::vector<uint8_t>& data) {
+    static constexpr char HEX[] = "0123456789abcdef";
+    std::ostringstream out;
+    out << RAW_HEADER << "size=" << data.size()
+        << " fnv1a64=" << hex64(fnv1a64(data)) << '\n';
+    for (size_t offset = 0; offset < data.size(); offset += 48) {
+        out << RAW_CHUNK;
+        const size_t end = std::min(data.size(), offset + 48);
+        for (size_t i = offset; i < end; ++i)
+            out << HEX[data[i] >> 4] << HEX[data[i] & 0x0f];
+        out << '\n';
+    }
+    out << RAW_END << '\n';
+    return out.str();
+}
+
+uint8_t hexDigit(char value) {
+    if (value >= '0' && value <= '9') return static_cast<uint8_t>(value - '0');
+    if (value >= 'a' && value <= 'f') return static_cast<uint8_t>(value - 'a' + 10);
+    if (value >= 'A' && value <= 'F') return static_cast<uint8_t>(value - 'A' + 10);
+    throw std::runtime_error("invalid hexadecimal digit in ;@gsc-raw metadata");
+}
+
 const std::unordered_map<uint16_t, std::string>& modernSchemas() {
     static const auto value = [] {
         auto r = [](char kind, size_t count) { return std::string(count, kind); };
@@ -493,7 +536,8 @@ std::vector<std::string> splitLines(const std::string& text) {
 
 } // namespace
 
-std::string decompileGsc(const std::string& inputPath, const std::string& encoding) {
+static std::string decompileListing(const std::string& inputPath,
+                                    const std::string& encoding) {
     const ParsedGsc gsc(inputPath);
     const auto instructions = gsc.instructions();
     const auto labels = gsc.jumpTargets();
@@ -561,12 +605,94 @@ std::string decompileGsc(const std::string& inputPath, const std::string& encodi
     return output.str();
 }
 
+std::string decompileGsc(const std::string& inputPath, const std::string& encoding) {
+    const auto raw = readFile(inputPath);
+    std::string output = rawEnvelope(raw);
+    try {
+        output += decompileListing(inputPath, encoding);
+    } catch (const std::exception& e) {
+        std::string message = e.what();
+        std::replace(message.begin(), message.end(), '\n', ' ');
+        std::replace(message.begin(), message.end(), '\r', ' ');
+        output += "; decompilation unavailable: " + message + "\n";
+    }
+    return output;
+}
+
+std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText) {
+    std::istringstream input(tscText);
+    std::string line;
+    std::vector<uint8_t> result;
+    size_t expectedSize = 0;
+    uint64_t expectedHash = 0;
+    bool reading = false;
+    bool complete = false;
+
+    while (std::getline(input, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.compare(0, std::char_traits<char>::length(RAW_HEADER), RAW_HEADER) == 0) {
+            if (reading || complete)
+                throw std::runtime_error("duplicate ;@gsc-raw-v1 metadata");
+            std::istringstream fields(
+                line.substr(std::char_traits<char>::length(RAW_HEADER)));
+            std::string sizeField, hashField, extra;
+            if (!(fields >> sizeField >> hashField) || (fields >> extra) ||
+                sizeField.rfind("size=", 0) != 0 ||
+                hashField.rfind("fnv1a64=", 0) != 0)
+                throw std::runtime_error("malformed ;@gsc-raw-v1 header");
+            try {
+                size_t used = 0;
+                expectedSize = static_cast<size_t>(
+                    std::stoull(sizeField.substr(5), &used, 10));
+                if (used != sizeField.size() - 5) throw std::invalid_argument("size");
+                used = 0;
+                expectedHash = std::stoull(hashField.substr(8), &used, 16);
+                if (used != hashField.size() - 8 || hashField.size() != 24)
+                    throw std::invalid_argument("hash");
+            } catch (const std::exception&) {
+                throw std::runtime_error("invalid ;@gsc-raw-v1 size or checksum");
+            }
+            reading = true;
+            continue;
+        }
+        if (!reading) continue;
+        if (line == RAW_END) {
+            reading = false;
+            complete = true;
+            continue;
+        }
+        if (line.compare(0, std::char_traits<char>::length(RAW_CHUNK), RAW_CHUNK) != 0)
+            throw std::runtime_error("unexpected line inside ;@gsc-raw metadata");
+        const auto hex = line.substr(std::char_traits<char>::length(RAW_CHUNK));
+        if (hex.empty() || hex.size() % 2)
+            throw std::runtime_error("malformed ;@gsc-raw chunk");
+        for (size_t i = 0; i < hex.size(); i += 2)
+            result.push_back(static_cast<uint8_t>((hexDigit(hex[i]) << 4) |
+                                                  hexDigit(hex[i + 1])));
+    }
+    if (reading) throw std::runtime_error("missing ;@gsc-raw-end marker");
+    if (!complete) throw std::runtime_error("TSC has no ;@gsc-raw-v1 metadata");
+    if (result.size() != expectedSize)
+        throw std::runtime_error(";@gsc-raw size mismatch");
+    if (fnv1a64(result) != expectedHash)
+        throw std::runtime_error(";@gsc-raw checksum mismatch");
+    return result;
+}
+
 void decompileGscToFile(const std::string& inputPath,
                         const std::string& outputPath,
                         const std::string& encoding) {
     const auto output = decompileGsc(inputPath, encoding);
     writeFileIfChanged(outputPath,
         reinterpret_cast<const uint8_t*>(output.data()), output.size());
+}
+
+void restoreGscFromTscFile(const std::string& inputPath,
+                           const std::string& outputPath) {
+    const auto text = readFile(inputPath);
+    const auto output = restoreGscFromTsc(
+        std::string(reinterpret_cast<const char*>(text.data()), text.size()));
+    writeFileIfChanged(outputPath, output);
 }
 
 } // namespace liarsoft
