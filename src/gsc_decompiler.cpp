@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <initializer_list>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -63,7 +64,7 @@ constexpr const char* RAW_END = ";@gsc-raw-end";
 constexpr const char* TEXT_ENCODING = ";@gsc-text-encoding ";
 constexpr const char* INSTRUCTION_SCHEMA = ";@gsc-instruction-schema ";
 
-enum class InstructionSchema { Early, RScript18, RScript19, Modern };
+enum class InstructionSchema { PreCodeX, Early, RScript18, RScript19, Modern };
 
 uint64_t fnv1a64(const std::vector<uint8_t>& data) {
     uint64_t value = 14695981039346656037ull;
@@ -194,6 +195,16 @@ const std::unordered_map<uint16_t, std::string>& legacySchemas() {
     return value;
 }
 
+const std::unordered_map<uint16_t, std::string>& preCodeXSchemas() {
+    static const auto value = [] {
+        auto result = legacySchemas();
+        result[14] = "H" + std::string(11, 'D');
+        result[81] = std::string(4, 'E') + "DD";
+        return result;
+    }();
+    return value;
+}
+
 const std::unordered_map<uint16_t, std::string>& rscript19Schemas() {
     static const auto value = [] {
         auto result = modernSchemas();
@@ -218,6 +229,7 @@ const std::unordered_map<uint16_t, std::string>& rscript18Schemas() {
 
 const std::unordered_map<uint16_t, std::string>& schemasFor(
     InstructionSchema schema) {
+    if (schema == InstructionSchema::PreCodeX) return preCodeXSchemas();
     if (schema == InstructionSchema::Early) return legacySchemas();
     if (schema == InstructionSchema::RScript18) return rscript18Schemas();
     if (schema == InstructionSchema::RScript19) return rscript19Schemas();
@@ -231,42 +243,16 @@ public:
         if (data.size() < 28) fail("shorter than the GSC header");
         const uint32_t headerLength = readU32(data, 4);
         if (headerLength == 28) {
-            instructionSchema = InstructionSchema::Early;
+            earlyVmEncoding = true;
             parseLegacy(data);
+            selectSchema({InstructionSchema::Early, InstructionSchema::PreCodeX,
+                          InstructionSchema::RScript18,
+                          InstructionSchema::RScript19, InstructionSchema::Modern});
         } else if (headerLength == 36) {
             parseModern(data);
-            std::optional<uint64_t> modernPenalty;
-            std::optional<uint64_t> rscript19Penalty;
-            std::optional<uint64_t> rscript18Penalty;
-            std::string modernFailure;
-            try {
-                jumpTargets();
-                modernPenalty = operandPenalty();
-            } catch (const std::runtime_error& error) {
-                modernFailure = error.what();
-            }
-            instructionSchema = InstructionSchema::RScript19;
-            try {
-                jumpTargets();
-                rscript19Penalty = operandPenalty();
-            } catch (const std::runtime_error&) {
-            }
-            instructionSchema = InstructionSchema::RScript18;
-            try {
-                jumpTargets();
-                rscript18Penalty = operandPenalty();
-            } catch (const std::runtime_error&) {
-            }
-            if (modernPenalty && (!rscript19Penalty || *modernPenalty <= *rscript19Penalty) &&
-                (!rscript18Penalty || *modernPenalty <= *rscript18Penalty)) {
-                instructionSchema = InstructionSchema::Modern;
-            } else if (rscript19Penalty &&
-                       (!rscript18Penalty || *rscript19Penalty <= *rscript18Penalty)) {
-                instructionSchema = InstructionSchema::RScript19;
-            } else if (!rscript18Penalty) {
-                instructionSchema = InstructionSchema::Modern;
-                throw std::runtime_error(modernFailure);
-            }
+            selectSchema({InstructionSchema::Modern, InstructionSchema::RScript19,
+                          InstructionSchema::RScript18, InstructionSchema::Early,
+                          InstructionSchema::PreCodeX});
         } else {
             fail("unsupported GSC header size " + std::to_string(headerLength));
         }
@@ -281,9 +267,9 @@ public:
             std::string kinds;
             if (opcode & 0xf000) {
                 if ((opcode & 0xf000) == 0xf000) {
-                    kinds = instructionSchema == InstructionSchema::Early ? "HH" : "HS";
+                    kinds = earlyVmEncoding ? "HH" : "HS";
                 } else {
-                    kinds = instructionSchema == InstructionSchema::Early ? "HHH" : "HSS";
+                    kinds = earlyVmEncoding ? "HHH" : "HSS";
                 }
             } else {
                 const auto& activeSchemas = schemasFor(instructionSchema);
@@ -375,6 +361,7 @@ private:
     std::vector<uint8_t> indexC;
     std::vector<std::vector<uint8_t>> legacyStrings;
     InstructionSchema instructionSchema = InstructionSchema::Modern;
+    bool earlyVmEncoding = false;
 
     [[noreturn]] void fail(const std::string& message) const {
         throw std::runtime_error(path.string() + ": " + message);
@@ -396,6 +383,39 @@ private:
                                     data.begin() + static_cast<ptrdiff_t>(pos + size));
         pos += size;
         return result;
+    }
+
+    void validateReferences() const {
+        for (const auto& instruction : instructions()) {
+            if (instruction.opcode == 81) {
+                stringBytes(static_cast<size_t>(instruction.operands[4]));
+                stringBytes(static_cast<size_t>(instruction.operands[5]));
+            } else if (instruction.opcode == 82) {
+                stringBytes(static_cast<size_t>(instruction.operands[4]));
+            }
+        }
+    }
+
+    void selectSchema(std::initializer_list<InstructionSchema> candidates) {
+        std::optional<uint64_t> bestPenalty;
+        InstructionSchema bestSchema = *candidates.begin();
+        std::string firstFailure;
+        for (const auto candidate : candidates) {
+            instructionSchema = candidate;
+            try {
+                jumpTargets();
+                validateReferences();
+                const auto penalty = operandPenalty();
+                if (!bestPenalty || penalty < *bestPenalty) {
+                    bestPenalty = penalty;
+                    bestSchema = candidate;
+                }
+            } catch (const std::runtime_error& error) {
+                if (firstFailure.empty()) firstFailure = error.what();
+            }
+        }
+        if (!bestPenalty) throw std::runtime_error(firstFailure);
+        instructionSchema = bestSchema;
     }
 
     void parseLegacy(const std::vector<uint8_t>& data) {
@@ -428,10 +448,7 @@ private:
         for (size_t i = 0; i < 9; ++i) header.push_back(readU32(data, i * 4));
         const uint64_t coreEnd = 36ull + header[2] + header[3] + header[4] +
                                  header[5] + header[6] * 2ull;
-        const uint64_t compactEnd = coreEnd + header[7] + header[8];
-        const uint64_t fullEnd = compactEnd + header[7];
-        if (header[0] > data.size() ||
-            (header[0] != compactEnd && header[0] != fullEnd))
+        if (header[0] > data.size() || coreEnd > header[0])
             fail("invalid modern GSC header");
         size_t pos = 36;
         code = section(data, pos, header[2]);
@@ -439,9 +456,7 @@ private:
         strings = section(data, pos, header[4]);
         indexB = section(data, pos, header[5]);
         indexC = section(data, pos, header[6] * 2ull);
-        section(data, pos, header[7]); // offsets
-        if (header[0] == fullEnd) section(data, pos, header[7]); // lines
-        section(data, pos, header[8]); // names
+        section(data, pos, header[0] - pos); // optional debug data
         validateStringOffsets();
     }
 
@@ -626,8 +641,13 @@ std::string instructionText(const ParsedGsc& gsc, const Instruction& instruction
     if (opcode == 18) {
         std::ostringstream out;
         out << "; data " << expression(static_cast<uint32_t>(instruction.operands[0]));
-        for (const auto value : gsc.dataBlock(static_cast<size_t>(instruction.operands[1])))
-            out << ' ' << value;
+        try {
+            for (const auto value :
+                 gsc.dataBlock(static_cast<size_t>(instruction.operands[1])))
+                out << ' ' << value;
+        } catch (const std::runtime_error&) {
+            out << " block=" << instruction.operands[1];
+        }
         return out.str();
     }
     const auto found = NAMES.find(opcode);
@@ -674,7 +694,8 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
                          INSTRUCTION_SCHEMA) == 0) {
             const auto value = line.substr(
                 std::char_traits<char>::length(INSTRUCTION_SCHEMA));
-            if (value == "early") instructionSchema = InstructionSchema::Early;
+            if (value == "pre-codex") instructionSchema = InstructionSchema::PreCodeX;
+            else if (value == "early") instructionSchema = InstructionSchema::Early;
             else if (value == "rscript18") instructionSchema = InstructionSchema::RScript18;
             else if (value == "rscript19") instructionSchema = InstructionSchema::RScript19;
             else if (value != "modern")
@@ -923,7 +944,8 @@ static std::string decompileListing(const std::string& inputPath,
     const auto labels = gsc.jumpTargets();
     std::vector<std::string> lines = {
         std::string(INSTRUCTION_SCHEMA) +
-            (gsc.schema() == InstructionSchema::Early ? "early" :
+            (gsc.schema() == InstructionSchema::PreCodeX ? "pre-codex" :
+             gsc.schema() == InstructionSchema::Early ? "early" :
              gsc.schema() == InstructionSchema::RScript18 ? "rscript18" :
              gsc.schema() == InstructionSchema::RScript19 ? "rscript19" : "modern"),
         "; generated from " + gsc.path.filename().string(),

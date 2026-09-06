@@ -134,14 +134,14 @@ int main() {
     auto compactDebug = modern;
     patchU32(compactDebug, 28, 4);
     patchU32(compactDebug, 32, 1);
-    compactDebug.insert(compactDebug.end(), 5, 0);
+    compactDebug.insert(compactDebug.end(), 7, 0);
     patchU32(compactDebug, 0, static_cast<uint32_t>(compactDebug.size()));
     save(temp, compactDebug);
     const auto compactDebugListing = liarsoft::decompileGsc(temp.string());
     std::remove(temp.string().c_str());
     if (compactDebugListing.find("; decompilation unavailable:") != std::string::npos ||
         liarsoft::restoreGscFromTsc(compactDebugListing) != compactDebug) {
-        std::cerr << "Compact GSC debug tables were not accepted" << std::endl;
+        std::cerr << "Opaque GSC debug data was not accepted" << std::endl;
         return 1;
     }
 
@@ -162,6 +162,35 @@ int main() {
         legacyListing.find("*end ; @000006") == std::string::npos ||
         legacyListing.find(":L_000008") == std::string::npos) {
         std::cerr << "Legacy GSC was not decoded" << std::endl;
+        return 1;
+    }
+
+    std::vector<uint8_t> preCodeXCode;
+    appendU16(preCodeXCode, 14); appendU16(preCodeXCode, 2);
+    for (uint32_t value = 0; value < 11; ++value) appendU32(preCodeXCode, value);
+    appendU16(preCodeXCode, 81);
+    appendU32(preCodeXCode, 0); appendU32(preCodeXCode, 123);
+    appendU32(preCodeXCode, 0); appendU32(preCodeXCode, 0);
+    appendU32(preCodeXCode, 0); appendU32(preCodeXCode, 1);
+    appendU16(preCodeXCode, 8);
+    std::vector<uint8_t> preCodeX(28, 0);
+    patchU32(preCodeX, 4, 28);
+    patchU32(preCodeX, 8, static_cast<uint32_t>(preCodeXCode.size()));
+    patchU32(preCodeX, 12, 8); patchU32(preCodeX, 16, 10);
+    preCodeX.insert(preCodeX.end(), preCodeXCode.begin(), preCodeXCode.end());
+    appendU32(preCodeX, 0); appendU32(preCodeX, 5);
+    preCodeX.insert(preCodeX.end(), strings.begin(), strings.end());
+    patchU32(preCodeX, 0, static_cast<uint32_t>(preCodeX.size()));
+    save(temp, preCodeX);
+    const auto preCodeXListing = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (preCodeXListing.find(";@gsc-instruction-schema pre-codex") ==
+            std::string::npos ||
+        preCodeXListing.find("*select 2 0 1 2 3 4 5 6 7 8 9 10") ==
+            std::string::npos ||
+        preCodeXListing.find("*voice 123") == std::string::npos ||
+        liarsoft::restoreGscFromTsc(preCodeXListing) != preCodeX) {
+        std::cerr << "Pre-CodeX instruction schema was not detected" << std::endl;
         return 1;
     }
 
