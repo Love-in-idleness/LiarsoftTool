@@ -146,6 +146,8 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
 封包会先将这种 TSC 恢复或更新为 GSC。
 
+完整映射及未知项见 [GSC opcode 与 TSC 命令对照表](docs/GSC_OPCODE_REFERENCE.md)。
+
 ### 典型工作流
 
 ```bash
@@ -319,6 +321,9 @@ changing opcodes, restructuring expressions, and rearranging control flow are
 not yet supported.
 Combined with `-R --unpack-only`, it generates `.tsc` throughout directory
 trees and nested archives; recursive packing restores or updates them to GSC.
+
+See the [GSC opcode/TSC command reference](docs/GSC_OPCODE_REFERENCE.md) for
+the complete mapping and explicitly unknown entries.
 
 ### Typical Workflows
 
