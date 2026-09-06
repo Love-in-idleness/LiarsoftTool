@@ -11,6 +11,11 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 针对 **CodeX**, **Liar-soft（骗子社）**、**rail-soft**、**スタジオ奪トランス**
 等社团使用 **Codex RScript** 引擎开发的视觉小说/文字游戏的综合资源处理工具。支持封包解包、图像编解码、脚本提取/注入、音频提取。
 
+本项目负责从用户合法持有的游戏中解包并转换 XFL/LWG、GSC、WCG/LIM
+和封装 WAV 等原始资源。若要把处理后的 CodeX RScript 游戏迁移到 Ren'Py，
+请配合 [rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy)；
+`rscript2renpy` 的资源预处理流程依赖本工具。
+
 **References / 参考项目：**
 - [RaiLTools](https://github.com/EusthEnoptEron/RaiLTools) — original C# reverse-engineering (GSC/XFL/LWG/WCG)
 - [arc_unpacker](https://github.com/vn-tools/arc_unpacker) — C++ port of CG decompression (WCG/LIM)
