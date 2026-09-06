@@ -47,6 +47,11 @@ int main() {
     appendU32(code, 0); appendU32(code, 123); appendU32(code, 0);
     appendU32(code, 0); appendU32(code, 0); appendU32(code, 1); appendU32(code, 0);
     appendU16(code, 13); appendU32(code, 7);
+    appendU16(code, 202); appendU32(code, 1); appendU32(code, 2); appendU32(code, 3);
+    appendU16(code, 210); appendU32(code, 1000); appendU32(code, 4);
+    appendU16(code, 211); appendU32(code, 1001); appendU32(code, 5); appendU32(code, 6); appendU32(code, 7);
+    appendU16(code, 212); appendU32(code, 1002);
+    appendU16(code, 213); appendU32(code, 8); appendU32(code, 9); appendU32(code, 10);
     appendU16(code, 8);
 
     std::vector<uint8_t> modern(36, 0);
@@ -116,7 +121,9 @@ int main() {
     std::remove(temp.string().c_str());
     for (const std::string expected : {
              "*if ((@1 == 0)) == 0", "*goto L_000032",
-             "*voice 123", "\\Name\"：\"Text", ":L_000032", "*wait 7", "*end"}) {
+             "*voice 123", "\\Name\"：\"Text", ":L_000032", "*wait 7",
+             "*flagset 1 2 3", "*dynsel 1000 4", "*dynans 1001 5 6 7",
+             "*dynnext 1002", "*dyndo 8 9 10", "*end"}) {
         if (listing.find(expected) == std::string::npos) {
             std::cerr << "Missing decompiler output: " << expected << std::endl;
             return 1;

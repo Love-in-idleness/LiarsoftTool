@@ -406,7 +406,8 @@ const std::unordered_map<uint16_t, std::string> NAMES = {
     {95,"texcolor"},{96,"texsize"},{97,"texfont"},{98,"texmode"},
     {100,"waitloc"},{103,"waitlod"},{104,"waitcol"},{106,"namloc"},
     {107,"texpich"},{108,"texruby"},{121,"folder"},{132,"numenable"},
-    {200,"insub"},{225,"locmap"},
+    {200,"insub"},{202,"flagset"},{210,"dynsel"},{211,"dynans"},
+    {212,"dynnext"},{213,"dyndo"},{225,"locmap"},
 };
 
 const std::unordered_map<uint16_t, std::string> VM_OPERATORS = {
