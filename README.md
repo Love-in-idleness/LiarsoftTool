@@ -31,7 +31,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 |------|------|
 | 提取脚本原文 | `liarsofttool -e gbk scenario.gsc` |
 | 实验性 GSC 反编译 | `liarsofttool --gsc-to-tsc scenario.gsc` |
-| 从 TSC 精确恢复 GSC | `liarsofttool scenario.tsc` |
+| 从 TSC 恢复/更新 GSC | `liarsofttool scenario.tsc` |
 | 翻译后注回 | `liarsofttool -e gbk -r original.gsc trans.txt` |
 | 解包资源封包 | `liarsofttool -e cp932 archive.xfl` |
 | 解包场景封包 | `liarsofttool cgview.lwg` |
@@ -124,7 +124,7 @@ make -j$(nproc)
 | XFL | `.xfl` | 解包/打包 | 通用资源封包，Magic: `LB\x01\x00` |
 | LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
 | GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容标准头（36B）及非标准头（28B，部分翻译工具产出），自动按 HeaderLength 适配 |
-| TSC | `.tsc` | → GSC | 从 `--gsc-to-tsc` 嵌入的原始数据逐字节恢复 GSC |
+| TSC | `.tsc` | → GSC | 原样输入时逐字节恢复；支持修改现代 GSC 的 TXT/TXA 对白 |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | 修改引擎编码参数 (`0x80`⇄`0x86`⇄`0xCC`)，`-e gbk/cp1251` 前向，`-e cp932` 还原 |
@@ -135,9 +135,11 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 
 `--gsc-to-tsc` 支持 36 字节现代头和 28 字节早期 CodeX 头。输出中的
 `;@gsc-raw-v1` 注释保存原 GSC 的完整二进制；未经修改时，直接输入该 TSC
-即可逐字节恢复 GSC，即使部分指令尚不能语义反编译。普通注释不参与恢复，
-对可读 TSC 指令的编辑目前也不会改变恢复结果。与 `-R --unpack-only` 组合时，
-会在整个目录树及内嵌封包中生成 `.tsc`；递归封包会先将这种 TSC 恢复为 GSC。
+即可逐字节恢复 GSC，即使部分指令尚不能语义反编译。生成时使用的文本编码
+也会写入元数据。修改现代 36 字节 GSC 对应的 TXT/TXA 对白行后，程序会保留
+原代码区和其他区段并重建字符串表；普通注释和其他可读指令暂不参与生成。
+与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
+封包会先将这种 TSC 恢复或更新为 GSC。
 
 ### 典型工作流
 
@@ -192,7 +194,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 |------|---------|
 | Extract script strings | `liarsofttool -e gbk scenario.gsc` |
 | Experimental GSC decompile | `liarsofttool --gsc-to-tsc scenario.gsc` |
-| Restore exact GSC from TSC | `liarsofttool scenario.tsc` |
+| Restore/update GSC from TSC | `liarsofttool scenario.tsc` |
 | Inject translation | `liarsofttool -e gbk -r original.gsc trans.txt` |
 | Unpack resource archive | `liarsofttool -e cp932 archive.xfl` |
 | Unpack scene archive | `liarsofttool cgview.lwg` |
@@ -285,7 +287,7 @@ When exactly two args have different extensions, the second is treated as output
 | XFL | `.xfl` | unpack/pack | Resource archive, Magic: `LB\x01\x00` |
 | LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
 | GSC | `.gsc` | extract/inject | Game script. Compatible with standard 36B header and non-standard 28B header (from some translation tools), auto-adapts to HeaderLength |
-| TSC | `.tsc` | → GSC | Byte-exact restoration from raw data embedded by `--gsc-to-tsc` |
+| TSC | `.tsc` | → GSC | Byte-exact unchanged restore; editable TXT/TXA text for modern GSC |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | Patches code-page byte (`0x80`⇄`0x86`⇄`0xCC`). `-e gbk/cp1251` forward, `-e cp932` reverse |
@@ -297,10 +299,12 @@ GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and
 `--gsc-to-tsc` supports both modern 36-byte and early 28-byte CodeX headers.
 Its `;@gsc-raw-v1` comments contain the complete original GSC, so feeding an
 unchanged TSC back to the tool restores the GSC byte-for-byte even when some
-instructions cannot be semantically decompiled. Ordinary comments are ignored;
-editing readable TSC instructions does not yet alter the restored output.
+instructions cannot be semantically decompiled. The selected text encoding is
+also recorded. Editing TXT/TXA dialogue lines from a modern 36-byte GSC keeps
+the original code and trailing sections while rebuilding the string table;
+ordinary comments and other readable commands do not yet affect output.
 Combined with `-R --unpack-only`, it generates `.tsc` throughout directory
-trees and nested archives; recursive packing restores those TSC files to GSC.
+trees and nested archives; recursive packing restores or updates them to GSC.
 
 ### Typical Workflows
 

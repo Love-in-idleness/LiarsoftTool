@@ -17,12 +17,15 @@ void decompileGscToFile(const std::string& inputPath,
                         const std::string& outputPath,
                         const std::string& encoding = "CP932");
 
-/// Restore the exact source GSC embedded by decompileGsc(). Other TSC text and
-/// ordinary comments are intentionally ignored in this first-stage round trip.
-std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText);
+/// Restore the source GSC embedded by decompileGsc(). Unchanged input is exact;
+/// edited TXT/TXA dialogue lines rebuild the modern GSC string table.
+std::vector<uint8_t> restoreGscFromTsc(
+    const std::string& tscText,
+    const std::string& fallbackEncoding = "CP932");
 
 void restoreGscFromTscFile(const std::string& inputPath,
-                           const std::string& outputPath);
+                           const std::string& outputPath,
+                           const std::string& fallbackEncoding = "CP932");
 
 } // namespace liarsoft
 

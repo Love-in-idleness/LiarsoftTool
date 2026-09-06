@@ -60,6 +60,7 @@ std::vector<uint8_t> readFile(const std::string& path) {
 constexpr const char* RAW_HEADER = ";@gsc-raw-v1 ";
 constexpr const char* RAW_CHUNK = ";@gsc-raw ";
 constexpr const char* RAW_END = ";@gsc-raw-end";
+constexpr const char* TEXT_ENCODING = ";@gsc-text-encoding ";
 
 uint64_t fnv1a64(const std::vector<uint8_t>& data) {
     uint64_t value = 14695981039346656037ull;
@@ -98,6 +99,15 @@ uint8_t hexDigit(char value) {
     if (value >= 'a' && value <= 'f') return static_cast<uint8_t>(value - 'a' + 10);
     if (value >= 'A' && value <= 'F') return static_cast<uint8_t>(value - 'A' + 10);
     throw std::runtime_error("invalid hexadecimal digit in ;@gsc-raw metadata");
+}
+
+void writeU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
+    if (offset + 4 > data.size())
+        throw std::runtime_error("cannot patch truncated GSC header");
+    data[offset] = static_cast<uint8_t>(value);
+    data[offset + 1] = static_cast<uint8_t>(value >> 8);
+    data[offset + 2] = static_cast<uint8_t>(value >> 16);
+    data[offset + 3] = static_cast<uint8_t>(value >> 24);
 }
 
 const std::unordered_map<uint16_t, std::string>& modernSchemas() {
@@ -534,6 +544,142 @@ std::vector<std::string> splitLines(const std::string& text) {
     return lines;
 }
 
+std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
+                                    const std::string& tscText,
+                                    const std::string& fallbackEncoding) {
+    std::vector<std::pair<size_t, std::string>> edits;
+    std::optional<size_t> pendingOffset;
+    std::string encoding = fallbackEncoding;
+    std::istringstream input(tscText);
+    std::string line;
+    bool afterRaw = false;
+    while (std::getline(input, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line == RAW_END) {
+            afterRaw = true;
+            continue;
+        }
+        if (!afterRaw) continue;
+        if (line.compare(0, std::char_traits<char>::length(TEXT_ENCODING),
+                         TEXT_ENCODING) == 0) {
+            encoding = line.substr(std::char_traits<char>::length(TEXT_ENCODING));
+            if (encoding.empty())
+                throw std::runtime_error("empty ;@gsc-text-encoding metadata");
+            continue;
+        }
+        if (line.size() == 9 && line.compare(0, 3, "; @") == 0) {
+            try {
+                size_t used = 0;
+                pendingOffset = static_cast<size_t>(
+                    std::stoull(line.substr(3), &used, 16));
+                if (used != 6) throw std::invalid_argument("offset");
+            } catch (const std::exception&) {
+                throw std::runtime_error("invalid GSC text offset marker");
+            }
+            continue;
+        }
+        if (pendingOffset && !line.empty() && line.front() == '\\')
+            edits.emplace_back(*pendingOffset, line);
+        pendingOffset.reset();
+    }
+    if (edits.empty()) return raw;
+    if (raw.size() < 36 || readU32(raw, 4) != 36)
+        throw std::runtime_error("editable TSC text currently requires a modern 36-byte GSC");
+
+    const size_t codeSize = readU32(raw, 8);
+    const size_t indexSize = readU32(raw, 12);
+    const size_t stringsSize = readU32(raw, 16);
+    const size_t codeStart = 36;
+    const size_t indexStart = codeStart + codeSize;
+    const size_t stringsStart = indexStart + indexSize;
+    const size_t tailStart = stringsStart + stringsSize;
+    if (indexSize % 4 || tailStart > raw.size())
+        throw std::runtime_error("malformed modern GSC string sections");
+
+    const size_t stringCount = indexSize / 4;
+    std::vector<std::vector<uint8_t>> strings;
+    strings.reserve(stringCount);
+    for (size_t index = 0; index < stringCount; ++index) {
+        const size_t start = readU32(raw, indexStart + index * 4);
+        if (start >= stringsSize)
+            throw std::runtime_error("GSC string starts outside its table");
+        const auto begin = raw.begin() + static_cast<ptrdiff_t>(stringsStart + start);
+        const auto tableEnd = raw.begin() + static_cast<ptrdiff_t>(tailStart);
+        const auto end = std::find(begin, tableEnd, 0);
+        if (end == tableEnd) throw std::runtime_error("unterminated GSC string");
+        strings.emplace_back(begin, end);
+    }
+
+    std::unordered_map<size_t, std::vector<uint8_t>> replacements;
+    auto setString = [&](size_t index, const std::string& value) {
+        if (index >= strings.size())
+            throw std::runtime_error("TSC text refers to an invalid GSC string index");
+        const auto encoded = convertEncoding(value, "UTF-8", encoding);
+        std::vector<uint8_t> bytes(encoded.begin(), encoded.end());
+        const auto found = replacements.find(index);
+        if (found != replacements.end() && found->second != bytes)
+            throw std::runtime_error("conflicting edits to a shared GSC string");
+        replacements[index] = std::move(bytes);
+    };
+
+    for (const auto& edit : edits) {
+        const size_t offset = edit.first;
+        if (offset + 2 > codeSize)
+            throw std::runtime_error("TSC text offset is outside the GSC code section");
+        const size_t instruction = codeStart + offset;
+        const uint16_t opcode = readU16(raw, instruction);
+        if (opcode == 81) {
+            if (offset + 30 > codeSize)
+                throw std::runtime_error("truncated TXT instruction");
+            const size_t nameIndex = readU32(raw, instruction + 18);
+            const size_t textIndex = readU32(raw, instruction + 22);
+            const std::string content = edit.second.substr(1);
+            const std::string delimiter = "\"：\"";
+            const auto separator = content.find(delimiter);
+            if (separator == std::string::npos) {
+                setString(nameIndex, "");
+                setString(textIndex, content);
+            } else {
+                setString(nameIndex, content.substr(0, separator));
+                setString(textIndex, content.substr(separator + delimiter.size()));
+            }
+        } else if (opcode == 82) {
+            if (offset + 26 > codeSize || edit.second.compare(0, 8, "\\append ") != 0)
+                throw std::runtime_error("malformed TXA text line");
+            setString(readU32(raw, instruction + 18), edit.second.substr(8));
+        } else {
+            throw std::runtime_error("GSC text marker does not point to TXT or TXA");
+        }
+    }
+
+    bool changed = false;
+    for (const auto& replacement : replacements) {
+        if (strings[replacement.first] != replacement.second) changed = true;
+        strings[replacement.first] = replacement.second;
+    }
+    if (!changed) return raw;
+
+    std::vector<uint8_t> pool;
+    std::vector<uint32_t> offsets;
+    for (const auto& value : strings) {
+        offsets.push_back(static_cast<uint32_t>(pool.size()));
+        pool.insert(pool.end(), value.begin(), value.end());
+        pool.push_back(0);
+    }
+    std::vector<uint8_t> result(raw.begin(), raw.begin() + static_cast<ptrdiff_t>(indexStart));
+    for (const auto offset : offsets) {
+        result.push_back(static_cast<uint8_t>(offset));
+        result.push_back(static_cast<uint8_t>(offset >> 8));
+        result.push_back(static_cast<uint8_t>(offset >> 16));
+        result.push_back(static_cast<uint8_t>(offset >> 24));
+    }
+    result.insert(result.end(), pool.begin(), pool.end());
+    result.insert(result.end(), raw.begin() + static_cast<ptrdiff_t>(tailStart), raw.end());
+    writeU32(result, 0, static_cast<uint32_t>(result.size()));
+    writeU32(result, 16, static_cast<uint32_t>(pool.size()));
+    return result;
+}
+
 } // namespace
 
 static std::string decompileListing(const std::string& inputPath,
@@ -608,6 +754,7 @@ static std::string decompileListing(const std::string& inputPath,
 std::string decompileGsc(const std::string& inputPath, const std::string& encoding) {
     const auto raw = readFile(inputPath);
     std::string output = rawEnvelope(raw);
+    output += std::string(TEXT_ENCODING) + encoding + "\n";
     try {
         output += decompileListing(inputPath, encoding);
     } catch (const std::exception& e) {
@@ -619,7 +766,8 @@ std::string decompileGsc(const std::string& inputPath, const std::string& encodi
     return output;
 }
 
-std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText) {
+std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText,
+                                       const std::string& fallbackEncoding) {
     std::istringstream input(tscText);
     std::string line;
     std::vector<uint8_t> result;
@@ -676,7 +824,7 @@ std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText) {
         throw std::runtime_error(";@gsc-raw size mismatch");
     if (fnv1a64(result) != expectedHash)
         throw std::runtime_error(";@gsc-raw checksum mismatch");
-    return result;
+    return applyTextEdits(result, tscText, fallbackEncoding);
 }
 
 void decompileGscToFile(const std::string& inputPath,
@@ -688,10 +836,12 @@ void decompileGscToFile(const std::string& inputPath,
 }
 
 void restoreGscFromTscFile(const std::string& inputPath,
-                           const std::string& outputPath) {
+                           const std::string& outputPath,
+                           const std::string& fallbackEncoding) {
     const auto text = readFile(inputPath);
     const auto output = restoreGscFromTsc(
-        std::string(reinterpret_cast<const char*>(text.data()), text.size()));
+        std::string(reinterpret_cast<const char*>(text.data()), text.size()),
+        fallbackEncoding);
     writeFileIfChanged(outputPath, output);
 }
 

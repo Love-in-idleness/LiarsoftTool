@@ -152,7 +152,7 @@ static void prepareDirectoryForPacking(const fs::path& directory,
 
         try {
             if (ext == ".tsc") {
-                restoreGscFromTscFile(source.string(), target.string());
+                restoreGscFromTscFile(source.string(), target.string(), encoding);
             } else if (ext == ".txt") {
                 if (!fs::is_regular_file(target))
                     throw std::runtime_error("same-name reference GSC not found");

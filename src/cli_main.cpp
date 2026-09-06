@@ -36,7 +36,7 @@ static void printUsage(const char* prog) {
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
-              << "  .tsc  -> .gsc         Restore exact GSC embedded by --gsc-to-tsc\n"
+              << "  .tsc  -> .gsc         Restore GSC and apply TXT/TXA text edits\n"
               << "  .txt  -> .gsc         Pack translated strings back into GSC\n"
               << "  .xfl  -> directory    Unpack XFL archive into a folder\n"
               << "  .lwg  -> directory    Unpack LWG archive into a folder\n"
@@ -225,8 +225,8 @@ static bool processOne(const std::string& inputPath,
 
     } else if (ext == ".tsc") {
         if (out.empty()) out = replaceExtension(inputPath, ".gsc");
-        liarsoft::restoreGscFromTscFile(inputPath, out);
-        std::cout << "Restored exact GSC from TSC: " << out << std::endl;
+        liarsoft::restoreGscFromTscFile(inputPath, out, encoding);
+        std::cout << "Built GSC from TSC: " << out << std::endl;
 
     } else if (ext == ".txt") {
         std::string ref = referencePath;

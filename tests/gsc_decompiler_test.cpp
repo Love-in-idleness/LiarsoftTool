@@ -72,6 +72,27 @@ int main() {
         std::cerr << "Readable TSC edits changed raw restoration" << std::endl;
         return 1;
     }
+    std::string editedListing = listing;
+    const std::string originalText = "\\Name\"：\"Text";
+    const auto textAt = editedListing.find(originalText);
+    if (textAt == std::string::npos) {
+        std::cerr << "Missing editable TXT line" << std::endl;
+        return 1;
+    }
+    editedListing.replace(textAt, originalText.size(), "\\Edited\"：\"Changed");
+    const auto editedGsc = liarsoft::restoreGscFromTsc(editedListing);
+    if (editedGsc == modern) {
+        std::cerr << "Edited TXT line did not change the GSC" << std::endl;
+        return 1;
+    }
+    save(temp, editedGsc);
+    const auto editedRoundTrip = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (editedRoundTrip.find("\\Edited\"：\"Changed") == std::string::npos ||
+        liarsoft::restoreGscFromTsc(editedRoundTrip) != editedGsc) {
+        std::cerr << "Edited GSC text did not re-decompile or round-trip" << std::endl;
+        return 1;
+    }
     std::remove(temp.string().c_str());
     for (const std::string expected : {
              "*if ((@1 == 0)) == 0", "*goto L_000032",

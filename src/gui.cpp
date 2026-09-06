@@ -89,7 +89,7 @@ static Glib::ustring guessOutput(const std::string& inputPath, const std::string
 static Glib::ustring guessType(const std::string& path, bool gscToTsc = false) {
     std::string ext = getExtension(path);
     if (ext == ".gsc") return gscToTsc ? "GSC → TSC" : "GSC → TXT";
-    if (ext == ".tsc") return "TSC → GSC (exact restore)";
+    if (ext == ".tsc") return "TSC → GSC";
     if (ext == ".txt") return "TXT → GSC";
     if (ext == ".xfl") return "XFL → DIR";
     if (ext == ".lwg") return "LWG → DIR";
@@ -191,7 +191,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
                     liarsoft::TransFile::fromGsc(
                         liarsoft::GscFile::fromFile(in, encoding)).save(out);
             } else if (ext == ".tsc") {
-                liarsoft::restoreGscFromTscFile(in, out);
+                liarsoft::restoreGscFromTscFile(in, out, encoding);
             } else if (ext == ".txt") {
                 std::string ref = refPath.empty() ? replaceExtension(in, ".gsc") : refPath;
                 auto trans = liarsoft::TransFile::fromFile(in);
