@@ -52,6 +52,7 @@ int main() {
     appendU16(code, 211); appendU32(code, 1001); appendU32(code, 5); appendU32(code, 6); appendU32(code, 7);
     appendU16(code, 212); appendU32(code, 1002);
     appendU16(code, 213); appendU32(code, 8); appendU32(code, 9); appendU32(code, 10);
+    appendU16(code, 136); appendU32(code, 11); appendU32(code, 12); appendU32(code, 13);
     appendU16(code, 8);
 
     std::vector<uint8_t> modern(36, 0);
@@ -123,7 +124,7 @@ int main() {
              "*if ((@1 == 0)) == 0", "*goto L_000032",
              "*voice 123", "\\Name\"：\"Text", ":L_000032", "*wait 7",
              "*flagset 1 2 3", "*dynsel 1000 4", "*dynans 1001 5 6 7",
-             "*dynnext 1002", "*dyndo 8 9 10", "*end"}) {
+             "*dynnext 1002", "*dyndo 8 9 10", "*num 11 12 13", "*end"}) {
         if (listing.find(expected) == std::string::npos) {
             std::cerr << "Missing decompiler output: " << expected << std::endl;
             return 1;
@@ -169,7 +170,7 @@ int main() {
     std::remove(temp.string().c_str());
     if (earlyListing.find(";@gsc-instruction-schema rscript18") == std::string::npos ||
         earlyListing.find("*locmode 1 2 3") == std::string::npos ||
-        earlyListing.find("; opcode 105 4") == std::string::npos ||
+        earlyListing.find("*facedep 4") == std::string::npos ||
         liarsoft::restoreGscFromTsc(earlyListing) != earlyModern) {
         std::cerr << "RScript 1.8 instruction schema was not detected"
                   << std::endl;
