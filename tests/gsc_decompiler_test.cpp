@@ -150,6 +150,78 @@ int main() {
         return 1;
     }
 
+    std::vector<uint8_t> earlyModern(36, 0);
+    std::vector<uint8_t> earlyCode;
+    appendU16(earlyCode, 38);
+    appendU32(earlyCode, 1); appendU32(earlyCode, 2); appendU32(earlyCode, 3);
+    appendU16(earlyCode, 105); appendU32(earlyCode, 4);
+    appendU16(earlyCode, 8);
+    patchU32(earlyModern, 4, 36);
+    patchU32(earlyModern, 8, static_cast<uint32_t>(earlyCode.size()));
+    patchU32(earlyModern, 12, 4);
+    patchU32(earlyModern, 16, 2);
+    earlyModern.insert(earlyModern.end(), earlyCode.begin(), earlyCode.end());
+    appendU32(earlyModern, 0);
+    earlyModern.push_back('x'); earlyModern.push_back(0);
+    patchU32(earlyModern, 0, static_cast<uint32_t>(earlyModern.size()));
+    save(temp, earlyModern);
+    const auto earlyListing = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (earlyListing.find(";@gsc-instruction-schema rscript18") == std::string::npos ||
+        earlyListing.find("*locmode 1 2 3") == std::string::npos ||
+        earlyListing.find("; opcode 105 4") == std::string::npos ||
+        liarsoft::restoreGscFromTsc(earlyListing) != earlyModern) {
+        std::cerr << "RScript 1.8 instruction schema was not detected"
+                  << std::endl;
+        return 1;
+    }
+    auto editedEarlyListing = earlyListing;
+    editedEarlyListing.replace(editedEarlyListing.find("*locmode 1 2 3"), 14,
+                               "*locmode 1 2 9");
+    const auto editedEarlyGsc = liarsoft::restoreGscFromTsc(editedEarlyListing);
+    save(temp, editedEarlyGsc);
+    const auto editedEarlyRoundTrip = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (editedEarlyRoundTrip.find("*locmode 1 2 9") == std::string::npos) {
+        std::cerr << "RScript 1.8 command edit was not rebuilt" << std::endl;
+        return 1;
+    }
+
+    std::vector<uint8_t> rscript19(36, 0);
+    std::vector<uint8_t> rscript19Code;
+    appendU16(rscript19Code, 38);
+    appendU32(rscript19Code, 1); appendU32(rscript19Code, 2);
+    appendU32(rscript19Code, 3); appendU32(rscript19Code, 4);
+    appendU16(rscript19Code, 64); appendU32(rscript19Code, 7);
+    appendU16(rscript19Code, 8);
+    patchU32(rscript19, 4, 36);
+    patchU32(rscript19, 8, static_cast<uint32_t>(rscript19Code.size()));
+    patchU32(rscript19, 12, 4);
+    patchU32(rscript19, 16, 2);
+    rscript19.insert(rscript19.end(), rscript19Code.begin(), rscript19Code.end());
+    appendU32(rscript19, 0);
+    rscript19.push_back('x'); rscript19.push_back(0);
+    patchU32(rscript19, 0, static_cast<uint32_t>(rscript19.size()));
+    save(temp, rscript19);
+    auto rscript19Listing = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (rscript19Listing.find(";@gsc-instruction-schema rscript19") == std::string::npos ||
+        rscript19Listing.find("*locmode 1 2 3 4") == std::string::npos ||
+        rscript19Listing.find("*se_off 7") == std::string::npos ||
+        liarsoft::restoreGscFromTsc(rscript19Listing) != rscript19) {
+        std::cerr << "RScript 1.9 instruction schema was not detected" << std::endl;
+        return 1;
+    }
+    rscript19Listing.replace(rscript19Listing.find("*se_off 7"), 9, "*se_off 9");
+    const auto editedRscript19 = liarsoft::restoreGscFromTsc(rscript19Listing);
+    save(temp, editedRscript19);
+    const auto editedRscript19Listing = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (editedRscript19Listing.find("*se_off 9") == std::string::npos) {
+        std::cerr << "RScript 1.9 command edit was not rebuilt" << std::endl;
+        return 1;
+    }
+
     auto unknown = modern;
     patchU16(unknown, 36, 0);
     save(temp, unknown);
