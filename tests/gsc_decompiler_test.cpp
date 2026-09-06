@@ -70,6 +70,12 @@ int main() {
                       "liarsofttool_gsc_decompiler_test.gsc";
     save(temp, modern);
     const std::string listing = liarsoft::decompileGsc(temp.string());
+    if (listing.find(";@gsc-structure-v1 ") == std::string::npos ||
+        listing.find(";@gsc-instruction ") == std::string::npos ||
+        listing.find(";@gsc-raw-v1 ") != std::string::npos) {
+        std::cerr << "Recognized GSC did not use structured metadata" << std::endl;
+        return 1;
+    }
     if (liarsoft::restoreGscFromTsc(listing) != modern) {
         std::cerr << "Modern GSC did not round-trip byte-for-byte" << std::endl;
         return 1;
@@ -272,14 +278,15 @@ int main() {
     const std::string unknownListing = liarsoft::decompileGsc(temp.string());
     std::remove(temp.string().c_str());
     if (unknownListing.find("; decompilation unavailable:") == std::string::npos ||
+        unknownListing.find(";@gsc-raw-v1 ") == std::string::npos ||
         liarsoft::restoreGscFromTsc(unknownListing) != unknown) {
         std::cerr << "Unknown dialect did not fall back to exact restoration" << std::endl;
         return 1;
     }
 
     std::string damaged = listing;
-    const auto chunk = damaged.find(";@gsc-raw ");
-    damaged[chunk + 10] = damaged[chunk + 10] == '0' ? '1' : '0';
+    const auto chunk = damaged.find(";@gsc-section strings ");
+    damaged[chunk + 22] = damaged[chunk + 22] == '0' ? '1' : '0';
     try {
         liarsoft::restoreGscFromTsc(damaged);
         std::cerr << "Damaged raw metadata was accepted" << std::endl;
