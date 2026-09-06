@@ -1,6 +1,7 @@
 #include "xflarchive.h"
 #include "bigendian.h"
 #include "gscfile.h"
+#include "gsc_decompiler.h"
 #include "fileio.h"
 #include "lim_decoder.h"
 #include "lwg_decoder.h"
@@ -49,16 +50,18 @@ bool isLwgDirectory(const std::string& path) {
 }
 
 bool matchesOperationMode(const std::string& path, bool packOnly,
-                          bool unpackOnly) {
+                          bool unpackOnly, bool recursive) {
     if (!packOnly && !unpackOnly) return true;
+    if (packOnly && unpackOnly) return false;
     const bool directory = fs::is_directory(path);
     const auto ext = lower(fs::path(path).extension().string());
     const bool packing = directory || ext == ".txt" || ext == ".ogg" ||
                          ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
                          ext == ".bmp";
-    const bool unpacking = !directory && (ext == ".xfl" || ext == ".lwg" ||
+    const bool unpacking = (directory && recursive) ||
+                           (!directory && (ext == ".xfl" || ext == ".lwg" ||
                            ext == ".gsc" || ext == ".wcg" || ext == ".lim" ||
-                           ext == ".wav");
+                           ext == ".wav"));
     return (!packOnly || packing) && (!unpackOnly || unpacking);
 }
 
@@ -276,7 +279,8 @@ std::vector<std::string> packDirectoryToFile(
 }
 
 static void unpackDirectory(const fs::path& directory, const std::string& encoding,
-                            unsigned depth, std::vector<std::string>& warnings) {
+                            unsigned depth, std::vector<std::string>& warnings,
+                            bool gscToTsc) {
     // ponytail: depth cap prevents malicious self-nesting; raise it if real
     // archives are ever observed deeper than 32 levels.
     if (depth > 32) {
@@ -309,12 +313,20 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
                 auto archive = LwgDecoder::decode(readFile(archivePath), encoding);
                 LwgDecoder::extractToDirectory(archive, target.string(), encoding);
             }
-            unpackDirectory(target, encoding, depth + 1, warnings);
         } catch (const std::exception& e) {
             warnings.push_back("Skipped archive '" + archivePath.string() +
                                "': " + e.what());
         }
     }
+
+    std::vector<fs::path> subdirectories;
+    for (const auto& entry : fs::directory_iterator(directory)) {
+        if (!entry.is_symlink() && entry.is_directory())
+            subdirectories.push_back(entry.path());
+    }
+    std::sort(subdirectories.begin(), subdirectories.end());
+    for (const auto& subdirectory : subdirectories)
+        unpackDirectory(subdirectory, encoding, depth + 1, warnings, gscToTsc);
 
     struct Conversion { fs::path source; int rank; };
     std::vector<Conversion> conversions;
@@ -337,7 +349,8 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
     for (const auto& conversion : conversions) {
         const auto& source = conversion.source;
         const auto ext = lower(source.extension().string());
-        auto target = outputFile(source, ext == ".gsc" ? ".txt" :
+        auto target = outputFile(source, ext == ".gsc" ?
+                                         (gscToTsc ? ".tsc" : ".txt") :
                                          ext == ".wav" ? ".ogg" : ".png");
         if (!convertedTargets.insert(normalized(target)).second) {
             warnings.push_back("Skipped duplicate conversion target: " +
@@ -346,8 +359,12 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
         }
         try {
             if (ext == ".gsc") {
-                auto gsc = GscFile::fromFile(source.string(), encoding);
-                TransFile::fromGsc(gsc).save(target.string());
+                if (gscToTsc) {
+                    decompileGscToFile(source.string(), target.string(), encoding);
+                } else {
+                    auto gsc = GscFile::fromFile(source.string(), encoding);
+                    TransFile::fromGsc(gsc).save(target.string());
+                }
             } else if (ext == ".wcg") {
                 wcgSavePng(wcgDecode(readFile(source)), target.string());
             } else if (ext == ".lim") {
@@ -362,11 +379,11 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
 }
 
 std::vector<std::string> unpackDirectoryRecursively(
-    const std::string& dirPath, const std::string& encoding) {
+    const std::string& dirPath, const std::string& encoding, bool gscToTsc) {
     if (!fs::is_directory(dirPath))
         throw std::runtime_error("Directory not found: " + dirPath);
     std::vector<std::string> warnings;
-    unpackDirectory(dirPath, encoding, 0, warnings);
+    unpackDirectory(dirPath, encoding, 0, warnings, gscToTsc);
     return warnings;
 }
 

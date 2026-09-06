@@ -90,6 +90,22 @@ if(result OR NOT EXISTS "${TEST_ROOT}/recursive_unpacked/nested/scene/.meta.xml"
     message(FATAL_ERROR "Nested archives were not recursively unpacked: ${error}")
 endif()
 
+# Recursive unpack-only accepts an existing directory tree, visits every
+# subdirectory, continues after a broken archive, and never packs the input.
+file(MAKE_DIRECTORY "${TEST_ROOT}/unpack_tree/level/deep")
+configure_file("${TEST_ROOT}/root.xfl"
+               "${TEST_ROOT}/unpack_tree/level/deep/good.xfl" COPYONLY)
+file(WRITE "${TEST_ROOT}/unpack_tree/level/broken.xfl" "not-an-archive")
+execute_process(
+    COMMAND "${TOOL}" -R --unpack-only "${TEST_ROOT}/unpack_tree"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR
+   NOT EXISTS "${TEST_ROOT}/unpack_tree/level/deep/good/nested/scene/.meta.xml" OR
+   EXISTS "${TEST_ROOT}/unpack_tree.xfl" OR
+   NOT error MATCHES "Skipped archive.*broken.xfl")
+    message(FATAL_ERROR "Recursive unpack-only directory traversal failed: ${error}")
+endif()
+
 execute_process(
     COMMAND "${TOOL}" -o "${TEST_ROOT}/good_unpacked" "${TEST_ROOT}/root/good.lwg"
     RESULT_VARIABLE result ERROR_VARIABLE error)

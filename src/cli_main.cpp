@@ -1,4 +1,5 @@
 #include "gscfile.h"
+#include "gsc_decompiler.h"
 #include "transfile.h"
 #include "xflarchive.h"
 #include "wcg_decoder.h"
@@ -31,6 +32,7 @@ static void printUsage(const char* prog) {
               << "  -R, --recursive        Recursively pack/unpack and convert resources\n"
               << "      --pack-only        Only pack/encode inputs\n"
               << "      --unpack-only      Only unpack/decode inputs\n"
+              << "      --gsc-to-tsc       Experimental annotated GSC -> TSC output\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
@@ -148,7 +150,7 @@ static bool processOne(const std::string& inputPath,
                        const std::string& outputPath,
                        const std::string& encoding,
                        const std::string& referencePath,
-                       bool recursive)
+                       bool recursive, bool unpackOnly, bool gscToTsc)
 {
     auto printWarnings = [](const std::vector<std::string>& warnings) {
         for (const auto& warning : warnings)
@@ -164,6 +166,14 @@ static bool processOne(const std::string& inputPath,
         // Strip trailing slash for clean extension appending
         while (!resolved.empty() && (resolved.back() == '/' || resolved.back() == '\\'))
             resolved.pop_back();
+
+        if (unpackOnly) {
+            std::cout << "Recursively unpacking directory: " << resolved
+                      << " (encoding: " << encoding << ")" << std::endl;
+            printWarnings(liarsoft::unpackDirectoryRecursively(
+                resolved, encoding, gscToTsc));
+            return true;
+        }
 
         bool hasMeta = liarsoft::isLwgDirectory(resolved);
         std::string out = outputPath;
@@ -199,12 +209,18 @@ static bool processOne(const std::string& inputPath,
     };
 
     if (ext == ".gsc") {
-        std::cout << "Reading GSC: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
-        auto gsc = liarsoft::GscFile::fromFile(inputPath, encoding);
-        auto trans = liarsoft::TransFile::fromGsc(gsc);
-        if (out.empty()) out = replaceExtension(inputPath, ".txt");
-        trans.save(out);
-        std::cout << "Extracted " << trans.strings.size() << " strings to: " << out << std::endl;
+        if (gscToTsc) {
+            if (out.empty()) out = replaceExtension(inputPath, ".tsc");
+            liarsoft::decompileGscToFile(inputPath, out, encoding);
+            std::cout << "Experimental GSC -> TSC: " << out << std::endl;
+        } else {
+            std::cout << "Reading GSC: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
+            auto gsc = liarsoft::GscFile::fromFile(inputPath, encoding);
+            auto trans = liarsoft::TransFile::fromGsc(gsc);
+            if (out.empty()) out = replaceExtension(inputPath, ".txt");
+            trans.save(out);
+            std::cout << "Extracted " << trans.strings.size() << " strings to: " << out << std::endl;
+        }
 
     } else if (ext == ".txt") {
         std::string ref = referencePath;
@@ -223,7 +239,8 @@ static bool processOne(const std::string& inputPath,
         if (out.empty()) out = replaceExtension(inputPath, "");
         archive.extractToDirectory(out);
         if (recursive)
-            printWarnings(liarsoft::unpackDirectoryRecursively(out, encoding));
+            printWarnings(liarsoft::unpackDirectoryRecursively(
+                out, encoding, gscToTsc));
         std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
 
     } else if (ext == ".lwg") {
@@ -233,7 +250,8 @@ static bool processOne(const std::string& inputPath,
         if (out.empty()) out = replaceExtension(inputPath, "");
         liarsoft::LwgDecoder::extractToDirectory(archive, out, encoding);
         if (recursive)
-            printWarnings(liarsoft::unpackDirectoryRecursively(out, encoding));
+            printWarnings(liarsoft::unpackDirectoryRecursively(
+                out, encoding, gscToTsc));
         std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
 
     } else if (ext == ".wav") {
@@ -304,6 +322,7 @@ int main(int argc, char* argv[]) {
     bool recursive = false;
     bool packOnly = false;
     bool unpackOnly = false;
+    bool gscToTsc = false;
 
     // Parse arguments
     int i = 1;
@@ -327,6 +346,8 @@ int main(int argc, char* argv[]) {
             packOnly = true;
         } else if (arg == "--unpack-only") {
             unpackOnly = true;
+        } else if (arg == "--gsc-to-tsc") {
+            gscToTsc = true;
         } else if (arg[0] == '-') {
             std::cerr << "Error: unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -379,20 +400,24 @@ int main(int argc, char* argv[]) {
     try {
         for (size_t fi = 0; fi < allFiles.size(); ++fi) {
             const auto& f = allFiles[fi];
-            if (!liarsoft::matchesOperationMode(f, packOnly, unpackOnly)) continue;
+            if (!liarsoft::matchesOperationMode(f, packOnly, unpackOnly,
+                                                recursive)) continue;
             std::string out;
             if (allFiles.size() == 1 && !outputPath.empty()) {
                 out = outputPath;  // explicit output for single file
             } else if (!outputPath.empty() && allFiles.size() > 1) {
                 // Output path is a directory for batch mode
                 fs::path name = fs::path(f).filename();
+                if (gscToTsc && getExtension(name.string()) == ".gsc")
+                    name.replace_extension(".tsc");
                 out = (fs::path(outputPath) / name).string();
             }
             // else: out stays empty → auto-derived
 
             if (allFiles.size() > 1)
                 std::cout << "\n[" << (fi + 1) << "/" << allFiles.size() << "] ";
-            if (!processOne(f, out, encoding, referencePath, recursive))
+            if (!processOne(f, out, encoding, referencePath, recursive,
+                            unpackOnly, gscToTsc))
                 ++errors;
         }
     } catch (const std::exception& e) {

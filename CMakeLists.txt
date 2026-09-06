@@ -43,6 +43,7 @@ set(COMMON_SOURCES
     src/encoding.cpp
     src/fileio.cpp
     src/gscfile.cpp
+    src/gsc_decompiler.cpp
     src/transfile.cpp
     src/xflarchive.cpp
     src/cg_decompress.cpp
@@ -101,6 +102,31 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(encoding_test tests/encoding_test.cpp src/encoding.cpp)
+    if(NOT WIN32)
+        target_link_libraries(encoding_test PRIVATE Iconv::Iconv)
+    else()
+        target_link_options(encoding_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME encoding COMMAND encoding_test)
+
+    add_executable(wav_ogg_test
+        tests/wav_ogg_test.cpp src/wav_ogg.cpp src/fileio.cpp)
+    if(WIN32)
+        target_link_options(wav_ogg_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME wav_ogg COMMAND wav_ogg_test)
+
+    add_executable(gsc_decompiler_test
+        tests/gsc_decompiler_test.cpp src/gsc_decompiler.cpp
+        src/encoding.cpp src/fileio.cpp)
+    if(NOT WIN32)
+        target_link_libraries(gsc_decompiler_test PRIVATE Iconv::Iconv)
+    else()
+        target_link_options(gsc_decompiler_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
+
     add_test(NAME directory_packing
         COMMAND ${CMAKE_COMMAND}
             -DTOOL=$<TARGET_FILE:liarsofttool>

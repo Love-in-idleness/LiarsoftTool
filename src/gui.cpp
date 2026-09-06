@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "gscfile.h"
+#include "gsc_decompiler.h"
 #include "transfile.h"
 #include "xflarchive.h"
 #include "wcg_decoder.h"
@@ -39,6 +40,7 @@ static Gtk::Entry* g_outDirEntry = nullptr;
 static Gtk::CheckButton* g_recursiveCheck = nullptr;
 static Gtk::CheckButton* g_packOnlyCheck = nullptr;
 static Gtk::CheckButton* g_unpackOnlyCheck = nullptr;
+static Gtk::CheckButton* g_gscToTscCheck = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
@@ -61,7 +63,8 @@ static std::string replaceExtension(const std::string& path, const std::string& 
     return path.substr(0, pos) + newExt;
 }
 
-static Glib::ustring guessOutput(const std::string& inputPath, const std::string& outDir) {
+static Glib::ustring guessOutput(const std::string& inputPath, const std::string& outDir,
+                                bool gscToTsc = false) {
     std::string ext = getExtension(inputPath);
     fs::path in(inputPath);
     fs::path base = outDir.empty() ? in.parent_path() : fs::path(outDir);
@@ -70,7 +73,7 @@ static Glib::ustring guessOutput(const std::string& inputPath, const std::string
     if (fs::is_directory(inputPath))
         return (base / (in.filename().string() +
                         (liarsoft::isLwgDirectory(inputPath) ? ".lwg" : ".xfl"))).string();
-    if (ext == ".gsc")      return (base / (stem + ".txt")).string();
+    if (ext == ".gsc")      return (base / (stem + (gscToTsc ? ".tsc" : ".txt"))).string();
     if (ext == ".txt")      return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
     if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
@@ -82,9 +85,9 @@ static Glib::ustring guessOutput(const std::string& inputPath, const std::string
     return (base / in.filename()).string();
 }
 
-static Glib::ustring guessType(const std::string& path) {
+static Glib::ustring guessType(const std::string& path, bool gscToTsc = false) {
     std::string ext = getExtension(path);
-    if (ext == ".gsc") return "GSC → TXT";
+    if (ext == ".gsc") return gscToTsc ? "GSC → TSC" : "GSC → TXT";
     if (ext == ".txt") return "TXT → GSC";
     if (ext == ".xfl") return "XFL → DIR";
     if (ext == ".lwg") return "LWG → DIR";
@@ -115,19 +118,21 @@ static void convertOne(const std::string& inputPath,
 
 // ---- Add files to the list ----
 static void addFiles(const std::vector<std::string>& paths, const std::string& outDir) {
+    const bool gscToTsc = g_gscToTscCheck && g_gscToTscCheck->get_active();
     for (const auto& p : paths) {
         if (!isSupported(p)) continue;
         auto row = *(g_store->append());
         row[g_columns.inputPath]  = p;
-        row[g_columns.outputPath] = guessOutput(p, outDir);
-        row[g_columns.fileType]   = guessType(p);
+        row[g_columns.outputPath] = guessOutput(p, outDir, gscToTsc);
+        row[g_columns.fileType]   = guessType(p, gscToTsc);
         row[g_columns.status]     = "Ready";
     }
 }
 
 // ---- Conversion worker thread ----
 static void convertAll(const std::string& encoding, const std::string& refPath,
-                       bool recursive, bool packOnly, bool unpackOnly) {
+                       bool recursive, bool packOnly, bool unpackOnly,
+                       bool gscToTsc) {
     g_running = true;
     g_convertBtn->set_sensitive(false);
 
@@ -146,7 +151,8 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
         int processingNumber = done + 1;
         std::string ext = getExtension(in);
 
-        if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly)) {
+        if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly,
+                                            recursive)) {
             done++;
             Glib::signal_idle().connect_once([rowPath, done, total]() {
                 auto row = g_store->get_iter(rowPath);
@@ -172,11 +178,16 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
 
         try {
             if (fs::is_directory(in)) {
-                warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
+                if (unpackOnly)
+                    warnings = liarsoft::unpackDirectoryRecursively(in, encoding, gscToTsc);
+                else
+                    warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
             } else if (ext == ".gsc") {
-                auto gsc = liarsoft::GscFile::fromFile(in, encoding);
-                auto trans = liarsoft::TransFile::fromGsc(gsc);
-                trans.save(out);
+                if (gscToTsc)
+                    liarsoft::decompileGscToFile(in, out, encoding);
+                else
+                    liarsoft::TransFile::fromGsc(
+                        liarsoft::GscFile::fromFile(in, encoding)).save(out);
             } else if (ext == ".txt") {
                 std::string ref = refPath.empty() ? replaceExtension(in, ".gsc") : refPath;
                 auto trans = liarsoft::TransFile::fromFile(in);
@@ -186,7 +197,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
                 auto arch = liarsoft::XflArchive::fromFile(in, encoding);
                 arch.extractToDirectory(out);
                 if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
             } else if (ext == ".lwg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end);
@@ -196,7 +207,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
                 auto arch = liarsoft::LwgDecoder::decode(raw, encoding);
                 liarsoft::LwgDecoder::extractToDirectory(arch, out, encoding);
                 if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
             } else if (ext == ".wcg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end);
@@ -289,8 +300,12 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
 // ---- Update output paths when output dir changes ----
 static void updateOutputPaths() {
     std::string outDir = g_outDirEntry->get_text();
+    const bool gscToTsc = g_gscToTscCheck && g_gscToTscCheck->get_active();
     for (auto& child : g_store->children()) {
-        child[g_columns.outputPath] = guessOutput(static_cast<std::string>(static_cast<Glib::ustring>(child[g_columns.inputPath])), outDir);
+        const std::string input = static_cast<std::string>(
+            static_cast<Glib::ustring>(child[g_columns.inputPath]));
+        child[g_columns.outputPath] = guessOutput(input, outDir, gscToTsc);
+        child[g_columns.fileType] = guessType(input, gscToTsc);
     }
 }
 
@@ -420,9 +435,14 @@ int runGui(int argc, char* argv[]) {
         "Recursively pack/unpack archives and convert their resources");
     g_packOnlyCheck = Gtk::manage(new Gtk::CheckButton("Pack only"));
     g_unpackOnlyCheck = Gtk::manage(new Gtk::CheckButton("Unpack only"));
+    g_gscToTscCheck = Gtk::manage(new Gtk::CheckButton("GSC → TSC (experimental)"));
+    g_gscToTscCheck->set_tooltip_text(
+        "Generate annotated TSC instead of TXT when decoding GSC files");
+    g_gscToTscCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
     optionsBar->pack_start(*g_recursiveCheck, false, false);
     optionsBar->pack_start(*g_packOnlyCheck, false, false);
     optionsBar->pack_start(*g_unpackOnlyCheck, false, false);
+    optionsBar->pack_start(*g_gscToTscCheck, false, false);
     mainBox->pack_start(*optionsBar, false, false);
 
     // --- File list ---
@@ -479,7 +499,9 @@ int runGui(int argc, char* argv[]) {
         bool recursive = g_recursiveCheck->get_active();
         bool packOnly = g_packOnlyCheck->get_active();
         bool unpackOnly = g_unpackOnlyCheck->get_active();
-        std::thread t(convertAll, enc, ref, recursive, packOnly, unpackOnly);
+        bool gscToTsc = g_gscToTscCheck->get_active();
+        std::thread t(convertAll, enc, ref, recursive, packOnly, unpackOnly,
+                      gscToTsc);
         t.detach();
     });
 

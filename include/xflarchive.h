@@ -18,7 +18,7 @@ bool isLwgDirectory(const std::string& path);
 /// Whether an input belongs to the selected packing/unpacking direction.
 /// Enabling both filters intentionally matches no input.
 bool matchesOperationMode(const std::string& path, bool packOnly,
-                          bool unpackOnly);
+                          bool unpackOnly, bool recursive = false);
 
 /// Pack `dirPath`. With `recursive`, editable files are converted first and
 /// subdirectories are packed from the deepest level upward.
@@ -30,7 +30,8 @@ std::vector<std::string> packDirectoryToFile(
 /// Recursively unpack nested XFL/LWG files and convert extracted resources to
 /// editable formats. Recoverable failures are returned as warnings.
 std::vector<std::string> unpackDirectoryRecursively(
-    const std::string& dirPath, const std::string& encoding);
+    const std::string& dirPath, const std::string& encoding,
+    bool gscToTsc = false);
 
 /// Represents a single file entry inside an XFL archive.
 struct XflEntry {

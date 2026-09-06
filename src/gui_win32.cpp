@@ -17,6 +17,7 @@
 #include <cstring>
 
 #include "gscfile.h"
+#include "gsc_decompiler.h"
 #include "transfile.h"
 #include "xflarchive.h"
 #include "wcg_decoder.h"
@@ -37,7 +38,7 @@ static HWND g_hWnd, g_hListView, g_hBtnAdd, g_hBtnRemove, g_hBtnClear, g_hBtnCon
 static HWND g_hBtnRef, g_hBtnOutDir;
 static HWND g_hCboEnc, g_hEditRef, g_hEditOutDir, g_hProgress, g_hStatus;
 static HWND g_hLblEnc, g_hLblRef, g_hLblOutDir;
-static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly;
+static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly, g_hChkGscToTsc;
 static std::vector<std::string> g_inputs;
 static std::vector<std::string> g_outputs;
 static std::vector<std::string> g_statuses;
@@ -58,7 +59,8 @@ static std::string replaceExtension(const std::string& path, const std::string& 
     return path.substr(0, pos) + newExt;
 }
 
-static std::string guessOutput(const std::string& in, const std::string& outDir) {
+static std::string guessOutput(const std::string& in, const std::string& outDir,
+                               bool gscToTsc = false) {
     std::string ext = getExtension(in);
     fs::path p(in);
     fs::path base = outDir.empty() ? p.parent_path() : fs::path(outDir);
@@ -66,7 +68,7 @@ static std::string guessOutput(const std::string& in, const std::string& outDir)
     if (fs::is_directory(in))
         return (base / (p.filename().string() +
                         (liarsoft::isLwgDirectory(in) ? ".lwg" : ".xfl"))).string();
-    if (ext == ".gsc") return (base / (stem + ".txt")).string();
+    if (ext == ".gsc") return (base / (stem + (gscToTsc ? ".tsc" : ".txt"))).string();
     if (ext == ".txt") return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
     if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
@@ -77,9 +79,9 @@ static std::string guessOutput(const std::string& in, const std::string& outDir)
     return (base / p.filename()).string();
 }
 
-static std::string guessType(const std::string& path) {
+static std::string guessType(const std::string& path, bool gscToTsc = false) {
     std::string ext = getExtension(path);
-    if (ext == ".gsc") return "GSC -> TXT";
+    if (ext == ".gsc") return gscToTsc ? "GSC -> TSC" : "GSC -> TXT";
     if (ext == ".txt") return "TXT -> GSC";
     if (ext == ".xfl") return "XFL -> DIR";
     if (ext == ".lwg") return "LWG -> DIR";
@@ -133,12 +135,14 @@ static void lvSetStatus(int idx, const std::string& s) {
 
 static void addFile(const std::string& path, const std::string& outDir) {
     if (!isSupported(path)) return;
-    std::string out = guessOutput(path, outDir);
+    const bool gscToTsc = g_hChkGscToTsc &&
+        SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    std::string out = guessOutput(path, outDir, gscToTsc);
     int idx = g_inputs.size();
     g_inputs.push_back(path);
     g_outputs.push_back(out);
     g_statuses.push_back("Ready");
-    lvInsert(idx, path, out, guessType(path), "Ready");
+    lvInsert(idx, path, out, guessType(path, gscToTsc), "Ready");
     EnableWindow(g_hBtnConvert, TRUE);
 }
 
@@ -146,8 +150,10 @@ static void rebuildOutputs() {
     char buf[1024];
     GetWindowTextA(g_hEditOutDir, buf, sizeof(buf));
     std::string outDir(buf);
+    const bool gscToTsc = g_hChkGscToTsc &&
+        SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
     for (size_t i = 0; i < g_inputs.size(); ++i) {
-        g_outputs[i] = guessOutput(g_inputs[i], outDir);
+        g_outputs[i] = guessOutput(g_inputs[i], outDir, gscToTsc);
         lvSetStatus(i, ""); // just refresh output col
         // Actually need to update the output column
         char buf[1024];
@@ -155,12 +161,17 @@ static void rebuildOutputs() {
         LVITEM item = {};
         item.iItem = (int)i; item.iSubItem = 1; item.pszText = buf;
         ListView_SetItem(g_hListView, &item);
+        std::string type = guessType(g_inputs[i], gscToTsc);
+        strncpy(buf, type.c_str(), sizeof(buf)-1); buf[sizeof(buf)-1] = 0;
+        item.iSubItem = 2; item.pszText = buf;
+        ListView_SetItem(g_hListView, &item);
     }
 }
 
 // ---- Conversion worker ----
 static void convertAll(const std::string& encoding, const std::string& refPath,
-                       bool recursive, bool packOnly, bool unpackOnly) {
+                       bool recursive, bool packOnly, bool unpackOnly,
+                       bool gscToTsc) {
     g_running = true;
     EnableWindow(g_hBtnConvert, FALSE);
     std::vector<std::string> allWarnings;
@@ -173,24 +184,31 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
         std::vector<std::string> warnings;
         
         SendMessage(g_hProgress, PBM_SETPOS, (WPARAM)(i * 100 / g_inputs.size()), 0);
-        if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly)) {
+        if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly,
+                                            recursive)) {
             lvSetStatus((int)i, "SKIPPED");
             continue;
         }
         
         try {
             if (fs::is_directory(in)) {
-                warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
+                if (unpackOnly)
+                    warnings = liarsoft::unpackDirectoryRecursively(in, encoding, gscToTsc);
+                else
+                    warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
             } else if (ext == ".gsc") {
-                auto gsc = liarsoft::GscFile::fromFile(in, encoding);
-                liarsoft::TransFile::fromGsc(gsc).save(out);
+                if (gscToTsc)
+                    liarsoft::decompileGscToFile(in, out, encoding);
+                else
+                    liarsoft::TransFile::fromGsc(
+                        liarsoft::GscFile::fromFile(in, encoding)).save(out);
             } else if (ext == ".txt") {
                 std::string ref = refPath.empty() ? replaceExtension(in, ".gsc") : refPath;
                 liarsoft::TransFile::fromFile(in).toGsc(ref, encoding).save(out);
             } else if (ext == ".xfl") {
                 liarsoft::XflArchive::fromFile(in, encoding).extractToDirectory(out);
                 if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
             } else if (ext == ".lwg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end); size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
@@ -198,7 +216,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
                 auto arch = liarsoft::LwgDecoder::decode(raw, encoding);
                 liarsoft::LwgDecoder::extractToDirectory(arch, out, encoding);
                 if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding);
+                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
             } else if (ext == ".wcg") {
                 std::ifstream fs(in, std::ios::binary);
                 fs.seekg(0, std::ios::end); size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
@@ -327,7 +345,9 @@ static void onConvert() {
     bool recursive = SendMessage(g_hChkRecursive, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool packOnly = SendMessage(g_hChkPackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool unpackOnly = SendMessage(g_hChkUnpackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    std::thread t(convertAll, encoding, refPath, recursive, packOnly, unpackOnly);
+    bool gscToTsc = SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    std::thread t(convertAll, encoding, refPath, recursive, packOnly, unpackOnly,
+                  gscToTsc);
     t.detach();
 }
 
@@ -374,6 +394,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         g_hChkUnpackOnly = CreateWindowA("BUTTON", "Unpack only",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
             210, 42, 105, 20, hWnd, (HMENU)109, NULL, NULL);
+        g_hChkGscToTsc = CreateWindowA("BUTTON", "GSC -> TSC (experimental)",
+            WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
+            320, 42, 190, 20, hWnd, (HMENU)110, NULL, NULL);
         
         // --- ListView ---
         g_hListView = CreateWindowA(WC_LISTVIEWA, NULL,
@@ -429,6 +452,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         case 104: onClear(); break;
         case 105: onChooseOutDir(); break;
         case 106: onConvert(); break;
+        case 110: rebuildOutputs(); break;
         }
         return 0;
     
@@ -487,6 +511,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         SetWindowPos(g_hChkRecursive,  NULL, 10,  42,  95, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkPackOnly,   NULL, 110, 42,  95, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkUnpackOnly, NULL, 210, 42, 105, 20, SWP_NOZORDER);
+        SetWindowPos(g_hChkGscToTsc,   NULL, 320, 42, 190, 20, SWP_NOZORDER);
         SetWindowPos(g_hListView, NULL, m, 65, w - 2*m, lvH, SWP_NOZORDER);
 
         // --- Resize ListView columns: Type+Status fixed, Input+Output split 50/50 ---
