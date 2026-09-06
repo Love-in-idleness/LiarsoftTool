@@ -31,6 +31,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 |------|------|
 | 提取脚本原文 | `liarsofttool -e gbk scenario.gsc` |
 | 实验性 GSC 反编译 | `liarsofttool --gsc-to-tsc scenario.gsc` |
+| 从 TSC 精确恢复 GSC | `liarsofttool scenario.tsc` |
 | 翻译后注回 | `liarsofttool -e gbk -r original.gsc trans.txt` |
 | 解包资源封包 | `liarsofttool -e cp932 archive.xfl` |
 | 解包场景封包 | `liarsofttool cgview.lwg` |
@@ -123,6 +124,7 @@ make -j$(nproc)
 | XFL | `.xfl` | 解包/打包 | 通用资源封包，Magic: `LB\x01\x00` |
 | LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
 | GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容标准头（36B）及非标准头（28B，部分翻译工具产出），自动按 HeaderLength 适配 |
+| TSC | `.tsc` | → GSC | 从 `--gsc-to-tsc` 嵌入的原始数据逐字节恢复 GSC |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | 修改引擎编码参数 (`0x80`⇄`0x86`⇄`0xCC`)，`-e gbk/cp1251` 前向，`-e cp932` 还原 |
@@ -131,7 +133,11 @@ make -j$(nproc)
 
 GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空格）和多行。
 
-`--gsc-to-tsc` 支持 36 字节现代头和 28 字节早期 CodeX 头。已确认的指令会输出为 TSC，尚未确认语义的指令保留为带 GSC 字节偏移的注释；因此结果适合分析和移植，但目前不承诺可重新编译。与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`。
+`--gsc-to-tsc` 支持 36 字节现代头和 28 字节早期 CodeX 头。输出中的
+`;@gsc-raw-v1` 注释保存原 GSC 的完整二进制；未经修改时，直接输入该 TSC
+即可逐字节恢复 GSC，即使部分指令尚不能语义反编译。普通注释不参与恢复，
+对可读 TSC 指令的编辑目前也不会改变恢复结果。与 `-R --unpack-only` 组合时，
+会在整个目录树及内嵌封包中生成 `.tsc`；递归封包会先将这种 TSC 恢复为 GSC。
 
 ### 典型工作流
 
@@ -166,11 +172,11 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 
 目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写），PNG 等工程文件不会直接进入封包。默认只处理指定目录或封包的当前层。
 
-启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、OGG→WAV（需同名 WAV 作为模板）。图像转换遇到同名 LIM 时，会先将它改名为 `.lim.old`；如果备份已存在，则警告并跳过该图像。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
+启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、OGG→WAV（需同名 WAV 作为模板）。图像转换遇到同名 LIM 时，会先将它改名为 `.lim.old`；如果备份已存在，则警告并跳过该图像。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
 
 递归解包会继续解开内嵌 XFL/LWG，并自动执行 GSC→TXT、WCG/LIM→PNG、WAV→OGG；单个文件失败只会产生警告，不会中断其余处理。
 
-“仅封包”包括目录→XFL/LWG、TXT→GSC、图片→WCG、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG/LIM→PNG、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
+“仅封包”包括目录→XFL/LWG、TSC/TXT→GSC、图片→WCG、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG/LIM→PNG、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
 
 ### 已知限制
 
@@ -186,6 +192,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 |------|---------|
 | Extract script strings | `liarsofttool -e gbk scenario.gsc` |
 | Experimental GSC decompile | `liarsofttool --gsc-to-tsc scenario.gsc` |
+| Restore exact GSC from TSC | `liarsofttool scenario.tsc` |
 | Inject translation | `liarsofttool -e gbk -r original.gsc trans.txt` |
 | Unpack resource archive | `liarsofttool -e cp932 archive.xfl` |
 | Unpack scene archive | `liarsofttool cgview.lwg` |
@@ -278,6 +285,7 @@ When exactly two args have different extensions, the second is treated as output
 | XFL | `.xfl` | unpack/pack | Resource archive, Magic: `LB\x01\x00` |
 | LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
 | GSC | `.gsc` | extract/inject | Game script. Compatible with standard 36B header and non-standard 28B header (from some translation tools), auto-adapts to HeaderLength |
+| TSC | `.tsc` | → GSC | Byte-exact restoration from raw data embedded by `--gsc-to-tsc` |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | Patches code-page byte (`0x80`⇄`0x86`⇄`0xCC`). `-e gbk/cp1251` forward, `-e cp932` reverse |
@@ -286,7 +294,13 @@ When exactly two args have different extensions, the second is treated as output
 
 GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and multi-line.
 
-`--gsc-to-tsc` supports both modern 36-byte and early 28-byte CodeX headers. Verified instructions are emitted as TSC, while instructions with unverified semantics remain comments carrying their GSC byte offsets. The output is intended for analysis and ports and is not yet guaranteed to be recompilable. Combined with `-R --unpack-only`, it generates `.tsc` throughout the directory tree and nested archives.
+`--gsc-to-tsc` supports both modern 36-byte and early 28-byte CodeX headers.
+Its `;@gsc-raw-v1` comments contain the complete original GSC, so feeding an
+unchanged TSC back to the tool restores the GSC byte-for-byte even when some
+instructions cannot be semantically decompiled. Ordinary comments are ignored;
+editing readable TSC instructions does not yet alter the restored output.
+Combined with `-R --unpack-only`, it generates `.tsc` throughout directory
+trees and nested archives; recursive packing restores those TSC files to GSC.
 
 ### Typical Workflows
 
@@ -324,11 +338,11 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
 
 Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive); project files such as PNG are never stored directly. By default, only the current level of the selected directory or archive is processed.
 
-With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, and OGG→WAV (requiring a same-name WAV template). Before converting an image, a same-name LIM is renamed to `.lim.old`; if that backup already exists, the image is skipped with a warning. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
+With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, and OGG→WAV (requiring a same-name WAV template). Before converting an image, a same-name LIM is renamed to `.lim.old`; if that backup already exists, the image is skipped with a warning. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
 
 Recursive unpacking opens nested XFL/LWG archives and performs GSC→TXT, WCG/LIM→PNG, and WAV→OGG. Failure of one file produces a warning without stopping the remaining work.
 
-**Pack only** covers directory→XFL/LWG, TXT→GSC, images→WCG, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG/LIM→PNG, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
+**Pack only** covers directory→XFL/LWG, TSC/TXT→GSC, images→WCG, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG/LIM→PNG, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
 
 ### Known Limitations
 

@@ -36,6 +36,7 @@ static void printUsage(const char* prog) {
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
+              << "  .tsc  -> .gsc         Restore exact GSC embedded by --gsc-to-tsc\n"
               << "  .txt  -> .gsc         Pack translated strings back into GSC\n"
               << "  .xfl  -> directory    Unpack XFL archive into a folder\n"
               << "  .lwg  -> directory    Unpack LWG archive into a folder\n"
@@ -221,6 +222,11 @@ static bool processOne(const std::string& inputPath,
             trans.save(out);
             std::cout << "Extracted " << trans.strings.size() << " strings to: " << out << std::endl;
         }
+
+    } else if (ext == ".tsc") {
+        if (out.empty()) out = replaceExtension(inputPath, ".gsc");
+        liarsoft::restoreGscFromTscFile(inputPath, out);
+        std::cout << "Restored exact GSC from TSC: " << out << std::endl;
 
     } else if (ext == ".txt") {
         std::string ref = referencePath;
@@ -410,6 +416,8 @@ int main(int argc, char* argv[]) {
                 fs::path name = fs::path(f).filename();
                 if (gscToTsc && getExtension(name.string()) == ".gsc")
                     name.replace_extension(".tsc");
+                else if (getExtension(name.string()) == ".tsc")
+                    name.replace_extension(".gsc");
                 out = (fs::path(outputPath) / name).string();
             }
             // else: out stays empty → auto-derived

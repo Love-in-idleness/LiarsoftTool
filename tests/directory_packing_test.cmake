@@ -170,6 +170,32 @@ if(result OR NOT EXISTS "${TEST_ROOT}/convert_unpacked/image.png" OR
     message(FATAL_ERROR "Recursive resource unpacking failed: ${error}")
 endif()
 
+# Raw metadata in a TSC is restored before recursive packing; the TSC itself is
+# an editable source file and must not be stored in the archive.
+file(MAKE_DIRECTORY "${TEST_ROOT}/tsc_restore")
+file(WRITE "${TEST_ROOT}/tsc_restore/script.tsc"
+    ";@gsc-raw-v1 size=3 fnv1a64=e71fa2190541574b\n"
+    ";@gsc-raw 616263\n"
+    ";@gsc-raw-end\n"
+    "; ordinary comment\n")
+file(WRITE "${TEST_ROOT}/tsc_restore/layout.xml" "resource")
+execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/tsc_restore.xfl"
+            "${TEST_ROOT}/tsc_restore"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result)
+    message(FATAL_ERROR "Recursive TSC restoration failed: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" -o "${TEST_ROOT}/tsc_restore_unpacked"
+            "${TEST_ROOT}/tsc_restore.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+file(READ "${TEST_ROOT}/tsc_restore_unpacked/script.gsc" restored HEX)
+if(result OR NOT restored STREQUAL "616263" OR
+   EXISTS "${TEST_ROOT}/tsc_restore_unpacked/script.tsc")
+    message(FATAL_ERROR "Restored TSC was not packed as exact GSC: ${error}")
+endif()
+
 # Existing .lim.old protects the backup and skips image conversion. Any stale
 # WCG target must not leak into the newly packed archive.
 file(MAKE_DIRECTORY "${TEST_ROOT}/backup_collision")

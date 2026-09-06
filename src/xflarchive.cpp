@@ -55,7 +55,7 @@ bool matchesOperationMode(const std::string& path, bool packOnly,
     if (packOnly && unpackOnly) return false;
     const bool directory = fs::is_directory(path);
     const auto ext = lower(fs::path(path).extension().string());
-    const bool packing = directory || ext == ".txt" || ext == ".ogg" ||
+    const bool packing = directory || ext == ".tsc" || ext == ".txt" || ext == ".ogg" ||
                          ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
                          ext == ".bmp";
     const bool unpacking = (directory && recursive) ||
@@ -102,8 +102,8 @@ static fs::path outputFile(const fs::path& source, const std::string& extension)
 }
 
 static std::vector<fs::path> editableFiles(const fs::path& directory) {
-    static constexpr std::array<const char*, 6> extensions = {
-        ".txt", ".ogg", ".png", ".jpg", ".jpeg", ".bmp"
+    static constexpr std::array<const char*, 7> extensions = {
+        ".tsc", ".txt", ".ogg", ".png", ".jpg", ".jpeg", ".bmp"
     };
     std::vector<fs::path> files;
     for (const auto& entry : fs::directory_iterator(directory)) {
@@ -115,12 +115,13 @@ static std::vector<fs::path> editableFiles(const fs::path& directory) {
     }
     auto rank = [](const fs::path& path) {
         const auto ext = lower(path.extension().string());
-        if (ext == ".txt") return 0;
-        if (ext == ".ogg") return 1;
-        if (ext == ".png") return 2;
-        if (ext == ".jpg") return 3;
-        if (ext == ".jpeg") return 4;
-        return 5;
+        if (ext == ".tsc") return 0;
+        if (ext == ".txt") return 1;
+        if (ext == ".ogg") return 2;
+        if (ext == ".png") return 3;
+        if (ext == ".jpg") return 4;
+        if (ext == ".jpeg") return 5;
+        return 6;
     };
     std::sort(files.begin(), files.end(), [&](const fs::path& a, const fs::path& b) {
         const auto aStem = lower(a.stem().string()), bStem = lower(b.stem().string());
@@ -138,7 +139,7 @@ static void prepareDirectoryForPacking(const fs::path& directory,
     for (const auto& source : editableFiles(directory)) {
         const auto ext = lower(source.extension().string());
         fs::path target;
-        if (ext == ".txt") target = outputFile(source, ".gsc");
+        if (ext == ".tsc" || ext == ".txt") target = outputFile(source, ".gsc");
         else if (ext == ".ogg") target = outputFile(source, ".wav");
         else target = outputFile(source, ".wcg");
 
@@ -150,7 +151,9 @@ static void prepareDirectoryForPacking(const fs::path& directory,
         }
 
         try {
-            if (ext == ".txt") {
+            if (ext == ".tsc") {
+                restoreGscFromTscFile(source.string(), target.string());
+            } else if (ext == ".txt") {
                 if (!fs::is_regular_file(target))
                     throw std::runtime_error("same-name reference GSC not found");
                 TransFile::fromFile(source.string()).toGsc(target.string(), encoding)

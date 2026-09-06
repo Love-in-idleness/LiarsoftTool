@@ -69,6 +69,7 @@ static std::string guessOutput(const std::string& in, const std::string& outDir,
         return (base / (p.filename().string() +
                         (liarsoft::isLwgDirectory(in) ? ".lwg" : ".xfl"))).string();
     if (ext == ".gsc") return (base / (stem + (gscToTsc ? ".tsc" : ".txt"))).string();
+    if (ext == ".tsc") return (base / (stem + ".gsc")).string();
     if (ext == ".txt") return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
     if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
@@ -82,6 +83,7 @@ static std::string guessOutput(const std::string& in, const std::string& outDir,
 static std::string guessType(const std::string& path, bool gscToTsc = false) {
     std::string ext = getExtension(path);
     if (ext == ".gsc") return gscToTsc ? "GSC -> TSC" : "GSC -> TXT";
+    if (ext == ".tsc") return "TSC -> GSC (exact restore)";
     if (ext == ".txt") return "TXT -> GSC";
     if (ext == ".xfl") return "XFL -> DIR";
     if (ext == ".lwg") return "LWG -> DIR";
@@ -97,7 +99,7 @@ static std::string guessType(const std::string& path, bool gscToTsc = false) {
 
 static bool isSupported(const std::string& path) {
     std::string ext = getExtension(path);
-    return ext == ".gsc" || ext == ".txt" || ext == ".xfl" || ext == ".lwg" ||
+    return ext == ".gsc" || ext == ".tsc" || ext == ".txt" || ext == ".xfl" || ext == ".lwg" ||
            ext == ".wcg" || ext == ".lim" || ext == ".wav" || ext == ".ogg" || ext == ".exe" ||
            ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
            fs::is_directory(path);
@@ -202,6 +204,8 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
                 else
                     liarsoft::TransFile::fromGsc(
                         liarsoft::GscFile::fromFile(in, encoding)).save(out);
+            } else if (ext == ".tsc") {
+                liarsoft::restoreGscFromTscFile(in, out);
             } else if (ext == ".txt") {
                 std::string ref = refPath.empty() ? replaceExtension(in, ".gsc") : refPath;
                 liarsoft::TransFile::fromFile(in).toGsc(ref, encoding).save(out);
@@ -271,7 +275,7 @@ static void onAddFiles() {
     char buf[8192] = {};
     OPENFILENAMEA ofn = {sizeof(ofn)};
     ofn.hwndOwner = g_hWnd;
-    ofn.lpstrFilter = "All Supported\0*.gsc;*.txt;*.xfl;*.lwg;*.wcg;*.lim;*.wav;*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0";
+    ofn.lpstrFilter = "All Supported\0*.gsc;*.tsc;*.txt;*.xfl;*.lwg;*.wcg;*.lim;*.wav;*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0";
     ofn.lpstrFile = buf;
     ofn.nMaxFile = sizeof(buf);
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;

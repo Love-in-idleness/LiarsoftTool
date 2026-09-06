@@ -26,6 +26,11 @@ void patchU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
     data[offset + 3] = static_cast<uint8_t>(value >> 24);
 }
 
+void patchU16(std::vector<uint8_t>& data, size_t offset, uint16_t value) {
+    data[offset] = static_cast<uint8_t>(value);
+    data[offset + 1] = static_cast<uint8_t>(value >> 8);
+}
+
 void save(const std::filesystem::path& path, const std::vector<uint8_t>& data) {
     std::ofstream output(path, std::ios::binary);
     output.write(reinterpret_cast<const char*>(data.data()), data.size());
@@ -62,6 +67,11 @@ int main() {
         std::cerr << "Modern GSC did not round-trip byte-for-byte" << std::endl;
         return 1;
     }
+    if (liarsoft::restoreGscFromTsc(
+            listing + "; ordinary comment\n*edited readable command\n") != modern) {
+        std::cerr << "Readable TSC edits changed raw restoration" << std::endl;
+        return 1;
+    }
     std::remove(temp.string().c_str());
     for (const std::string expected : {
              "*if ((@1 == 0)) == 0", "*goto L_000032",
@@ -89,6 +99,17 @@ int main() {
         legacyListing.find("*end ; @000006") == std::string::npos ||
         legacyListing.find(":L_000008") == std::string::npos) {
         std::cerr << "Legacy GSC was not decoded" << std::endl;
+        return 1;
+    }
+
+    auto unknown = modern;
+    patchU16(unknown, 36, 0);
+    save(temp, unknown);
+    const std::string unknownListing = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (unknownListing.find("; decompilation unavailable:") == std::string::npos ||
+        liarsoft::restoreGscFromTsc(unknownListing) != unknown) {
+        std::cerr << "Unknown dialect did not fall back to exact restoration" << std::endl;
         return 1;
     }
 
