@@ -46,6 +46,7 @@ int main() {
     appendU16(code, 81);
     appendU32(code, 0); appendU32(code, 123); appendU32(code, 0);
     appendU32(code, 0); appendU32(code, 0); appendU32(code, 1); appendU32(code, 0);
+    appendU16(code, 13); appendU32(code, 7);
     appendU16(code, 8);
 
     std::vector<uint8_t> modern(36, 0);
@@ -93,10 +94,29 @@ int main() {
         std::cerr << "Edited GSC text did not re-decompile or round-trip" << std::endl;
         return 1;
     }
+    std::string commandListing = listing;
+    const auto voiceAt = commandListing.find("*voice 123");
+    const auto waitAt = commandListing.find("*wait 7");
+    if (voiceAt == std::string::npos || waitAt == std::string::npos) {
+        std::cerr << "Missing editable command line" << std::endl;
+        return 1;
+    }
+    commandListing.replace(voiceAt, 10, "*voice 456");
+    commandListing.replace(waitAt, 7, "*wait 9");
+    const auto commandGsc = liarsoft::restoreGscFromTsc(commandListing);
+    save(temp, commandGsc);
+    const auto commandRoundTrip = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (commandRoundTrip.find("*voice 456") == std::string::npos ||
+        commandRoundTrip.find("*wait 9") == std::string::npos ||
+        liarsoft::restoreGscFromTsc(commandRoundTrip) != commandGsc) {
+        std::cerr << "Edited command operands were not rebuilt" << std::endl;
+        return 1;
+    }
     std::remove(temp.string().c_str());
     for (const std::string expected : {
              "*if ((@1 == 0)) == 0", "*goto L_000032",
-             "*voice 123", "\\Name\"：\"Text", ":L_000032", "*end"}) {
+             "*voice 123", "\\Name\"：\"Text", ":L_000032", "*wait 7", "*end"}) {
         if (listing.find(expected) == std::string::npos) {
             std::cerr << "Missing decompiler output: " << expected << std::endl;
             return 1;

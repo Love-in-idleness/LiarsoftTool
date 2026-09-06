@@ -18,7 +18,8 @@ void decompileGscToFile(const std::string& inputPath,
                         const std::string& encoding = "CP932");
 
 /// Restore the source GSC embedded by decompileGsc(). Unchanged input is exact;
-/// edited TXT/TXA dialogue lines rebuild the modern GSC string table.
+/// edited TXT/TXA dialogue lines rebuild the modern GSC string table, and
+/// edited operands of known fixed-size commands patch the original code.
 std::vector<uint8_t> restoreGscFromTsc(
     const std::string& tscText,
     const std::string& fallbackEncoding = "CP932");

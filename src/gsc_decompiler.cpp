@@ -110,6 +110,13 @@ void writeU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
     data[offset + 3] = static_cast<uint8_t>(value >> 24);
 }
 
+void writeU16(std::vector<uint8_t>& data, size_t offset, uint16_t value) {
+    if (offset + 2 > data.size())
+        throw std::runtime_error("cannot patch truncated GSC instruction");
+    data[offset] = static_cast<uint8_t>(value);
+    data[offset + 1] = static_cast<uint8_t>(value >> 8);
+}
+
 const std::unordered_map<uint16_t, std::string>& modernSchemas() {
     static const auto value = [] {
         auto r = [](char kind, size_t count) { return std::string(count, kind); };
@@ -548,6 +555,7 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
                                     const std::string& tscText,
                                     const std::string& fallbackEncoding) {
     std::vector<std::pair<size_t, std::string>> edits;
+    std::vector<std::pair<size_t, std::string>> commandEdits;
     std::optional<size_t> pendingOffset;
     std::string encoding = fallbackEncoding;
     std::istringstream input(tscText);
@@ -578,13 +586,25 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
             }
             continue;
         }
+        const auto marker = line.rfind(" ; @");
+        if (line.size() >= 10 && line.front() == '*' && marker != std::string::npos &&
+            marker + 10 == line.size()) {
+            try {
+                size_t used = 0;
+                const auto offset = static_cast<size_t>(
+                    std::stoull(line.substr(marker + 4), &used, 16));
+                if (used != 6) throw std::invalid_argument("offset");
+                commandEdits.emplace_back(offset, line.substr(1, marker - 1));
+            } catch (const std::exception&) {
+                throw std::runtime_error("invalid GSC command offset marker");
+            }
+        }
         if (pendingOffset && !line.empty() && line.front() == '\\')
             edits.emplace_back(*pendingOffset, line);
         pendingOffset.reset();
     }
-    if (edits.empty()) return raw;
-    if (raw.size() < 36 || readU32(raw, 4) != 36)
-        throw std::runtime_error("editable TSC text currently requires a modern 36-byte GSC");
+    if (edits.empty() && commandEdits.empty()) return raw;
+    if (raw.size() < 36 || readU32(raw, 4) != 36) return raw;
 
     const size_t codeSize = readU32(raw, 8);
     const size_t indexSize = readU32(raw, 12);
@@ -595,6 +615,100 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
     const size_t tailStart = stringsStart + stringsSize;
     if (indexSize % 4 || tailStart > raw.size())
         throw std::runtime_error("malformed modern GSC string sections");
+
+    std::vector<uint8_t> working = raw;
+    auto parseNumber = [](const std::string& token, char kind) -> uint32_t {
+        size_t depth = 0;
+        if (kind == 'E') {
+            while (depth < token.size() && token[depth] == '@') ++depth;
+        }
+        if (depth > 0xffff)
+            throw std::runtime_error("GSC expression indirection is too deep");
+        const auto digits = token.substr(depth);
+        if (digits.empty()) throw std::runtime_error("missing numeric GSC operand");
+        size_t used = 0;
+        int64_t value = 0;
+        try {
+            value = std::stoll(digits, &used, 10);
+        } catch (const std::exception&) {
+            throw std::runtime_error("invalid numeric GSC operand: " + token);
+        }
+        if (used != digits.size())
+            throw std::runtime_error("invalid numeric GSC operand: " + token);
+        if (kind == 'E') {
+            if ((!depth && (value < -32768 || value > 32767)) ||
+                (depth && (value < 0 || value > 65535)))
+                throw std::runtime_error("GSC expression operand is out of range");
+            return static_cast<uint32_t>(depth * 0x10000ull |
+                                         static_cast<uint16_t>(value));
+        }
+        if (kind == 'S') {
+            if (value < -32768 || value > 32767)
+                throw std::runtime_error("signed GSC operand is out of range");
+            return static_cast<uint16_t>(value);
+        }
+        const uint64_t maximum = kind == 'H' ? 0xffffull : 0xffffffffull;
+        if (value < 0 || static_cast<uint64_t>(value) > maximum)
+            throw std::runtime_error("unsigned GSC operand is out of range");
+        return static_cast<uint32_t>(value);
+    };
+    std::unordered_map<std::string, uint16_t> opcodes;
+    for (const auto& item : NAMES) opcodes[item.second] = item.first;
+    for (const auto& edit : commandEdits) {
+        const size_t offset = edit.first;
+        if (offset + 2 > codeSize)
+            throw std::runtime_error("TSC command offset is outside the GSC code section");
+        const size_t instruction = codeStart + offset;
+        const uint16_t originalOpcode = readU16(working, instruction);
+        std::istringstream fields(edit.second);
+        std::string name;
+        fields >> name;
+        if (name == "goto") {
+            std::string label, extra;
+            if (originalOpcode < 3 || originalOpcode > 5 || !(fields >> label) ||
+                (fields >> extra) || label.compare(0, 2, "L_") != 0)
+                throw std::runtime_error("malformed or misplaced TSC goto");
+            try {
+                size_t used = 0;
+                const auto target = std::stoull(label.substr(2), &used, 16);
+                if (used != label.size() - 2 || target > 0xffffffffull)
+                    throw std::invalid_argument("target");
+                writeU32(working, instruction + 2, static_cast<uint32_t>(target));
+            } catch (const std::exception&) {
+                throw std::runtime_error("invalid TSC goto label");
+            }
+            continue;
+        }
+        if (originalOpcode == 81 && name == "voice") {
+            std::string value, extra;
+            if (!(fields >> value) || (fields >> extra))
+                throw std::runtime_error("malformed TXT voice command");
+            writeU32(working, instruction + 6, parseNumber(value, 'E'));
+            continue;
+        }
+        const auto named = opcodes.find(name);
+        if (named == opcodes.end() || named->second != originalOpcode)
+            throw std::runtime_error("TSC command does not match its original GSC opcode");
+        const auto schema = modernSchemas().find(originalOpcode);
+        if (schema == modernSchemas().end())
+            throw std::runtime_error("GSC command has no modern operand schema");
+        size_t cursor = instruction + 2;
+        for (const char kind : schema->second) {
+            std::string token;
+            if (!(fields >> token))
+                throw std::runtime_error("TSC command has too few operands");
+            const auto value = parseNumber(token, kind);
+            if (kind == 'H' || kind == 'S') {
+                writeU16(working, cursor, static_cast<uint16_t>(value));
+                cursor += 2;
+            } else {
+                writeU32(working, cursor, value);
+                cursor += 4;
+            }
+        }
+        std::string extra;
+        if (fields >> extra) throw std::runtime_error("TSC command has too many operands");
+    }
 
     const size_t stringCount = indexSize / 4;
     std::vector<std::vector<uint8_t>> strings;
@@ -611,6 +725,13 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
     }
 
     std::unordered_map<size_t, std::vector<uint8_t>> replacements;
+    auto decodedString = [&](size_t index) {
+        if (index >= strings.size())
+            throw std::runtime_error("TSC text refers to an invalid GSC string index");
+        return convertEncoding(
+            std::string(strings[index].begin(), strings[index].end()),
+            encoding, "UTF-8");
+    };
     auto setString = [&](size_t index, const std::string& value) {
         if (index >= strings.size())
             throw std::runtime_error("TSC text refers to an invalid GSC string index");
@@ -627,26 +748,30 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
         if (offset + 2 > codeSize)
             throw std::runtime_error("TSC text offset is outside the GSC code section");
         const size_t instruction = codeStart + offset;
-        const uint16_t opcode = readU16(raw, instruction);
+        const uint16_t opcode = readU16(working, instruction);
         if (opcode == 81) {
             if (offset + 30 > codeSize)
                 throw std::runtime_error("truncated TXT instruction");
-            const size_t nameIndex = readU32(raw, instruction + 18);
-            const size_t textIndex = readU32(raw, instruction + 22);
+            const size_t nameIndex = readU32(working, instruction + 18);
+            const size_t textIndex = readU32(working, instruction + 22);
             const std::string content = edit.second.substr(1);
             const std::string delimiter = "\"：\"";
             const auto separator = content.find(delimiter);
+            std::string name, text;
             if (separator == std::string::npos) {
-                setString(nameIndex, "");
-                setString(textIndex, content);
+                text = content;
             } else {
-                setString(nameIndex, content.substr(0, separator));
-                setString(textIndex, content.substr(separator + delimiter.size()));
+                name = content.substr(0, separator);
+                text = content.substr(separator + delimiter.size());
             }
+            if (name != decodedString(nameIndex)) setString(nameIndex, name);
+            if (text != decodedString(textIndex)) setString(textIndex, text);
         } else if (opcode == 82) {
             if (offset + 26 > codeSize || edit.second.compare(0, 8, "\\append ") != 0)
                 throw std::runtime_error("malformed TXA text line");
-            setString(readU32(raw, instruction + 18), edit.second.substr(8));
+            const size_t textIndex = readU32(working, instruction + 18);
+            const auto text = edit.second.substr(8);
+            if (text != decodedString(textIndex)) setString(textIndex, text);
         } else {
             throw std::runtime_error("GSC text marker does not point to TXT or TXA");
         }
@@ -657,7 +782,7 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
         if (strings[replacement.first] != replacement.second) changed = true;
         strings[replacement.first] = replacement.second;
     }
-    if (!changed) return raw;
+    if (!changed) return working;
 
     std::vector<uint8_t> pool;
     std::vector<uint32_t> offsets;
@@ -666,7 +791,8 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
         pool.insert(pool.end(), value.begin(), value.end());
         pool.push_back(0);
     }
-    std::vector<uint8_t> result(raw.begin(), raw.begin() + static_cast<ptrdiff_t>(indexStart));
+    std::vector<uint8_t> result(working.begin(),
+                                working.begin() + static_cast<ptrdiff_t>(indexStart));
     for (const auto offset : offsets) {
         result.push_back(static_cast<uint8_t>(offset));
         result.push_back(static_cast<uint8_t>(offset >> 8));
@@ -674,7 +800,8 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
         result.push_back(static_cast<uint8_t>(offset >> 24));
     }
     result.insert(result.end(), pool.begin(), pool.end());
-    result.insert(result.end(), raw.begin() + static_cast<ptrdiff_t>(tailStart), raw.end());
+    result.insert(result.end(), working.begin() + static_cast<ptrdiff_t>(tailStart),
+                  working.end());
     writeU32(result, 0, static_cast<uint32_t>(result.size()));
     writeU32(result, 16, static_cast<uint32_t>(pool.size()));
     return result;
