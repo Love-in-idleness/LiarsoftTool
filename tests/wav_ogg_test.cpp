@@ -57,6 +57,16 @@ int main() {
         return 1;
     }
 
+    auto legacyWav = wav;
+    legacyWav[62] = 0xff;
+    legacyWav[63] = 0xff;
+    legacyWav[64] = 0xff;
+    legacyWav[65] = 0x7f;
+    if (liarsoft::WavOggExtractor::extract(legacyWav) != clean) {
+        std::cerr << "Legacy decoded-size data chunk was rejected" << std::endl;
+        return 1;
+    }
+
     auto truncated = wav;
     truncated.resize(truncated.size() - 2);
     try {

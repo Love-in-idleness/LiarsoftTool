@@ -50,9 +50,13 @@ std::vector<uint8_t> WavOggExtractor::extract(const std::vector<uint8_t>& wavDat
     if (!hasEmbeddedOgg(wavData)) return {};
 
     const uint32_t dataSize = readU32(wavData, OGG_OFFSET - 4);
-    if (dataSize > wavData.size() - OGG_OFFSET)
-        throw std::runtime_error("Truncated embedded Ogg data");
-    const size_t dataEnd = OGG_OFFSET + dataSize;
+    const size_t available = wavData.size() - OGG_OFFSET;
+    // Some original RScript WAV files store the decoded PCM size in the data
+    // chunk instead of the embedded Ogg byte size. In that case the Ogg stream
+    // simply runs to EOF. Files produced here store the exact Ogg size so an
+    // optional RIFF alignment byte is not parsed as another page.
+    const size_t dataEnd = OGG_OFFSET +
+        (dataSize <= available ? static_cast<size_t>(dataSize) : available);
 
     // Copy pages starting from OGG_OFFSET.
     // Each Ogg page has a standard header:
@@ -72,6 +76,7 @@ std::vector<uint8_t> WavOggExtractor::extract(const std::vector<uint8_t>& wavDat
     size_t pos = OGG_OFFSET;
 
     while (pos < dataEnd) {
+        if (dataEnd - pos == 1 && wavData[pos] == 0) break;
         if (dataEnd - pos < 27)
             throw std::runtime_error("Truncated Ogg page header");
         // Verify Ogg magic at current position
@@ -100,7 +105,8 @@ std::vector<uint8_t> WavOggExtractor::extract(const std::vector<uint8_t>& wavDat
 
         // Liar-soft pads the real Vorbis stream with zero-length pages using
         // serial 0xffffffff. They are wrapper data, not playable audio.
-        if (segmentCount != 1 || payloadSize != 0) {
+        const uint32_t serial = readU32(wavData, pageStart + 14);
+        if (serial != 0xffffffffu || segmentCount != 1 || payloadSize != 0) {
             output.insert(output.end(),
                           wavData.begin() + static_cast<ptrdiff_t>(pageStart),
                           wavData.begin() + static_cast<ptrdiff_t>(pageStart + pageSize));
