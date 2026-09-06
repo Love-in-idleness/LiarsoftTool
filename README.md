@@ -124,7 +124,7 @@ make -j$(nproc)
 | XFL | `.xfl` | 解包/打包 | 通用资源封包，Magic: `LB\x01\x00` |
 | LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
 | GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容标准头（36B）及非标准头（28B，部分翻译工具产出），自动按 HeaderLength 适配 |
-| TSC | `.tsc` | → GSC | 原样输入时逐字节恢复；支持修改现代 GSC 的对白和已知定长指令参数 |
+| TSC | `.tsc` | → GSC | 原样输入时逐字节恢复；支持修改已识别版本 GSC 的对白和已知定长指令参数 |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | 修改引擎编码参数 (`0x80`⇄`0x86`⇄`0xCC`)，`-e gbk/cp1251` 前向，`-e cp932` 还原 |
@@ -133,10 +133,12 @@ make -j$(nproc)
 
 GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空格）和多行。
 
-`--gsc-to-tsc` 支持 36 字节现代头和 28 字节早期 CodeX 头。输出中的
+`--gsc-to-tsc` 支持 28 字节早期 CodeX 头，以及采用 RScript 1.8、1.9
+或现代指令布局的 36 字节头；程序会根据完整指令边界、跳转目标和操作数结构
+自动选择布局，并将选择写入 TSC 元数据。输出中的
 `;@gsc-raw-v1` 注释保存原 GSC 的完整二进制；未经修改时，直接输入该 TSC
 即可逐字节恢复 GSC，即使部分指令尚不能语义反编译。生成时使用的文本编码
-也会写入元数据。修改现代 36 字节 GSC 对应的 TXT/TXA 对白行后，程序会保留
+也会写入元数据。修改已识别的 36 字节 GSC 对应的 TXT/TXA 对白行后，程序会保留
 原代码区和其他区段并重建字符串表；修改已知定长指令的数值参数会就地更新代码。
 普通注释不参与生成；新增或删除指令、更换 opcode、改写表达式结构与重排控制流仍不支持。
 与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
@@ -288,7 +290,7 @@ When exactly two args have different extensions, the second is treated as output
 | XFL | `.xfl` | unpack/pack | Resource archive, Magic: `LB\x01\x00` |
 | LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
 | GSC | `.gsc` | extract/inject | Game script. Compatible with standard 36B header and non-standard 28B header (from some translation tools), auto-adapts to HeaderLength |
-| TSC | `.tsc` | → GSC | Byte-exact unchanged restore; editable dialogue and known fixed-size command operands for modern GSC |
+| TSC | `.tsc` | → GSC | Byte-exact unchanged restore; editable dialogue and known fixed-size command operands for recognized GSC versions |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | Patches code-page byte (`0x80`⇄`0x86`⇄`0xCC`). `-e gbk/cp1251` forward, `-e cp932` reverse |
@@ -297,11 +299,14 @@ When exactly two args have different extensions, the second is treated as output
 
 GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and multi-line.
 
-`--gsc-to-tsc` supports both modern 36-byte and early 28-byte CodeX headers.
+`--gsc-to-tsc` supports early 28-byte CodeX headers and 36-byte headers using
+RScript 1.8, RScript 1.9, or modern instruction layouts. It selects a layout
+from complete instruction boundaries, jump targets, and operand structure, then
+records that choice in TSC metadata.
 Its `;@gsc-raw-v1` comments contain the complete original GSC, so feeding an
 unchanged TSC back to the tool restores the GSC byte-for-byte even when some
 instructions cannot be semantically decompiled. The selected text encoding is
-also recorded. Editing TXT/TXA dialogue lines from a modern 36-byte GSC keeps
+also recorded. Editing TXT/TXA dialogue lines from a recognized 36-byte GSC keeps
 the original code and trailing sections while rebuilding the string table;
 editing numeric operands of known fixed-size commands patches the original
 code in place. Ordinary comments are ignored. Inserting or deleting commands,
