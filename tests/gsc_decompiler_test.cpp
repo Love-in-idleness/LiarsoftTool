@@ -131,6 +131,20 @@ int main() {
         }
     }
 
+    auto compactDebug = modern;
+    patchU32(compactDebug, 28, 4);
+    patchU32(compactDebug, 32, 1);
+    compactDebug.insert(compactDebug.end(), 5, 0);
+    patchU32(compactDebug, 0, static_cast<uint32_t>(compactDebug.size()));
+    save(temp, compactDebug);
+    const auto compactDebugListing = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (compactDebugListing.find("; decompilation unavailable:") != std::string::npos ||
+        liarsoft::restoreGscFromTsc(compactDebugListing) != compactDebug) {
+        std::cerr << "Compact GSC debug tables were not accepted" << std::endl;
+        return 1;
+    }
+
     std::vector<uint8_t> legacy(28, 0);
     patchU32(legacy, 0, 42); patchU32(legacy, 4, 28);
     patchU32(legacy, 8, 8); patchU32(legacy, 12, 4); patchU32(legacy, 16, 2);

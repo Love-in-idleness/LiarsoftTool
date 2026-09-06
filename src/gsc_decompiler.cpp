@@ -426,10 +426,12 @@ private:
     void parseModern(const std::vector<uint8_t>& data) {
         std::vector<uint32_t> header;
         for (size_t i = 0; i < 9; ++i) header.push_back(readU32(data, i * 4));
-        const uint64_t expected = 36ull + header[2] + header[3] + header[4] +
-                                  header[5] + header[6] * 2ull +
-                                  header[7] * 2ull + header[8];
-        if (header[0] > data.size() || expected != header[0])
+        const uint64_t coreEnd = 36ull + header[2] + header[3] + header[4] +
+                                 header[5] + header[6] * 2ull;
+        const uint64_t compactEnd = coreEnd + header[7] + header[8];
+        const uint64_t fullEnd = compactEnd + header[7];
+        if (header[0] > data.size() ||
+            (header[0] != compactEnd && header[0] != fullEnd))
             fail("invalid modern GSC header");
         size_t pos = 36;
         code = section(data, pos, header[2]);
@@ -438,7 +440,7 @@ private:
         indexB = section(data, pos, header[5]);
         indexC = section(data, pos, header[6] * 2ull);
         section(data, pos, header[7]); // offsets
-        section(data, pos, header[7]); // lines
+        if (header[0] == fullEnd) section(data, pos, header[7]); // lines
         section(data, pos, header[8]); // names
         validateStringOffsets();
     }
