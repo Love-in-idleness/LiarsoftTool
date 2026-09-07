@@ -123,7 +123,7 @@ make -j$(nproc)
 |------|--------|------|------|
 | XFL | `.xfl` | 解包/打包 | 通用资源封包，Magic: `LB\x01\x00` |
 | LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
-| GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容标准头（36B）及非标准头（28B，部分翻译工具产出），自动按 HeaderLength 适配 |
+| GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容现代头（36B）及早期头（28B），自动按 HeaderLength 适配 |
 | TSC | `.tsc` | → GSC | 原样输入时逐字节恢复；支持修改已识别版本 GSC 的对白和已知定长指令参数 |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
@@ -139,9 +139,10 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 `;@gsc-structure-v1` 注释逐条记录指令，并分别记录头、字符串、数据块和调试区段；
 它不再包含完整的 `gsc-raw`。未经修改时，直接输入该 TSC 即可由这些结构逐字节
 重建 GSC。只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注
-无法反编译。生成时使用的文本编码也会写入元数据。修改已识别的 36 字节 GSC
-对应的 TXT/TXA 对白行后，程序会重建字符串表；修改已知定长指令的数值参数会
-就地更新代码。
+无法反编译。TSC 还会用 `;@gsc-byte-format legacy-28/modern-36` 记录字节布局，
+回编时据此定位代码和字符串区并校验结构；旧版 TSC 没有该字段时仍从 GSC 头推断。
+生成时使用的文本编码也会写入元数据。修改已识别的 28 或 36 字节 GSC 对应的
+TXT/TXA 对白行后，程序会重建字符串表；修改已知定长指令的数值参数会就地更新代码。
 普通注释不参与生成；新增或删除指令、更换 opcode、改写表达式结构与重排控制流仍不支持。
 与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
 封包会先将这种 TSC 恢复或更新为 GSC。
@@ -293,7 +294,7 @@ When exactly two args have different extensions, the second is treated as output
 |--------|-----------|-----------|-------|
 | XFL | `.xfl` | unpack/pack | Resource archive, Magic: `LB\x01\x00` |
 | LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
-| GSC | `.gsc` | extract/inject | Game script. Compatible with standard 36B header and non-standard 28B header (from some translation tools), auto-adapts to HeaderLength |
+| GSC | `.gsc` | extract/inject | Game script. Compatible with modern 36B and early 28B headers; auto-adapts to HeaderLength |
 | TSC | `.tsc` | → GSC | Byte-exact unchanged restore; editable dialogue and known fixed-size command operands for recognized GSC versions |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
@@ -313,10 +314,13 @@ and named header, string, data-block, and debug sections rather than embedding a
 complete `gsc-raw`. Feeding an unchanged TSC back rebuilds the GSC byte-for-byte
 from that structure. Files with unknown instruction layouts retain the old
 `;@gsc-raw-v1` compatibility fallback and are explicitly marked unavailable for
-decompilation. The selected text encoding is also recorded. Editing TXT/TXA
-dialogue lines from a recognized 36-byte GSC rebuilds the string table;
-editing numeric operands of known fixed-size commands patches the original
-code in place. Ordinary comments are ignored. Inserting or deleting commands,
+decompilation. `;@gsc-byte-format legacy-28/modern-36` records the byte layout,
+which is used to locate and validate code and string sections during rebuild;
+older TSC files without it remain compatible through header inference. The
+selected text encoding is also recorded. Editing TXT/TXA dialogue lines from a
+recognized 28- or 36-byte GSC rebuilds the string table; editing numeric
+operands of known fixed-size commands patches the original code in place.
+Ordinary comments are ignored. Inserting or deleting commands,
 changing opcodes, restructuring expressions, and rearranging control flow are
 not yet supported.
 Combined with `-R --unpack-only`, it generates `.tsc` throughout directory

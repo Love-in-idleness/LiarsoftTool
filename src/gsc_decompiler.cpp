@@ -65,6 +65,7 @@ constexpr const char* STRUCTURE_HEADER = ";@gsc-structure-v1 ";
 constexpr const char* STRUCTURE_INSTRUCTION = ";@gsc-instruction ";
 constexpr const char* STRUCTURE_SECTION = ";@gsc-section ";
 constexpr const char* STRUCTURE_END = ";@gsc-structure-end";
+constexpr const char* BYTE_FORMAT = ";@gsc-byte-format ";
 constexpr const char* TEXT_ENCODING = ";@gsc-text-encoding ";
 constexpr const char* INSTRUCTION_SCHEMA = ";@gsc-instruction-schema ";
 
@@ -560,6 +561,7 @@ std::string structuredEnvelope(const std::vector<uint8_t>& raw,
     for (const auto& section : sections)
         appendHexLines(out, section.first, section.second);
     out << STRUCTURE_END << '\n';
+    out << BYTE_FORMAT << (headerSize == 28 ? "legacy-28" : "modern-36") << '\n';
     return out.str();
 }
 
@@ -928,6 +930,7 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
     std::vector<std::pair<size_t, std::string>> edits;
     std::vector<std::pair<size_t, std::string>> commandEdits;
     std::optional<size_t> pendingOffset;
+    std::optional<size_t> declaredHeaderSize;
     std::string encoding = fallbackEncoding;
     InstructionSchema instructionSchema = InstructionSchema::Modern;
     std::istringstream input(tscText);
@@ -940,6 +943,17 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
             continue;
         }
         if (!afterRaw) continue;
+        if (line.compare(0, std::char_traits<char>::length(BYTE_FORMAT),
+                         BYTE_FORMAT) == 0) {
+            if (declaredHeaderSize)
+                throw std::runtime_error("duplicate ;@gsc-byte-format metadata");
+            const auto value = line.substr(
+                std::char_traits<char>::length(BYTE_FORMAT));
+            if (value == "legacy-28") declaredHeaderSize = 28;
+            else if (value == "modern-36") declaredHeaderSize = 36;
+            else throw std::runtime_error("unsupported GSC byte format: " + value);
+            continue;
+        }
         if (line.compare(0, std::char_traits<char>::length(TEXT_ENCODING),
                          TEXT_ENCODING) == 0) {
             encoding = line.substr(std::char_traits<char>::length(TEXT_ENCODING));
@@ -987,18 +1001,23 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
             edits.emplace_back(*pendingOffset, line);
         pendingOffset.reset();
     }
+    if (declaredHeaderSize &&
+        (raw.size() < 8 || *declaredHeaderSize != readU32(raw, 4)))
+        throw std::runtime_error("TSC byte format does not match its GSC header");
     if (edits.empty() && commandEdits.empty()) return raw;
-    if (raw.size() < 36 || readU32(raw, 4) != 36) return raw;
+    if (raw.size() < 28) return raw;
+    const size_t headerSize = readU32(raw, 4);
+    if (headerSize != 28 && headerSize != 36) return raw;
 
     const size_t codeSize = readU32(raw, 8);
     const size_t indexSize = readU32(raw, 12);
     const size_t stringsSize = readU32(raw, 16);
-    const size_t codeStart = 36;
+    const size_t codeStart = headerSize;
     const size_t indexStart = codeStart + codeSize;
     const size_t stringsStart = indexStart + indexSize;
     const size_t tailStart = stringsStart + stringsSize;
     if (indexSize % 4 || tailStart > raw.size())
-        throw std::runtime_error("malformed modern GSC string sections");
+        throw std::runtime_error("malformed GSC string sections");
 
     std::vector<uint8_t> working = raw;
     auto parseNumber = [](const std::string& token, char kind) -> uint32_t {
@@ -1135,7 +1154,7 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
         const size_t instruction = codeStart + offset;
         const uint16_t opcode = readU16(working, instruction);
         if (opcode == 81) {
-            if (offset + 30 > codeSize)
+            if (offset + 26 > codeSize)
                 throw std::runtime_error("truncated TXT instruction");
             const size_t nameIndex = readU32(working, instruction + 18);
             const size_t textIndex = readU32(working, instruction + 22);

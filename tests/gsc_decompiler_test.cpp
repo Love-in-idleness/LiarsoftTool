@@ -72,6 +72,7 @@ int main() {
     const std::string listing = liarsoft::decompileGsc(temp.string());
     if (listing.find(";@gsc-structure-v1 ") == std::string::npos ||
         listing.find(";@gsc-instruction ") == std::string::npos ||
+        listing.find(";@gsc-byte-format modern-36") == std::string::npos ||
         listing.find(";@gsc-raw-v1 ") != std::string::npos) {
         std::cerr << "Recognized GSC did not use structured metadata" << std::endl;
         return 1;
@@ -190,7 +191,8 @@ int main() {
     save(temp, preCodeX);
     const auto preCodeXListing = liarsoft::decompileGsc(temp.string());
     std::remove(temp.string().c_str());
-    if (preCodeXListing.find(";@gsc-instruction-schema pre-codex") ==
+    if (preCodeXListing.find(";@gsc-byte-format legacy-28") == std::string::npos ||
+        preCodeXListing.find(";@gsc-instruction-schema pre-codex") ==
             std::string::npos ||
         preCodeXListing.find("*select 2 0 1 2 3 4 5 6 7 8 9 10") ==
             std::string::npos ||
@@ -198,6 +200,48 @@ int main() {
         liarsoft::restoreGscFromTsc(preCodeXListing) != preCodeX) {
         std::cerr << "Pre-CodeX instruction schema was not detected" << std::endl;
         return 1;
+    }
+    auto editedPreCodeXListing = preCodeXListing;
+    const auto legacyTextAt = editedPreCodeXListing.find(originalText);
+    if (legacyTextAt == std::string::npos) {
+        std::cerr << "Missing editable legacy TXT line" << std::endl;
+        return 1;
+    }
+    editedPreCodeXListing.replace(legacyTextAt, originalText.size(),
+                                  "\\Edited\"：\"Legacy changed");
+    const auto editedPreCodeX = liarsoft::restoreGscFromTsc(editedPreCodeXListing);
+    if (editedPreCodeX == preCodeX) {
+        std::cerr << "Edited legacy TXT line did not change the GSC" << std::endl;
+        return 1;
+    }
+    save(temp, editedPreCodeX);
+    const auto editedPreCodeXRoundTrip = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (editedPreCodeXRoundTrip.find("\\Edited\"：\"Legacy changed") ==
+            std::string::npos ||
+        liarsoft::restoreGscFromTsc(editedPreCodeXRoundTrip) != editedPreCodeX) {
+        std::cerr << "Edited legacy GSC text did not re-decompile or round-trip"
+                  << std::endl;
+        return 1;
+    }
+    const std::string legacyFormat = ";@gsc-byte-format legacy-28";
+    auto oldStyleListing = editedPreCodeXListing;
+    const auto oldFormatAt = oldStyleListing.find(legacyFormat);
+    oldStyleListing.erase(oldFormatAt, legacyFormat.size() + 1);
+    if (liarsoft::restoreGscFromTsc(oldStyleListing) != editedPreCodeX) {
+        std::cerr << "TSC without byte-format metadata lost compatibility"
+                  << std::endl;
+        return 1;
+    }
+    auto mismatchedFormat = preCodeXListing;
+    const auto formatAt = mismatchedFormat.find(legacyFormat);
+    mismatchedFormat.replace(formatAt, legacyFormat.size(),
+                             ";@gsc-byte-format modern-36");
+    try {
+        liarsoft::restoreGscFromTsc(mismatchedFormat);
+        std::cerr << "Mismatched GSC byte format was accepted" << std::endl;
+        return 1;
+    } catch (const std::runtime_error&) {
     }
 
     std::vector<uint8_t> earlyModern(36, 0);
