@@ -21,6 +21,9 @@ public:
     /// Check if a WAV file contains embedded Ogg data.
     static bool hasEmbeddedOgg(const std::vector<uint8_t>& data);
 
+    /// Check if the input is already a standard PCM WAV that needs no extraction.
+    static bool isStandardPcmWav(const std::vector<uint8_t>& data);
+
     /// Extract Ogg Vorbis stream from WAV data.
     /// Returns the extracted OGG data, or empty if no OGG found.
     static std::vector<uint8_t> extract(const std::vector<uint8_t>& wavData);
@@ -29,8 +32,9 @@ public:
     static std::vector<uint8_t> embed(const std::vector<uint8_t>& oggData,
                                       const std::vector<uint8_t>& refWavData);
 
-    /// Extract from file and save to .ogg file.
-    static void extractToFile(const std::string& wavPath, const std::string& oggPath);
+    /// Extract from file and save to .ogg file. Returns false when the input is
+    /// already a standard PCM WAV and is deliberately retained unchanged.
+    static bool extractToFile(const std::string& wavPath, const std::string& oggPath);
 
     /// Embed Ogg Vorbis data into a WAV container.
     /// Uses the first 66 bytes of `refWavPath` as the WAV header template.

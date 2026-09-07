@@ -1,5 +1,6 @@
 #include "wav_ogg.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -36,6 +37,20 @@ uint32_t readU32(const std::vector<uint8_t>& data, size_t offset) {
 } // namespace
 
 int main() {
+    std::vector<uint8_t> pcm(48, 0);
+    std::copy_n(reinterpret_cast<const uint8_t*>("RIFF"), 4, pcm.begin());
+    std::copy_n(reinterpret_cast<const uint8_t*>("WAVEfmt "), 8, pcm.begin() + 8);
+    pcm[16] = 16;
+    pcm[20] = 1;
+    pcm[22] = 2;
+    std::copy_n(reinterpret_cast<const uint8_t*>("data"), 4, pcm.begin() + 36);
+    pcm[40] = 4;
+    if (!liarsoft::WavOggExtractor::isStandardPcmWav(pcm) ||
+        liarsoft::WavOggExtractor::hasEmbeddedOgg(pcm)) {
+        std::cerr << "Standard PCM WAV was not recognized" << std::endl;
+        return 1;
+    }
+
     std::vector<uint8_t> clean;
     appendPage(clean, 7, 0, {'a', 'b', 'c'});
     appendPage(clean, 7, 1, {'d', 'e'});

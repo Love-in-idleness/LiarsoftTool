@@ -38,7 +38,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | WCG 转 PNG | `liarsofttool image.wcg` |
 | LIM 转 PNG | `liarsofttool image.lim` |
 | PNG 转 WCG | `liarsofttool image.png` |
-| WAV 提取 OGG | `liarsofttool audio.wav` |
+| WAV 提取 OGG（标准 PCM 保留） | `liarsofttool audio.wav` |
 | OGG 嵌入 WAV | `liarsofttool -r template.wav audio.ogg` |
 | 打包目录→XFL | `liarsofttool -e cp932 ./dir` |
 | 打包目录→LWG | `liarsofttool -e cp932 ./dir_with_meta` |
@@ -128,7 +128,7 @@ make -j$(nproc)
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | 修改引擎编码参数 (`0x80`⇄`0x86`⇄`0xCC`)，`-e gbk/cp1251` 前向，`-e cp932` 还原 |
-| WAV | `.wav` | → OGG | 偏移 66 处嵌入 Ogg Vorbis |
+| WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
 
 GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空格）和多行。
@@ -174,7 +174,7 @@ liarsofttool -e cp932 game.exe  # revert GBK/CP1251→CP932
 # 输出 name.gbk.exe / name.cp1251.exe / name.sjis.exe，不覆盖原文件
 
 # --- 音频往返 ---
-liarsofttool audio.wav                         # → audio.ogg
+liarsofttool audio.wav                         # 嵌入式 → audio.ogg；标准 PCM 原样保留
 liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 ```
 
@@ -184,7 +184,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 
 启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、OGG→WAV（需同名 WAV 作为模板）。图像转换遇到同名 LIM 时，会先将它改名为 `.lim.old`；如果备份已存在，则警告并跳过该图像。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
 
-递归解包会继续解开内嵌 XFL/LWG，并自动执行 GSC→TXT、WCG/LIM→PNG、WAV→OGG；单个文件失败只会产生警告，不会中断其余处理。
+递归解包会继续解开内嵌 XFL/LWG，并自动执行 GSC→TXT、WCG/LIM→PNG、嵌入式 WAV→OGG；已经是标准 PCM 的 WAV 会原样保留并视为成功。单个文件失败只会产生警告，不会中断其余处理。
 
 “仅封包”包括目录→XFL/LWG、TSC/TXT→GSC、图片→WCG、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG/LIM→PNG、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
 
@@ -209,7 +209,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 | WCG to PNG | `liarsofttool image.wcg` |
 | LIM to PNG | `liarsofttool image.lim` |
 | PNG to WCG | `liarsofttool image.png` |
-| WAV extract OGG | `liarsofttool audio.wav` |
+| WAV extract OGG (retain PCM) | `liarsofttool audio.wav` |
 | OGG embed to WAV | `liarsofttool -r template.wav audio.ogg` |
 | Pack directory → XFL | `liarsofttool -e cp932 ./dir` |
 | Pack directory → LWG | `liarsofttool -e cp932 ./dir_with_meta` |
@@ -299,7 +299,7 @@ When exactly two args have different extensions, the second is treated as output
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | Patches code-page byte (`0x80`⇄`0x86`⇄`0xCC`). `-e gbk/cp1251` forward, `-e cp932` reverse |
-| WAV | `.wav` | → OGG | Embedded Ogg Vorbis at offset 66 |
+| WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
 GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and multi-line.
@@ -354,7 +354,7 @@ liarsofttool -e cp932 game.exe  # revert GBK/CP1251→CP932
 # Output: name.gbk.exe / name.cp1251.exe / name.sjis.exe; original untouched
 
 # --- Audio roundtrip ---
-liarsofttool audio.wav                         # → audio.ogg
+liarsofttool audio.wav                         # embedded → audio.ogg; standard PCM retained
 liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
 ```
 
@@ -367,7 +367,7 @@ Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, 
 
 With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, and OGG→WAV (requiring a same-name WAV template). Before converting an image, a same-name LIM is renamed to `.lim.old`; if that backup already exists, the image is skipped with a warning. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
 
-Recursive unpacking opens nested XFL/LWG archives and performs GSC→TXT, WCG/LIM→PNG, and WAV→OGG. Failure of one file produces a warning without stopping the remaining work.
+Recursive unpacking opens nested XFL/LWG archives and performs GSC→TXT, WCG/LIM→PNG, and embedded WAV→OGG. Standard PCM WAV files are retained unchanged and count as successful. Failure of one file produces a warning without stopping the remaining work.
 
 **Pack only** covers directory→XFL/LWG, TSC/TXT→GSC, images→WCG, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG/LIM→PNG, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
 

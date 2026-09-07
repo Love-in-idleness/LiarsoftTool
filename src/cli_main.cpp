@@ -42,7 +42,7 @@ static void printUsage(const char* prog) {
               << "  .lwg  -> directory    Unpack LWG archive into a folder\n"
               << "  .wcg  -> .png         Convert WCG image to PNG\n"
               << "  .lim  -> .png         Convert LIM image to PNG\n"
-              << "  .wav  -> .ogg         Extract embedded Ogg Vorbis from WAV\n"
+              << "  .wav  -> .ogg         Extract embedded Ogg; retain standard PCM WAV\n"
               << "  .ogg  -> .wav         Embed Ogg Vorbis into WAV (needs -r template.wav)\n"
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
               << "  directory -> .xfl     Pack a folder into an XFL archive\n"
@@ -263,8 +263,10 @@ static bool processOne(const std::string& inputPath,
     } else if (ext == ".wav") {
         std::cout << "Processing WAV: " << inputPath << std::endl;
         if (out.empty()) out = replaceExtension(inputPath, ".ogg");
-        liarsoft::WavOggExtractor::extractToFile(inputPath, out);
-        std::cout << "Extracted OGG to: " << out << std::endl;
+        if (liarsoft::WavOggExtractor::extractToFile(inputPath, out))
+            std::cout << "Extracted OGG to: " << out << std::endl;
+        else
+            std::cout << "Standard PCM WAV retained unchanged: " << inputPath << std::endl;
 
     } else if (ext == ".ogg") {
         std::string ref = referencePath;

@@ -16,6 +16,11 @@ uint32_t readU32(const std::vector<uint8_t>& data, size_t offset) {
            (static_cast<uint32_t>(data[offset + 3]) << 24);
 }
 
+uint16_t readU16(const std::vector<uint8_t>& data, size_t offset) {
+    return static_cast<uint16_t>(data[offset]) |
+           (static_cast<uint16_t>(data[offset + 1]) << 8);
+}
+
 void writeU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
     data[offset] = static_cast<uint8_t>(value);
     data[offset + 1] = static_cast<uint8_t>(value >> 8);
@@ -44,6 +49,27 @@ bool WavOggExtractor::hasEmbeddedOgg(const std::vector<uint8_t>& data) {
            data[OGG_OFFSET + 1] == OGG_MAGIC[1] &&
            data[OGG_OFFSET + 2] == OGG_MAGIC[2] &&
            data[OGG_OFFSET + 3] == OGG_MAGIC[3];
+}
+
+bool WavOggExtractor::isStandardPcmWav(const std::vector<uint8_t>& data) {
+    if (data.size() < 12 || std::memcmp(data.data(), "RIFF", 4) != 0 ||
+        std::memcmp(data.data() + 8, "WAVE", 4) != 0)
+        return false;
+
+    bool pcm = false;
+    bool samples = false;
+    size_t pos = 12;
+    while (pos + 8 <= data.size()) {
+        const uint32_t chunkSize = readU32(data, pos + 4);
+        const size_t chunkData = pos + 8;
+        if (chunkSize > data.size() - chunkData) return false;
+        if (std::memcmp(data.data() + pos, "fmt ", 4) == 0 && chunkSize >= 16)
+            pcm = readU16(data, chunkData) == 1;
+        else if (std::memcmp(data.data() + pos, "data", 4) == 0)
+            samples = true;
+        pos = chunkData + chunkSize + (chunkSize & 1u);
+    }
+    return pcm && samples;
 }
 
 std::vector<uint8_t> WavOggExtractor::extract(const std::vector<uint8_t>& wavData) {
@@ -136,12 +162,15 @@ std::vector<uint8_t> WavOggExtractor::embed(
     return output;
 }
 
-void WavOggExtractor::extractToFile(const std::string& wavPath, const std::string& oggPath) {
-    auto ogg = extract(readFile(wavPath));
+bool WavOggExtractor::extractToFile(const std::string& wavPath, const std::string& oggPath) {
+    const auto wav = readFile(wavPath);
+    auto ogg = extract(wav);
+    if (ogg.empty() && isStandardPcmWav(wav)) return false;
     if (ogg.empty())
         throw std::runtime_error("No embedded Ogg Vorbis found in: " + wavPath);
 
     writeFileIfChanged(oggPath, ogg);
+    return true;
 }
 
 void WavOggExtractor::embedToFile(const std::string& oggPath, const std::string& refWavPath,
