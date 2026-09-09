@@ -588,15 +588,15 @@ const std::unordered_map<uint16_t, std::string> NAMES = {
     {99,"texindent"},{100,"waitloc"},{101,"faceloc"},{102,"tclsmode"},
     {103,"waitlod"},{104,"waitcol"},{105,"facedep"},{106,"namloc"},
     {107,"texpich"},{108,"texruby"},{110,"getloc"},{111,"muldev"},
-    {112,"root"},{114,"getflag"},{115,"menuon"},{116,"menuset"},
+    {112,"root"},{113,"pow"},{114,"getflag"},{115,"menuon"},{116,"menuset"},
     {117,"menuget"},{120,"fontsize"},{121,"folder"},{130,"numload"},
     {131,"numreng"},{132,"numenable"},{134,"numloc"},{135,"numset"},
-    {136,"num"},
+    {136,"num"},{140,"gmenuon"},{141,"gmenuset"},{142,"gmenuget"},
     {150,"strset"},{151,"stradd"},{152,"numstr"},{153,"strnum"},
     {154,"strcpy"},{155,"strcat"},{156,"strinput"},{157,"strinprop"},
     {158,"strsave"},{159,"strload"},{200,"insub"},{201,"metamor"},
     {202,"flagset"},{210,"dynsel"},{211,"dynans"},{212,"dynnext"},
-    {213,"dyndo"},{221,"mapload"},{222,"mapcls"},{223,"mapobj"},
+    {213,"dyndo"},{220,"map"},{221,"mapload"},{222,"mapcls"},{223,"mapobj"},
     {225,"locmap"},{230,"bganim"},{231,"await"},{255,"excmd"},
 };
 
