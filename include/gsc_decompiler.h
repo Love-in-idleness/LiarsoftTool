@@ -8,8 +8,8 @@
 namespace liarsoft {
 
 /// Produce an annotated, UTF-8 TSC listing from a CodeX GSC file.
-/// This is experimental: verified commands are emitted as TSC while unknown
-/// semantics remain offset-annotated comments.
+/// Verified commands are emitted as TSC while unknown semantics remain
+/// offset-annotated comments.
 std::string decompileGsc(const std::string& inputPath,
                          const std::string& encoding = "CP932");
 

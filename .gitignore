@@ -1,5 +1,17 @@
-test/
 build/
+.vscode/
+test/
+
+# Local reverse-engineering references and game resources.
+CodeXRScript/
+res_ft/
+tsc/
+ubai/
+
+# Generated and platform-specific artifacts.
+__pycache__/
+*.py[cod]
 *.exe
-.gitignore
-.vscode
+*.dll
+*.old
+*.bak

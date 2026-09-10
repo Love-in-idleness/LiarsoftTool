@@ -411,7 +411,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         g_hChkUnpackOnly = CreateWindowA("BUTTON", "Unpack only",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
             210, 42, 105, 20, hWnd, (HMENU)109, NULL, NULL);
-        g_hChkGscToTsc = CreateWindowA("BUTTON", "GSC -> TSC (experimental)",
+        g_hChkGscToTsc = CreateWindowA("BUTTON", "GSC -> TSC",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
             320, 42, 190, 20, hWnd, (HMENU)110, NULL, NULL);
         

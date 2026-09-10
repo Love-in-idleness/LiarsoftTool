@@ -1,6 +1,6 @@
 # GSC opcode 与 TSC 命令对照表
 
-本文档对应 LiarsoftTool 2.0 的实验性 GSC↔TSC 实现。源码事实来源为 `src/gsc_decompiler.cpp`；“样本次数”来自本地兼容性资料，不代表所有 RScript 版本都只包含这些 opcode。
+本文档对应 LiarsoftTool 2.1 的 GSC↔TSC 实现。源码事实来源为 `src/gsc_decompiler.cpp`；“样本次数”来自本地兼容性资料，不代表所有 RScript 版本都只包含这些 opcode。
 
 ## 状态说明
 

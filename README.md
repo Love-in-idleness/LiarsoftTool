@@ -30,7 +30,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | 需求 | 命令 |
 |------|------|
 | 提取脚本原文 | `liarsofttool -e gbk scenario.gsc` |
-| 实验性 GSC 反编译 | `liarsofttool --gsc-to-tsc scenario.gsc` |
+| GSC 转结构化 TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
 | 从 TSC 恢复/更新 GSC | `liarsofttool scenario.tsc` |
 | 翻译后注回 | `liarsofttool -e gbk -r original.gsc trans.txt` |
 | 解包资源封包 | `liarsofttool -e cp932 archive.xfl` |
@@ -95,7 +95,7 @@ make -j$(nproc)
 直接运行 `liarsofttool-gui` 或双击可执行文件启动：
 
 - **拖放文件**到窗口即可添加到转换列表
-- 编码选择（CP932 / GBK / CP1251）、参考 GSC 指定、输出目录，以及递归/仅封包/仅解包/实验性 GSC→TSC 开关
+- 编码选择（CP932 / GBK / CP1251）、参考 GSC 指定、输出目录，以及递归/仅封包/仅解包/GSC→TSC 开关
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
 - Linux 使用 GTK3，Windows 使用原生 Win32 API（零额外 DLL 依赖）
@@ -110,7 +110,7 @@ make -j$(nproc)
 | `-R, --recursive` | 递归处理输入目录和子封包，并在打包/解包时自动转换资源 |
 | `--pack-only` | 只执行封包及编码方向的输入 |
 | `--unpack-only` | 只执行解包及解码方向的输入 |
-| `--gsc-to-tsc` | 实验性：将 GSC 反编译为带源码偏移注释的 UTF-8 TSC，而非提取为 TXT |
+| `--gsc-to-tsc` | 将 GSC 反编译为结构化 UTF-8 TSC，而非提取为 TXT |
 | `-h, --help` | 显示帮助 |
 
 支持多个输入文件及 shell 通配符：`liarsofttool *.wcg`、`liarsofttool * -e gbk`。
@@ -202,7 +202,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 | Task | Command |
 |------|---------|
 | Extract script strings | `liarsofttool -e gbk scenario.gsc` |
-| Experimental GSC decompile | `liarsofttool --gsc-to-tsc scenario.gsc` |
+| GSC to structured TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
 | Restore/update GSC from TSC | `liarsofttool scenario.tsc` |
 | Inject translation | `liarsofttool -e gbk -r original.gsc trans.txt` |
 | Unpack resource archive | `liarsofttool -e cp932 archive.xfl` |
@@ -268,7 +268,7 @@ make -j$(nproc)
 Run `liarsofttool-gui` or double-click the executable:
 
 - **Drag & drop** files onto the window to add them
-- Encoding selector (CP932 / GBK / CP1251), optional reference, output directory, and recursive/pack-only/unpack-only/experimental GSC→TSC toggles
+- Encoding selector (CP932 / GBK / CP1251), optional reference, output directory, and recursive/pack-only/unpack-only/GSC→TSC toggles
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Linux: GTK3 backend. Windows: native Win32 API (zero extra DLL dependencies)
@@ -283,7 +283,7 @@ Run `liarsofttool-gui` or double-click the executable:
 | `-R, --recursive` | Process nested archives and convert resources while packing/unpacking |
 | `--pack-only` | Only process packing and encoding inputs |
 | `--unpack-only` | Only process unpacking and decoding inputs |
-| `--gsc-to-tsc` | Experimental: decompile GSC to annotated UTF-8 TSC instead of extracting TXT |
+| `--gsc-to-tsc` | Decompile GSC to structured UTF-8 TSC instead of extracting TXT |
 | `-h, --help` | Show help |
 
 Multiple inputs and shell wildcards are supported: `liarsofttool *.wcg`, `liarsofttool * -e gbk`.

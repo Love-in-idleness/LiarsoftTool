@@ -32,7 +32,7 @@ static void printUsage(const char* prog) {
               << "  -R, --recursive        Recursively pack/unpack and convert resources\n"
               << "      --pack-only        Only pack/encode inputs\n"
               << "      --unpack-only      Only unpack/decode inputs\n"
-              << "      --gsc-to-tsc       Experimental annotated GSC -> TSC output\n"
+              << "      --gsc-to-tsc       Structured GSC -> TSC output\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
@@ -213,7 +213,7 @@ static bool processOne(const std::string& inputPath,
         if (gscToTsc) {
             if (out.empty()) out = replaceExtension(inputPath, ".tsc");
             liarsoft::decompileGscToFile(inputPath, out, encoding);
-            std::cout << "Experimental GSC -> TSC: " << out << std::endl;
+            std::cout << "GSC -> TSC: " << out << std::endl;
         } else {
             std::cout << "Reading GSC: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
             auto gsc = liarsoft::GscFile::fromFile(inputPath, encoding);

@@ -449,7 +449,7 @@ int runGui(int argc, char* argv[]) {
         "Recursively pack/unpack archives and convert their resources");
     g_packOnlyCheck = Gtk::manage(new Gtk::CheckButton("Pack only"));
     g_unpackOnlyCheck = Gtk::manage(new Gtk::CheckButton("Unpack only"));
-    g_gscToTscCheck = Gtk::manage(new Gtk::CheckButton("GSC → TSC (experimental)"));
+    g_gscToTscCheck = Gtk::manage(new Gtk::CheckButton("GSC → TSC"));
     g_gscToTscCheck->set_tooltip_text(
         "Generate annotated TSC instead of TXT when decoding GSC files");
     g_gscToTscCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
