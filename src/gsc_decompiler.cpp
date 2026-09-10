@@ -936,13 +936,18 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
         data.push_back(static_cast<uint8_t>(value >> 8));
     }
     const size_t modernTrailerSize = headerSize == 36 ? 9 : 0;
-    const uint64_t total = headerSize + code.size() + stringIndex.size() +
-                           stringPool.size() + dataIndex.size() + data.size() +
-                           modernTrailerSize;
-    if (total > std::numeric_limits<uint32_t>::max())
+    const uint64_t physicalSize = headerSize + code.size() + stringIndex.size() +
+                                  stringPool.size() + dataIndex.size() + data.size() +
+                                  modernTrailerSize;
+    // The 28-byte format's first field counts Section D in 16-bit words,
+    // although the file stores those words as two bytes each.
+    const uint64_t declaredSize = headerSize == 28
+        ? physicalSize - dataWords.size()
+        : physicalSize;
+    if (physicalSize > std::numeric_limits<uint32_t>::max())
         throw std::runtime_error("compiled GSC is too large");
     std::vector<uint8_t> result(headerSize, 0);
-    writeU32(result, 0, static_cast<uint32_t>(total));
+    writeU32(result, 0, static_cast<uint32_t>(declaredSize));
     writeU32(result, 4, static_cast<uint32_t>(headerSize));
     writeU32(result, 8, static_cast<uint32_t>(code.size()));
     writeU32(result, 12, static_cast<uint32_t>(stringIndex.size()));
@@ -961,8 +966,6 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     result.insert(result.end(), dataIndex.begin(), dataIndex.end());
     result.insert(result.end(), data.begin(), data.end());
     result.insert(result.end(), modernTrailerSize, 0);
-    // Legacy compilers keep this final sentinel outside header[0].
-    if (headerSize == 28) result.push_back(0);
     return result;
 }
 

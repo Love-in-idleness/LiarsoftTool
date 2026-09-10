@@ -15,6 +15,11 @@ void patchU32(std::vector<uint8_t>& d, size_t p, uint32_t v) {
     d[p] = v; d[p + 1] = v >> 8; d[p + 2] = v >> 16; d[p + 3] = v >> 24;
 }
 void patchU16(std::vector<uint8_t>& d, size_t p, uint16_t v) { d[p] = v; d[p + 1] = v >> 8; }
+uint32_t readU32(const std::vector<uint8_t>& d, size_t p) {
+    return static_cast<uint32_t>(d[p]) | (static_cast<uint32_t>(d[p + 1]) << 8) |
+           (static_cast<uint32_t>(d[p + 2]) << 16) |
+           (static_cast<uint32_t>(d[p + 3]) << 24);
+}
 void save(const std::filesystem::path& p, const std::vector<uint8_t>& d) {
     std::ofstream out(p, std::ios::binary);
     out.write(reinterpret_cast<const char*>(d.data()), d.size());
@@ -123,10 +128,20 @@ int main(int argc, char** argv) {
         std::cerr << "Select strings or data blocks did not round-trip" << std::endl; return 1;
     }
 
+    const std::string legacyDataSource =
+        ";@gsc-byte-format legacy-28\n;@gsc-text-encoding CP932\n;@gsc-schema early\n"
+        "*datablock 0 3 -1 2 32767\n*data 0 0\n*end\n";
+    const auto legacyDataGsc = liarsoft::restoreGscFromTsc(legacyDataSource);
+    if (legacyDataGsc.size() - readU32(legacyDataGsc, 0) !=
+            readU32(legacyDataGsc, 24)) {
+        std::cerr << "Legacy declared size did not count Section D in words" << std::endl;
+        return 1;
+    }
+
     std::vector<uint8_t> legacy(28, 0);
     patchU32(legacy, 4, 28); patchU32(legacy, 8, 8); patchU32(legacy, 12, 4); patchU32(legacy, 16, 1);
     appendU16(legacy, 5); appendU32(legacy, 8); appendU16(legacy, 8);
-    appendU32(legacy, 0); legacy.push_back(0); patchU32(legacy, 0, legacy.size()); legacy.push_back(0);
+    appendU32(legacy, 0); legacy.push_back(0); patchU32(legacy, 0, legacy.size());
     save(temp, legacy);
     const auto legacyListing = liarsoft::decompileGsc(temp.string());
     if (!contains(legacyListing, ";@gsc-byte-format legacy-28") ||
@@ -171,6 +186,13 @@ int main(int argc, char** argv) {
                 return 1;
             }
             const auto rebuilt = liarsoft::restoreGscFromTsc(first);
+            const auto headerSize = readU32(rebuilt, 4);
+            if ((headerSize == 28 && rebuilt.size() - readU32(rebuilt, 0) !=
+                                      readU32(rebuilt, 24)) ||
+                (headerSize == 36 && rebuilt.size() != readU32(rebuilt, 0))) {
+                std::cerr << "Invalid rebuilt declared size: " << item.path() << std::endl;
+                return 1;
+            }
             save(temp, rebuilt);
             const auto second = liarsoft::decompileGsc(temp.string());
             if (normalizeListing(first) != normalizeListing(second)) {
