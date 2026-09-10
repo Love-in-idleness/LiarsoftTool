@@ -124,7 +124,7 @@ make -j$(nproc)
 | XFL | `.xfl` | 解包/打包 | 通用资源封包，Magic: `LB\x01\x00` |
 | LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
 | GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容现代头（36B）及早期头（28B），自动按 HeaderLength 适配 |
-| TSC | `.tsc` | → GSC | 原样输入时逐字节恢复；支持修改已识别版本 GSC 的对白和已知定长指令参数 |
+| TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | 修改引擎编码参数 (`0x80`⇄`0x86`⇄`0xCC`)，`-e gbk/cp1251` 前向，`-e cp932` 还原 |
@@ -135,19 +135,15 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 
 `--gsc-to-tsc` 支持 28 字节早期（含 CodeX 之前）头，以及采用 RScript 1.8、1.9
 或现代指令布局的 36 字节头；程序会根据完整指令边界、跳转目标和操作数结构
-自动选择布局，并将选择写入 TSC 元数据。输出中的
-`;@gsc-structure-v1` 注释以 `;@gsc-code` 保存代码区、以 `;@gsc-string` 按索引
-保存各字符串，并分别记录头、索引、数据块和调试区段；生成结果不再包含
-`;@gsc-instruction` 或 `;@gsc-section strings`，也不包含完整的 `gsc-raw`。
-未经修改时，直接输入该 TSC 即可由这些结构逐字节
-重建 GSC。只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注
-无法反编译。TSC 还会用 `;@gsc-byte-format legacy-28/modern-36` 记录字节布局，
-回编时据此定位代码和字符串区并校验结构。旧版结构化 TSC 不再兼容；需要用当前版本
-从原 GSC 重新生成。
-生成时使用的文本编码也会写入元数据。修改已识别的 28 或 36 字节 GSC 对应的
-TXT/TXA 对白行后，程序会重建字符串表；修改已知定长指令的数值参数会就地更新代码。
-`*font` 的最后一个参数显示实际文本，而非字符串表索引；修改该文本也会重建字符串表。
-普通注释不参与生成；新增或删除指令、更换 opcode、改写表达式结构与重排控制流仍不支持。
+自动选择布局，并将选择写入 TSC 元数据。已识别文件的 TSC 正文由主动可编译的
+`*命令`、`*vm`、标签、`*datablock` 和字符串字面量组成，不保存原代码区或原字符串表。
+回编时会重新编码字符串，按内容去重，并重算字符串索引、偏移、代码、数据块及完整头部。
+因此生成结果保证结构和执行语义一致，但调试表、字符串编号和字节排列不保证与原文件完全
+相同。28 字节格式会生成旧式尾部 NUL 哨兵；36 字节格式会生成标准空调试表和名字表终止符。
+只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注无法反编译。
+`*TXT`/`*TXA` 的字符串参数、`*font` 的文字、`*folder` 路径、选择题文字和字符串操作
+都直接出现在正文中。普通注释不参与生成；可以修改、新增、删除和重排完整指令，但标签及
+各指令参数仍须符合所记录的 RScript schema。旧版结构化 TSC 不再兼容，须从原 GSC 重生成。
 与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
 封包会先将这种 TSC 恢复或更新为 GSC。
 
@@ -299,7 +295,7 @@ When exactly two args have different extensions, the second is treated as output
 | XFL | `.xfl` | unpack/pack | Resource archive, Magic: `LB\x01\x00` |
 | LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
 | GSC | `.gsc` | extract/inject | Game script. Compatible with modern 36B and early 28B headers; auto-adapts to HeaderLength |
-| TSC | `.tsc` | → GSC | Byte-exact unchanged restore; editable dialogue and known fixed-size command operands for recognized GSC versions |
+| TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932⇄GBK/CP1251 | Patches code-page byte (`0x80`⇄`0x86`⇄`0xCC`). `-e gbk/cp1251` forward, `-e cp932` reverse |
@@ -313,25 +309,21 @@ and 36-byte headers using
 RScript 1.8, RScript 1.9, or modern instruction layouts. It selects a layout
 from complete instruction boundaries, jump targets, and operand structure, then
 records that choice in TSC metadata.
-For recognized layouts, `;@gsc-structure-v1` stores the code section in
-`;@gsc-code`, stores each indexed string in `;@gsc-string`, and keeps named
-header, index, data-block, and debug sections. Generated TSC files contain
-neither `;@gsc-instruction` nor `;@gsc-section strings`, and do not embed a
-complete `gsc-raw`. Feeding an unchanged TSC back rebuilds the GSC byte-for-byte
-from that structure. Files with unknown instruction layouts retain the old
-`;@gsc-raw-v1` compatibility fallback and are explicitly marked unavailable for
-decompilation. `;@gsc-byte-format legacy-28/modern-36` records the byte layout,
-which is used to locate and validate code and string sections during rebuild.
-Older structured TSC files are not supported and should be regenerated from
-their original GSC files. The selected text encoding is also recorded. Editing
-TXT/TXA dialogue lines from a
-recognized 28- or 36-byte GSC rebuilds the string table; editing numeric
-operands of known fixed-size commands patches the original code in place.
-The final `*font` operand is the actual text rather than a string-table index;
+For recognized layouts, the TSC body contains active `*command`, `*vm`, label,
+`*datablock`, and quoted-string source instead of embedded code or string-table
+bytes. Recompilation re-encodes and interns strings, recalculates every index and
+offset, rebuilds code and data blocks, and writes the complete 28- or 36-byte
+container. The result is structurally and semantically equivalent; debug tables,
+string numbering, and byte layout need not be identical to the input. Legacy
+containers receive their trailing NUL sentinel, while modern containers receive
+the standard empty debug tables and names terminator. Files with unknown
+instruction layouts retain the `;@gsc-raw-v1` fallback and are explicitly marked
+unavailable for decompilation. Older structured TSC files are unsupported and
+must be regenerated from their original GSC files. TXT/TXA, font, folder,
+selection, and string-operation text appears directly in the source;
 editing it rebuilds the string table as well.
-Ordinary comments are ignored. Inserting or deleting commands,
-changing opcodes, restructuring expressions, and rearranging control flow are
-not yet supported.
+Ordinary comments are ignored. Commands may be inserted, deleted, or reordered
+as long as labels and operands remain valid for the recorded RScript schema.
 Combined with `-R --unpack-only`, it generates `.tsc` throughout directory
 trees and nested archives; recursive packing restores or updates them to GSC.
 

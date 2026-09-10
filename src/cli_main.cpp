@@ -36,7 +36,7 @@ static void printUsage(const char* prog) {
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
-              << "  .tsc  -> .gsc         Restore GSC and apply supported TSC edits\n"
+              << "  .tsc  -> .gsc         Compile structured TSC source into GSC\n"
               << "  .txt  -> .gsc         Pack translated strings back into GSC\n"
               << "  .xfl  -> directory    Unpack XFL archive into a folder\n"
               << "  .lwg  -> directory    Unpack LWG archive into a folder\n"
