@@ -117,6 +117,13 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME wav_ogg COMMAND wav_ogg_test)
 
+    add_executable(exe_patch_test
+        tests/exe_patch_test.cpp src/exe_patch.cpp src/fileio.cpp)
+    if(WIN32)
+        target_link_options(exe_patch_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME exe_patch COMMAND exe_patch_test)
+
     add_executable(gsc_decompiler_test
         tests/gsc_decompiler_test.cpp src/gsc_decompiler.cpp
         src/encoding.cpp src/fileio.cpp)

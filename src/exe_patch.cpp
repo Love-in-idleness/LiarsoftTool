@@ -6,6 +6,29 @@
 
 namespace liarsoft {
 
+namespace {
+
+bool hasCharsetPattern(const std::vector<uint8_t>& data, uint8_t value) {
+    const uint8_t pattern1[17] = {
+        0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,
+        0x68,value,0x00,0x00,0x00,
+        0x6A,0x00,0x6A,0x00
+    };
+    const uint8_t pattern2[3] = {0xDA, 0x68, value};
+
+    for (size_t i = 0; i + sizeof(pattern1) <= data.size(); ++i) {
+        if (std::memcmp(&data[i], pattern1, sizeof(pattern1)) == 0)
+            return true;
+    }
+    for (size_t i = 0; i + sizeof(pattern2) <= data.size(); ++i) {
+        if (std::memcmp(&data[i], pattern2, sizeof(pattern2)) == 0)
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
 std::vector<uint8_t> exeConvertEncoding(const std::vector<uint8_t>& data,
                                         uint8_t fromByte, uint8_t toByte) {
     if (fromByte == toByte) return data;
@@ -48,37 +71,38 @@ void exeConvertFile(const std::string& inputPath, const std::string& outputPath,
     std::ifstream in(inputPath, std::ios::binary);
     if (!in) throw std::runtime_error("Cannot open: " + inputPath);
     in.seekg(0, std::ios::end);
-    size_t sz = in.tellg();
+    const std::streamoff end = in.tellg();
+    if (end < 0) throw std::runtime_error("Cannot read: " + inputPath);
+    const size_t sz = static_cast<size_t>(end);
     in.seekg(0, std::ios::beg);
     std::vector<uint8_t> data(sz);
-    in.read(reinterpret_cast<char*>(data.data()), sz);
-
-    // Map encoding to code-page byte:
-    //   SJIS=0x80, GBK=0x86, CP1251=0xCC
-    // Forward: always from 0x80 (SJIS default) to target
-    // Reverse (encoding=="CP932"): detect current byte and revert to 0x80
-    uint8_t fromByte = 0x80;
-    uint8_t toByte   = 0x80;
-
-    if (encoding == "GBK") {
-        toByte = 0x86;
-    } else if (encoding == "CP1251") {
-        toByte = 0xCC;
-    } else {
-        // CP932: detect and revert to 0x80
-        // Search for the 2-byte marker in pattern 1 context
-        uint8_t p1gbk[17] = {0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x68,0x86,0x00,0x00,0x00,0x6A,0x00,0x6A,0x00};
-        uint8_t p1cp[17]  = {0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x68,0xCC,0x00,0x00,0x00,0x6A,0x00,0x6A,0x00};
-        bool found = false;
-        for (size_t i = 0; i + 17 <= data.size(); ++i) {
-            if (std::memcmp(&data[i], p1gbk, 17) == 0) { fromByte = 0x86; found = true; break; }
-            if (std::memcmp(&data[i], p1cp, 17) == 0)  { fromByte = 0xCC; found = true; break; }
-        }
-        if (!found) return; // nothing to revert
-        toByte = 0x80;
+    if (sz > 0) {
+        in.read(reinterpret_cast<char*>(data.data()),
+                static_cast<std::streamsize>(sz));
+        if (!in) throw std::runtime_error("Cannot read: " + inputPath);
     }
 
-    auto patched = exeConvertEncoding(data, fromByte, toByte);
+    // These are Win32 font charset values, not code-page identifiers:
+    // SHIFTJIS_CHARSET=0x80, GB2312_CHARSET=0x86, RUSSIAN_CHARSET=0xCC.
+    uint8_t target;
+    if (encoding == "CP932") target = 0x80;
+    else if (encoding == "GBK") target = 0x86;
+    else if (encoding == "CP1251") target = 0xCC;
+    else throw std::runtime_error("Unsupported EXE encoding: " + encoding);
+
+    const uint8_t supported[] = {0x80, 0x86, 0xCC};
+    bool found = false;
+    for (uint8_t value : supported)
+        found = found || hasCharsetPattern(data, value);
+    if (!found)
+        throw std::runtime_error(
+            "No supported RScript font charset pattern found in EXE: " + inputPath);
+
+    // Normalize every recognized occurrence. Some released or previously
+    // patched executables contain more than one charset value.
+    auto patched = data;
+    for (uint8_t source : supported)
+        patched = exeConvertEncoding(patched, source, target);
 
     // Identical content already on disk is left untouched (mtime preserved).
     writeFileIfChanged(outputPath, patched);

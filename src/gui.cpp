@@ -64,7 +64,7 @@ static std::string replaceExtension(const std::string& path, const std::string& 
 }
 
 static Glib::ustring guessOutput(const std::string& inputPath, const std::string& outDir,
-                                bool gscToTsc = false) {
+                                bool gscToTsc, const std::string& encoding) {
     std::string ext = getExtension(inputPath);
     fs::path in(inputPath);
     fs::path base = outDir.empty() ? in.parent_path() : fs::path(outDir);
@@ -78,7 +78,11 @@ static Glib::ustring guessOutput(const std::string& inputPath, const std::string
     if (ext == ".txt")      return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
     if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
-    if (ext == ".exe") return (base / (stem + ".gbk.exe")).string();
+    if (ext == ".exe") {
+        const std::string suffix = encoding == "GBK" ? ".gbk.exe" :
+            encoding == "CP1251" ? ".cp1251.exe" : ".sjis.exe";
+        return (base / (stem + suffix)).string();
+    }
     if (ext == ".wav")      return (base / (stem + ".ogg")).string();
     if (ext == ".ogg")      return (base / (stem + ".wav")).string();
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
@@ -86,7 +90,8 @@ static Glib::ustring guessOutput(const std::string& inputPath, const std::string
     return (base / in.filename()).string();
 }
 
-static Glib::ustring guessType(const std::string& path, bool gscToTsc = false) {
+static Glib::ustring guessType(const std::string& path, bool gscToTsc,
+                              const std::string& encoding) {
     std::string ext = getExtension(path);
     if (ext == ".gsc") return gscToTsc ? "GSC → TSC" : "GSC → TXT";
     if (ext == ".tsc") return "TSC → GSC";
@@ -95,7 +100,7 @@ static Glib::ustring guessType(const std::string& path, bool gscToTsc = false) {
     if (ext == ".lwg") return "LWG → DIR";
     if (ext == ".wcg") return "WCG → PNG";
     if (ext == ".lim") return "LIM → PNG";
-    if (ext == ".exe") return "EXE SJIS→GBK";
+    if (ext == ".exe") return "EXE → " + encoding;
     if (ext == ".wav") return "WAV → OGG";
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return "IMG → WCG";
@@ -121,12 +126,14 @@ static void convertOne(const std::string& inputPath,
 // ---- Add files to the list ----
 static void addFiles(const std::vector<std::string>& paths, const std::string& outDir) {
     const bool gscToTsc = g_gscToTscCheck && g_gscToTscCheck->get_active();
+    const std::string encoding = g_encodingCombo ?
+        g_encodingCombo->get_active_id() : "CP932";
     for (const auto& p : paths) {
         if (!isSupported(p)) continue;
         auto row = *(g_store->append());
         row[g_columns.inputPath]  = p;
-        row[g_columns.outputPath] = guessOutput(p, outDir, gscToTsc);
-        row[g_columns.fileType]   = guessType(p, gscToTsc);
+        row[g_columns.outputPath] = guessOutput(p, outDir, gscToTsc, encoding);
+        row[g_columns.fileType]   = guessType(p, gscToTsc, encoding);
         row[g_columns.status]     = "Ready";
     }
 }
@@ -305,11 +312,13 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
 static void updateOutputPaths() {
     std::string outDir = g_outDirEntry->get_text();
     const bool gscToTsc = g_gscToTscCheck && g_gscToTscCheck->get_active();
+    const std::string encoding = g_encodingCombo ?
+        g_encodingCombo->get_active_id() : "CP932";
     for (auto& child : g_store->children()) {
         const std::string input = static_cast<std::string>(
             static_cast<Glib::ustring>(child[g_columns.inputPath]));
-        child[g_columns.outputPath] = guessOutput(input, outDir, gscToTsc);
-        child[g_columns.fileType] = guessType(input, gscToTsc);
+        child[g_columns.outputPath] = guessOutput(input, outDir, gscToTsc, encoding);
+        child[g_columns.fileType] = guessType(input, gscToTsc, encoding);
     }
 }
 
@@ -444,6 +453,7 @@ int runGui(int argc, char* argv[]) {
     g_gscToTscCheck->set_tooltip_text(
         "Generate annotated TSC instead of TXT when decoding GSC files");
     g_gscToTscCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
+    g_encodingCombo->signal_changed().connect(sigc::ptr_fun(&updateOutputPaths));
     optionsBar->pack_start(*g_recursiveCheck, false, false);
     optionsBar->pack_start(*g_packOnlyCheck, false, false);
     optionsBar->pack_start(*g_unpackOnlyCheck, false, false);

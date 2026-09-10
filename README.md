@@ -127,7 +127,7 @@ make -j$(nproc)
 | TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
-| EXE | `.exe` | CP932⇄GBK/CP1251 | 修改引擎编码参数 (`0x80`⇄`0x86`⇄`0xCC`)，`-e gbk/cp1251` 前向，`-e cp932` 还原 |
+| EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数 (`0x80`/`0x86`/`0xCC`)，并统一所有已识别位置为目标值 |
 | WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
 
@@ -169,9 +169,9 @@ liarsofttool cgview/bg.png                         # → bg.wcg
 liarsofttool cgview/                               # → cgview.lwg
 
 # --- EXE 编码转换 ---
-liarsofttool -e gbk game.exe        # SJIS→GBK
-liarsofttool -e cp1251 game.exe     # SJIS→CP1251 (Russian)
-liarsofttool -e cp932 game.exe  # revert GBK/CP1251→CP932
+liarsofttool -e gbk game.exe        # 转为 GBK 字体 charset
+liarsofttool -e cp1251 game.exe     # 转为 CP1251 字体 charset (Russian)
+liarsofttool -e cp932 game.exe      # 转为 CP932 字体 charset
 # 输出 name.gbk.exe / name.cp1251.exe / name.sjis.exe，不覆盖原文件
 
 # --- 音频往返 ---
@@ -299,7 +299,7 @@ When exactly two args have different extensions, the second is treated as output
 | TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
-| EXE | `.exe` | CP932⇄GBK/CP1251 | Patches code-page byte (`0x80`⇄`0x86`⇄`0xCC`). `-e gbk/cp1251` forward, `-e cp932` reverse |
+| EXE | `.exe` | CP932/GBK/CP1251 | Normalizes recognized font charset operands (`0x80`/`0x86`/`0xCC`) to the selected target |
 | WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
@@ -350,9 +350,9 @@ liarsofttool cgview/bg.png                         # → bg.wcg
 liarsofttool cgview/                               # → cgview.lwg
 
 # --- EXE encoding conversion ---
-liarsofttool -e gbk game.exe        # SJIS→GBK
-liarsofttool -e cp1251 game.exe     # SJIS→CP1251 (Russian)
-liarsofttool -e cp932 game.exe  # revert GBK/CP1251→CP932
+liarsofttool -e gbk game.exe        # Set the GBK font charset
+liarsofttool -e cp1251 game.exe     # Set the CP1251 font charset (Russian)
+liarsofttool -e cp932 game.exe      # Set the CP932 font charset
 # Output: name.gbk.exe / name.cp1251.exe / name.sjis.exe; original untouched
 
 # --- Audio roundtrip ---

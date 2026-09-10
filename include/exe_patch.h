@@ -7,16 +7,17 @@
 
 namespace liarsoft {
 
-/// Convert EXE between encoding modes (SJIS=0x80, GBK=0x86, CP1251=0xCC).
+/// Convert recognized RScript EXE font charset operands.
 /// @param data   Raw EXE bytes.
-/// @param fromByte  Source code-page byte in the EXE.
-/// @param toByte    Target code-page byte.
+/// @param fromByte  Source Win32 font charset value in the EXE.
+/// @param toByte    Target Win32 font charset value.
 std::vector<uint8_t> exeConvertEncoding(const std::vector<uint8_t>& data,
                                         uint8_t fromByte, uint8_t toByte);
 
 /// Convert a file. `encoding` is "CP932", "GBK", or "CP1251".
 /// CP1251 provides correct rendering for Cyrillic and English scripts.
-/// If encoding is CP932, auto-detect source and convert back to 0x80.
+/// All recognized charset operands are normalized to the requested target.
+/// Throws if the EXE contains no supported RScript charset pattern.
 void exeConvertFile(const std::string& inputPath, const std::string& outputPath,
                     const std::string& encoding);
 

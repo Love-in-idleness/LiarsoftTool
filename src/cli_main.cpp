@@ -47,7 +47,7 @@ static void printUsage(const char* prog) {
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
               << "  directory -> .xfl     Pack a folder into an XFL archive\n"
               << "  directory -> .lwg     Pack folder with .meta.xml into LWG\n"
-              << "  .exe  -> .gbk.exe/.cp1251.exe  Convert EXE encoding\n\n"
+              << "  .exe  -> .gbk.exe/.cp1251.exe/.sjis.exe  Set EXE font charset\n\n"
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
               << "  " << prog << " -e cp932 scenario.gsc\n"
@@ -56,9 +56,9 @@ static void printUsage(const char* prog) {
               << "  " << prog << " -e gbk archive.xfl\n"
               << "  " << prog << " image.wcg\n"
               << "  " << prog << " cgview.lwg\n"
-              << "  " << prog << " -e gbk game.exe          # SJIS→GBK\n"
-              << "  " << prog << " -e cp1251 game.exe       # SJIS→CP1251\n"
-              << "  " << prog << " -e cp932 game.exe        # revert to CP932\n"
+              << "  " << prog << " -e gbk game.exe          # set GBK charset\n"
+              << "  " << prog << " -e cp1251 game.exe       # set CP1251 charset\n"
+              << "  " << prog << " -e cp932 game.exe        # set CP932 charset\n"
               << "  " << prog << " -r template.wav audio.ogg\n"
               << "  " << prog << " -R archive.xfl         # recursive unpack + conversion\n"
               << "  " << prog << " -R ./extracted_dir      # conversion + recursive pack\n"
@@ -303,9 +303,8 @@ static bool processOne(const std::string& inputPath,
         std::cout << "Saved " << w << "x" << h << " WCG to: " << out << std::endl;
 
     } else if (ext == ".exe") {
-        std::string dir = (encoding == "GBK") ? "SJIS→GBK" :
-                          (encoding == "CP1251") ? "SJIS→CP1251" : "→SJIS";
-        std::cout << "Converting EXE (" << dir << "): " << inputPath << std::endl;
+        std::cout << "Converting EXE charset to " << encoding << ": "
+                  << inputPath << std::endl;
         if (out.empty()) {
             out = (encoding == "GBK") ? replaceExtension(inputPath, ".gbk.exe") :
                   (encoding == "CP1251") ? replaceExtension(inputPath, ".cp1251.exe") :

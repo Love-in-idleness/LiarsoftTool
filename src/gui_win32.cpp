@@ -45,6 +45,13 @@ static std::vector<std::string> g_statuses;
 static std::mutex g_mutex;
 static bool g_running = false;
 
+static std::string selectedEncoding() {
+    const LRESULT selected = SendMessage(g_hCboEnc, CB_GETCURSEL, 0, 0);
+    if (selected == 1) return "GBK";
+    if (selected == 2) return "CP1251";
+    return "CP932";
+}
+
 static std::string getExtension(const std::string& path) {
     auto pos = path.rfind('.');
     if (pos == std::string::npos) return "";
@@ -60,7 +67,7 @@ static std::string replaceExtension(const std::string& path, const std::string& 
 }
 
 static std::string guessOutput(const std::string& in, const std::string& outDir,
-                               bool gscToTsc = false) {
+                               bool gscToTsc, const std::string& encoding) {
     std::string ext = getExtension(in);
     fs::path p(in);
     fs::path base = outDir.empty() ? p.parent_path() : fs::path(outDir);
@@ -73,14 +80,19 @@ static std::string guessOutput(const std::string& in, const std::string& outDir,
     if (ext == ".txt") return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
     if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
-    if (ext == ".exe") return (base / (stem + ".gbk.exe")).string();
+    if (ext == ".exe") {
+        const std::string suffix = encoding == "GBK" ? ".gbk.exe" :
+            encoding == "CP1251" ? ".cp1251.exe" : ".sjis.exe";
+        return (base / (stem + suffix)).string();
+    }
     if (ext == ".wav") return (base / (stem + ".ogg")).string();
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return (base / (stem + ".wcg")).string();
     return (base / p.filename()).string();
 }
 
-static std::string guessType(const std::string& path, bool gscToTsc = false) {
+static std::string guessType(const std::string& path, bool gscToTsc,
+                             const std::string& encoding) {
     std::string ext = getExtension(path);
     if (ext == ".gsc") return gscToTsc ? "GSC -> TSC" : "GSC -> TXT";
     if (ext == ".tsc") return "TSC -> GSC";
@@ -91,7 +103,7 @@ static std::string guessType(const std::string& path, bool gscToTsc = false) {
     if (ext == ".lim") return "LIM -> PNG";
     if (ext == ".wav") return "WAV -> OGG";
     if (ext == ".ogg") return "OGG -> WAV";
-    if (ext == ".exe") return "EXE SJIS->GBK";
+    if (ext == ".exe") return "EXE -> " + encoding;
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") return "IMG -> WCG";
     if (fs::is_directory(path)) return "DIR -> XFL/LWG";
     return "?";
@@ -139,12 +151,13 @@ static void addFile(const std::string& path, const std::string& outDir) {
     if (!isSupported(path)) return;
     const bool gscToTsc = g_hChkGscToTsc &&
         SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    std::string out = guessOutput(path, outDir, gscToTsc);
+    const std::string encoding = selectedEncoding();
+    std::string out = guessOutput(path, outDir, gscToTsc, encoding);
     int idx = g_inputs.size();
     g_inputs.push_back(path);
     g_outputs.push_back(out);
     g_statuses.push_back("Ready");
-    lvInsert(idx, path, out, guessType(path, gscToTsc), "Ready");
+    lvInsert(idx, path, out, guessType(path, gscToTsc, encoding), "Ready");
     EnableWindow(g_hBtnConvert, TRUE);
 }
 
@@ -154,8 +167,9 @@ static void rebuildOutputs() {
     std::string outDir(buf);
     const bool gscToTsc = g_hChkGscToTsc &&
         SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    const std::string encoding = selectedEncoding();
     for (size_t i = 0; i < g_inputs.size(); ++i) {
-        g_outputs[i] = guessOutput(g_inputs[i], outDir, gscToTsc);
+        g_outputs[i] = guessOutput(g_inputs[i], outDir, gscToTsc, encoding);
         lvSetStatus(i, ""); // just refresh output col
         // Actually need to update the output column
         char buf[1024];
@@ -163,7 +177,7 @@ static void rebuildOutputs() {
         LVITEM item = {};
         item.iItem = (int)i; item.iSubItem = 1; item.pszText = buf;
         ListView_SetItem(g_hListView, &item);
-        std::string type = guessType(g_inputs[i], gscToTsc);
+        std::string type = guessType(g_inputs[i], gscToTsc, encoding);
         strncpy(buf, type.c_str(), sizeof(buf)-1); buf[sizeof(buf)-1] = 0;
         item.iSubItem = 2; item.pszText = buf;
         ListView_SetItem(g_hListView, &item);
@@ -341,10 +355,9 @@ static void onChooseRef() {
 }
 
 static void onConvert() {
-    char enc[64], ref[1024];
-    GetWindowTextA(g_hCboEnc, enc, sizeof(enc));
+    char ref[1024];
     GetWindowTextA(g_hEditRef, ref, sizeof(ref));
-    std::string encoding = (strcmp(enc, "GBK") == 0) ? "GBK" : (strcmp(enc, "CP1251") == 0) ? "CP1251" : "CP932";
+    const std::string encoding = selectedEncoding();
     std::string refPath = ref;
     bool recursive = SendMessage(g_hChkRecursive, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool packOnly = SendMessage(g_hChkPackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -457,6 +470,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         case 105: onChooseOutDir(); break;
         case 106: onConvert(); break;
         case 110: rebuildOutputs(); break;
+        case 200:
+            if (HIWORD(wParam) == CBN_SELCHANGE) rebuildOutputs();
+            break;
         }
         return 0;
     
