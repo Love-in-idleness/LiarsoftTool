@@ -46,6 +46,9 @@ int main() {
     appendU16(code, 81);
     appendU32(code, 0); appendU32(code, 123); appendU32(code, 0);
     appendU32(code, 0); appendU32(code, 0); appendU32(code, 1); appendU32(code, 0);
+    appendU16(code, 32);
+    appendU32(code, 40); appendU32(code, 400); appendU32(code, 250);
+    appendU32(code, 0); appendU32(code, 0); appendU32(code, 2);
     appendU16(code, 13); appendU32(code, 7);
     appendU16(code, 202); appendU32(code, 1); appendU32(code, 2); appendU32(code, 3);
     appendU16(code, 210); appendU32(code, 1000); appendU32(code, 4);
@@ -63,11 +66,11 @@ int main() {
     std::vector<uint8_t> modern(36, 0);
     patchU32(modern, 4, 36);
     patchU32(modern, 8, static_cast<uint32_t>(code.size()));
-    patchU32(modern, 12, 8);
-    patchU32(modern, 16, 10);
+    patchU32(modern, 12, 12);
+    patchU32(modern, 16, 20);
     modern.insert(modern.end(), code.begin(), code.end());
-    appendU32(modern, 0); appendU32(modern, 5);
-    const std::string strings("Name\0Text\0", 10);
+    appendU32(modern, 0); appendU32(modern, 5); appendU32(modern, 10);
+    const std::string strings("Name\0Text\0Font Text\0", 20);
     modern.insert(modern.end(), strings.begin(), strings.end());
     patchU32(modern, 0, static_cast<uint32_t>(modern.size()));
 
@@ -76,7 +79,10 @@ int main() {
     save(temp, modern);
     const std::string listing = liarsoft::decompileGsc(temp.string());
     if (listing.find(";@gsc-structure-v1 ") == std::string::npos ||
-        listing.find(";@gsc-instruction ") == std::string::npos ||
+        listing.find(";@gsc-code ") == std::string::npos ||
+        listing.find(";@gsc-string 2 ") == std::string::npos ||
+        listing.find(";@gsc-instruction ") != std::string::npos ||
+        listing.find(";@gsc-section strings ") != std::string::npos ||
         listing.find(";@gsc-byte-format modern-36") == std::string::npos ||
         listing.find(";@gsc-raw-v1 ") != std::string::npos) {
         std::cerr << "Recognized GSC did not use structured metadata" << std::endl;
@@ -131,10 +137,30 @@ int main() {
         std::cerr << "Edited command operands were not rebuilt" << std::endl;
         return 1;
     }
+    std::string fontListing = listing;
+    const std::string originalFont = "*font 40 400 250 0 0 Font Text";
+    const auto fontAt = fontListing.find(originalFont);
+    if (fontAt == std::string::npos) {
+        std::cerr << "Missing editable font text" << std::endl;
+        return 1;
+    }
+    fontListing.replace(fontAt, originalFont.size(),
+                        "*font 40 400 250 0 0 Edited Font Text");
+    const auto fontGsc = liarsoft::restoreGscFromTsc(fontListing);
+    save(temp, fontGsc);
+    const auto fontRoundTrip = liarsoft::decompileGsc(temp.string());
+    std::remove(temp.string().c_str());
+    if (fontRoundTrip.find("*font 40 400 250 0 0 Edited Font Text") ==
+            std::string::npos ||
+        liarsoft::restoreGscFromTsc(fontRoundTrip) != fontGsc) {
+        std::cerr << "Edited font text was not rebuilt" << std::endl;
+        return 1;
+    }
     std::remove(temp.string().c_str());
     for (const std::string expected : {
              "*if ((@1 == 0)) == 0", "*goto L_000032",
-             "*voice 123", "\\Name\"：\"Text", ":L_000032", "*wait 7",
+             "*voice 123", "\\Name\"：\"Text", ":L_000032",
+             "*font 40 400 250 0 0 Font Text", "*wait 7",
              "*flagset 1 2 3", "*dynsel 1000 4", "*dynans 1001 5 6 7",
              "*dynnext 1002", "*dyndo 8 9 10", "*num 11 12 13",
              "*pow 14 15", "*gmenuon 16 17", "*gmenuset 18 19",
@@ -199,7 +225,7 @@ int main() {
     const auto preCodeXListing = liarsoft::decompileGsc(temp.string());
     std::remove(temp.string().c_str());
     if (preCodeXListing.find(";@gsc-byte-format legacy-28") == std::string::npos ||
-        preCodeXListing.find(";@gsc-instruction-schema pre-codex") ==
+        preCodeXListing.find(";@gsc-schema pre-codex") ==
             std::string::npos ||
         preCodeXListing.find("*select 2 0 1 2 3 4 5 6 7 8 9 10") ==
             std::string::npos ||
@@ -232,14 +258,6 @@ int main() {
         return 1;
     }
     const std::string legacyFormat = ";@gsc-byte-format legacy-28";
-    auto oldStyleListing = editedPreCodeXListing;
-    const auto oldFormatAt = oldStyleListing.find(legacyFormat);
-    oldStyleListing.erase(oldFormatAt, legacyFormat.size() + 1);
-    if (liarsoft::restoreGscFromTsc(oldStyleListing) != editedPreCodeX) {
-        std::cerr << "TSC without byte-format metadata lost compatibility"
-                  << std::endl;
-        return 1;
-    }
     auto mismatchedFormat = preCodeXListing;
     const auto formatAt = mismatchedFormat.find(legacyFormat);
     mismatchedFormat.replace(formatAt, legacyFormat.size(),
@@ -268,7 +286,7 @@ int main() {
     save(temp, earlyModern);
     const auto earlyListing = liarsoft::decompileGsc(temp.string());
     std::remove(temp.string().c_str());
-    if (earlyListing.find(";@gsc-instruction-schema rscript18") == std::string::npos ||
+    if (earlyListing.find(";@gsc-schema rscript18") == std::string::npos ||
         earlyListing.find("*locmode 1 2 3") == std::string::npos ||
         earlyListing.find("*facedep 4") == std::string::npos ||
         liarsoft::restoreGscFromTsc(earlyListing) != earlyModern) {
@@ -306,7 +324,7 @@ int main() {
     save(temp, rscript19);
     auto rscript19Listing = liarsoft::decompileGsc(temp.string());
     std::remove(temp.string().c_str());
-    if (rscript19Listing.find(";@gsc-instruction-schema rscript19") == std::string::npos ||
+    if (rscript19Listing.find(";@gsc-schema rscript19") == std::string::npos ||
         rscript19Listing.find("*locmode 1 2 3 4") == std::string::npos ||
         rscript19Listing.find("*se_off 7") == std::string::npos ||
         liarsoft::restoreGscFromTsc(rscript19Listing) != rscript19) {
@@ -336,8 +354,8 @@ int main() {
     }
 
     std::string damaged = listing;
-    const auto chunk = damaged.find(";@gsc-section strings ");
-    damaged[chunk + 22] = damaged[chunk + 22] == '0' ? '1' : '0';
+    const auto chunk = damaged.find(";@gsc-string 0 ");
+    damaged[chunk + 15] = damaged[chunk + 15] == '0' ? '1' : '0';
     try {
         liarsoft::restoreGscFromTsc(damaged);
         std::cerr << "Damaged raw metadata was accepted" << std::endl;

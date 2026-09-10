@@ -62,12 +62,13 @@ constexpr const char* RAW_HEADER = ";@gsc-raw-v1 ";
 constexpr const char* RAW_CHUNK = ";@gsc-raw ";
 constexpr const char* RAW_END = ";@gsc-raw-end";
 constexpr const char* STRUCTURE_HEADER = ";@gsc-structure-v1 ";
-constexpr const char* STRUCTURE_INSTRUCTION = ";@gsc-instruction ";
 constexpr const char* STRUCTURE_SECTION = ";@gsc-section ";
+constexpr const char* STRUCTURE_CODE = ";@gsc-code ";
+constexpr const char* STRUCTURE_STRING = ";@gsc-string ";
 constexpr const char* STRUCTURE_END = ";@gsc-structure-end";
 constexpr const char* BYTE_FORMAT = ";@gsc-byte-format ";
 constexpr const char* TEXT_ENCODING = ";@gsc-text-encoding ";
-constexpr const char* INSTRUCTION_SCHEMA = ";@gsc-instruction-schema ";
+constexpr const char* INSTRUCTION_SCHEMA = ";@gsc-schema ";
 
 enum class InstructionSchema { PreCodeX, Early, RScript18, RScript19, Modern };
 
@@ -135,6 +136,66 @@ void appendHexLines(std::ostringstream& out, const std::string& name,
         for (size_t i = offset; i < end; ++i)
             out << HEX[data[i] >> 4] << HEX[data[i] & 0x0f];
         out << '\n';
+    }
+}
+
+void appendHexDataLines(std::ostringstream& out, const char* prefix,
+                        const std::vector<uint8_t>& data) {
+    static constexpr char HEX[] = "0123456789abcdef";
+    if (data.empty()) {
+        out << prefix << "-\n";
+        return;
+    }
+    for (size_t offset = 0; offset < data.size(); offset += 48) {
+        out << prefix;
+        const size_t end = std::min(data.size(), offset + 48);
+        for (size_t i = offset; i < end; ++i)
+            out << HEX[data[i] >> 4] << HEX[data[i] & 0x0f];
+        out << '\n';
+    }
+}
+
+std::vector<std::vector<uint8_t>> splitStringTable(
+    const std::vector<uint8_t>& index, const std::vector<uint8_t>& pool) {
+    if (index.size() % 4)
+        throw std::runtime_error("malformed GSC string index");
+    std::vector<std::vector<uint8_t>> result;
+    std::vector<bool> covered(pool.size(), false);
+    for (size_t i = 0; i < index.size(); i += 4) {
+        const uint32_t offset = readU32(index, i);
+        if (offset >= pool.size())
+            throw std::runtime_error("GSC string starts outside its table");
+        const auto begin = pool.begin() + static_cast<ptrdiff_t>(offset);
+        const auto end = std::find(begin, pool.end(), 0);
+        if (end == pool.end())
+            throw std::runtime_error("unterminated GSC string");
+        result.emplace_back(begin, end);
+        const size_t endOffset = static_cast<size_t>(end - pool.begin());
+        std::fill(covered.begin() + offset, covered.begin() + endOffset + 1, true);
+    }
+    for (size_t i = 0; i < pool.size(); ++i) {
+        if (!covered[i] && pool[i] != 0)
+            throw std::runtime_error("nonzero unindexed bytes in GSC string table");
+    }
+    return result;
+}
+
+void appendStringLines(std::ostringstream& out,
+                       const std::vector<std::vector<uint8_t>>& strings) {
+    static constexpr char HEX[] = "0123456789abcdef";
+    for (size_t index = 0; index < strings.size(); ++index) {
+        const auto& value = strings[index];
+        if (value.empty()) {
+            out << STRUCTURE_STRING << index << " -\n";
+            continue;
+        }
+        for (size_t offset = 0; offset < value.size(); offset += 48) {
+            out << STRUCTURE_STRING << index << ' ';
+            const size_t end = std::min(value.size(), offset + 48);
+            for (size_t i = offset; i < end; ++i)
+                out << HEX[value[i] >> 4] << HEX[value[i] & 0x0f];
+            out << '\n';
+        }
     }
 }
 
@@ -516,8 +577,7 @@ private:
     }
 };
 
-std::string structuredEnvelope(const std::vector<uint8_t>& raw,
-                               const ParsedGsc& gsc) {
+std::string structuredEnvelope(const std::vector<uint8_t>& raw) {
     const size_t headerSize = readU32(raw, 4);
     size_t pos = headerSize;
     const auto slice = [&](size_t& offset, size_t size) {
@@ -531,16 +591,20 @@ std::string structuredEnvelope(const std::vector<uint8_t>& raw,
     };
 
     const auto header = std::vector<uint8_t>(raw.begin(), raw.begin() + headerSize);
-    pos += readU32(raw, 8); // code is represented by instructions below.
+    const auto code = slice(pos, readU32(raw, 8));
     std::vector<std::pair<std::string, std::vector<uint8_t>>> sections;
+    std::vector<uint8_t> stringIndex;
+    std::vector<uint8_t> stringPool;
     if (headerSize == 28) {
-        sections.push_back({"declaration", slice(pos, readU32(raw, 12))});
-        sections.push_back({"strings", slice(pos, readU32(raw, 16))});
+        stringIndex = slice(pos, readU32(raw, 12));
+        sections.push_back({"declaration", stringIndex});
+        stringPool = slice(pos, readU32(raw, 16));
         sections.push_back({"data-index", slice(pos, readU32(raw, 20))});
         sections.push_back({"data", slice(pos, readU32(raw, 24) * 2ull)});
     } else {
-        sections.push_back({"string-index", slice(pos, readU32(raw, 12))});
-        sections.push_back({"strings", slice(pos, readU32(raw, 16))});
+        stringIndex = slice(pos, readU32(raw, 12));
+        sections.push_back({"string-index", stringIndex});
+        stringPool = slice(pos, readU32(raw, 16));
         sections.push_back({"data-index", slice(pos, readU32(raw, 20))});
         sections.push_back({"data", slice(pos, readU32(raw, 24) * 2ull)});
     }
@@ -550,14 +614,8 @@ std::string structuredEnvelope(const std::vector<uint8_t>& raw,
     out << STRUCTURE_HEADER << "size=" << raw.size()
         << " fnv1a64=" << hex64(fnv1a64(raw)) << '\n';
     appendHexLines(out, "header", header);
-    for (const auto& instruction : gsc.instructions()) {
-        out << STRUCTURE_INSTRUCTION << std::hex << std::nouppercase
-            << std::setw(6) << std::setfill('0') << instruction.offset << ' '
-            << std::setw(4) << instruction.opcode << std::dec << ' '
-            << (instruction.kinds.empty() ? "-" : instruction.kinds);
-        for (const auto operand : instruction.operands) out << ' ' << operand;
-        out << '\n';
-    }
+    appendHexDataLines(out, STRUCTURE_CODE, code);
+    appendStringLines(out, splitStringTable(stringIndex, stringPool));
     for (const auto& section : sections)
         appendHexLines(out, section.first, section.second);
     out << STRUCTURE_END << '\n';
@@ -719,6 +777,14 @@ std::string instructionText(const ParsedGsc& gsc, const Instruction& instruction
                " L_" + hex6(target) + " (tmp0)";
     }
     if (opcode == 81 || opcode == 82) return textCommand(gsc, instruction, encoding);
+    if (opcode == 32) {
+        std::ostringstream out;
+        out << "*font";
+        for (size_t i = 0; i < 5; ++i)
+            out << ' ' << expression(static_cast<uint32_t>(instruction.operands[i]));
+        out << ' ' << gsc.string(static_cast<size_t>(instruction.operands[5]), encoding);
+        return out.str();
+    }
     if (opcode == 26) return "=";
     if (opcode == 18) {
         std::ostringstream out;
@@ -756,26 +822,9 @@ std::vector<uint8_t> restoreStructuredEnvelope(const std::string& tscText) {
     bool complete = false;
     std::vector<uint8_t> code;
     std::unordered_map<std::string, std::vector<uint8_t>> sections;
-
-    const auto parseHexNumber = [](const std::string& value,
-                                   const std::string& context) {
-        try {
-            size_t used = 0;
-            const auto result = std::stoull(value, &used, 16);
-            if (used != value.size()) throw std::invalid_argument("hex");
-            return result;
-        } catch (const std::exception&) {
-            throw std::runtime_error("invalid " + context);
-        }
-    };
-    const auto append16 = [](std::vector<uint8_t>& output, uint16_t value) {
-        output.push_back(static_cast<uint8_t>(value));
-        output.push_back(static_cast<uint8_t>(value >> 8));
-    };
-    const auto append32 = [&](std::vector<uint8_t>& output, uint32_t value) {
-        append16(output, static_cast<uint16_t>(value));
-        append16(output, static_cast<uint16_t>(value >> 16));
-    };
+    std::unordered_map<size_t, std::vector<uint8_t>> stringEntries;
+    std::set<size_t> presentStringEntries;
+    bool hasCodeMetadata = false;
 
     while (std::getline(input, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
@@ -819,6 +868,8 @@ std::vector<uint8_t> restoreStructuredEnvelope(const std::string& tscText) {
             std::string name, bytes, extra;
             if (!(fields >> name >> bytes) || (fields >> extra))
                 throw std::runtime_error("malformed ;@gsc-section metadata");
+            if (name == "strings")
+                throw std::runtime_error("obsolete ;@gsc-section strings metadata");
             if (bytes != "-") {
                 auto decoded = decodeHex(bytes, ";@gsc-section");
                 auto& section = sections[name];
@@ -828,56 +879,44 @@ std::vector<uint8_t> restoreStructuredEnvelope(const std::string& tscText) {
             }
             continue;
         }
-        if (line.compare(0, std::char_traits<char>::length(STRUCTURE_INSTRUCTION),
-                         STRUCTURE_INSTRUCTION) == 0) {
-            std::istringstream fields(line.substr(
-                std::char_traits<char>::length(STRUCTURE_INSTRUCTION)));
-            std::string offsetField, opcodeField, kinds;
-            if (!(fields >> offsetField >> opcodeField >> kinds))
-                throw std::runtime_error("malformed ;@gsc-instruction metadata");
-            const auto offset = parseHexNumber(offsetField, "GSC instruction offset");
-            const auto opcode = parseHexNumber(opcodeField, "GSC opcode");
-            if (offset != code.size() || opcode > 0xffff)
-                throw std::runtime_error("non-contiguous GSC instructions");
-            append16(code, static_cast<uint16_t>(opcode));
-            if (kinds == "-") kinds.clear();
-            for (const char kind : kinds) {
-                if (kind != 'H' && kind != 'S' && kind != 'D' && kind != 'E')
-                    throw std::runtime_error("invalid GSC operand kind");
-                std::string token;
-                if (!(fields >> token))
-                    throw std::runtime_error("missing structured GSC operand");
-                int64_t value;
-                try {
-                    size_t used = 0;
-                    value = std::stoll(token, &used, 10);
-                    if (used != token.size()) throw std::invalid_argument("operand");
-                } catch (const std::exception&) {
-                    throw std::runtime_error("invalid structured GSC operand");
-                }
-                if (kind == 'S') {
-                    if (value < -32768 || value > 32767)
-                        throw std::runtime_error("structured GSC operand is out of range");
-                    append16(code, static_cast<uint16_t>(value));
-                } else if (kind == 'H') {
-                    if (value < 0 || value > 0xffff)
-                        throw std::runtime_error("structured GSC operand is out of range");
-                    append16(code, static_cast<uint16_t>(value));
-                } else {
-                    if (value < 0 || static_cast<uint64_t>(value) > 0xffffffffull)
-                        throw std::runtime_error("structured GSC operand is out of range");
-                    append32(code, static_cast<uint32_t>(value));
-                }
+        if (line.compare(0, std::char_traits<char>::length(STRUCTURE_CODE),
+                         STRUCTURE_CODE) == 0) {
+            hasCodeMetadata = true;
+            const auto bytes = line.substr(
+                std::char_traits<char>::length(STRUCTURE_CODE));
+            if (bytes != "-") {
+                auto decoded = decodeHex(bytes, ";@gsc-code");
+                code.insert(code.end(), decoded.begin(), decoded.end());
+            } else if (!code.empty()) {
+                throw std::runtime_error("malformed empty ;@gsc-code metadata");
             }
-            std::string extra;
-            if (fields >> extra)
-                throw std::runtime_error("extra structured GSC operand");
+            continue;
+        }
+        if (line.compare(0, std::char_traits<char>::length(STRUCTURE_STRING),
+                         STRUCTURE_STRING) == 0) {
+            std::istringstream fields(line.substr(
+                std::char_traits<char>::length(STRUCTURE_STRING)));
+            size_t index;
+            std::string bytes, extra;
+            if (!(fields >> index >> bytes) || (fields >> extra))
+                throw std::runtime_error("malformed ;@gsc-string metadata");
+            auto& value = stringEntries[index];
+            if (bytes == "-") {
+                if (presentStringEntries.count(index) || !value.empty())
+                    throw std::runtime_error("malformed empty ;@gsc-string metadata");
+            } else {
+                auto decoded = decodeHex(bytes, ";@gsc-string");
+                value.insert(value.end(), decoded.begin(), decoded.end());
+            }
+            presentStringEntries.insert(index);
             continue;
         }
         throw std::runtime_error("unexpected line inside ;@gsc-structure metadata");
     }
     if (reading) throw std::runtime_error("missing ;@gsc-structure-end marker");
     if (!complete) throw std::runtime_error("TSC has no ;@gsc-structure-v1 metadata");
+    if (!hasCodeMetadata)
+        throw std::runtime_error("TSC has no ;@gsc-code metadata");
 
     const auto headerAt = sections.find("header");
     if (headerAt == sections.end() || headerAt->second.size() < 28)
@@ -894,6 +933,35 @@ std::vector<uint8_t> restoreStructuredEnvelope(const std::string& tscText) {
             throw std::runtime_error("structured GSC section size mismatch: " + name);
         return found->second;
     };
+    {
+        const size_t indexSize = readU32(header, 12);
+        if (indexSize % 4)
+            throw std::runtime_error("malformed structured GSC string index");
+        const size_t poolSize = readU32(header, 16);
+        const auto& stringIndex = require(
+            headerSize == 28 ? "declaration" : "string-index", indexSize);
+        const size_t stringCount = indexSize / 4;
+        if (presentStringEntries.size() != stringCount)
+            throw std::runtime_error("structured GSC string count mismatch");
+        std::vector<uint8_t> pool(poolSize, 0);
+        std::vector<bool> written(poolSize, false);
+        for (size_t index = 0; index < stringCount; ++index) {
+            if (!presentStringEntries.count(index))
+                throw std::runtime_error("missing structured GSC string");
+            const auto& value = stringEntries[index];
+            const size_t offset = readU32(stringIndex, index * 4);
+            if (offset >= pool.size() || value.size() >= pool.size() - offset)
+                throw std::runtime_error("structured GSC string exceeds its table");
+            for (size_t i = 0; i < value.size(); ++i) {
+                const size_t at = offset + i;
+                if (written[at] && pool[at] != value[i])
+                    throw std::runtime_error("conflicting overlapping GSC strings");
+                pool[at] = value[i];
+                written[at] = true;
+            }
+        }
+        sections["strings"] = std::move(pool);
+    }
     std::vector<uint8_t> result = header;
     result.insert(result.end(), code.begin(), code.end());
     if (headerSize == 28) {
@@ -929,6 +997,7 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
                                     const std::string& fallbackEncoding) {
     std::vector<std::pair<size_t, std::string>> edits;
     std::vector<std::pair<size_t, std::string>> commandEdits;
+    std::vector<std::pair<size_t, std::string>> stringCommandEdits;
     std::optional<size_t> pendingOffset;
     std::optional<size_t> declaredHeaderSize;
     std::string encoding = fallbackEncoding;
@@ -1089,6 +1158,22 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
             writeU32(working, instruction + 6, parseNumber(value, 'E'));
             continue;
         }
+        if (originalOpcode == 32 && name == "font") {
+            size_t cursor = instruction + 2;
+            for (size_t i = 0; i < 5; ++i) {
+                std::string token;
+                if (!(fields >> token))
+                    throw std::runtime_error("TSC font command has too few operands");
+                writeU32(working, cursor, parseNumber(token, 'E'));
+                cursor += 4;
+            }
+            std::string text;
+            std::getline(fields, text);
+            if (!text.empty() && text.front() == ' ') text.erase(text.begin());
+            stringCommandEdits.emplace_back(
+                readU32(working, instruction + 22), text);
+            continue;
+        }
         const auto named = opcodes.find(name);
         if (named == opcodes.end() || named->second != originalOpcode)
             throw std::runtime_error("TSC command does not match its original GSC opcode");
@@ -1146,6 +1231,11 @@ std::vector<uint8_t> applyTextEdits(const std::vector<uint8_t>& raw,
             throw std::runtime_error("conflicting edits to a shared GSC string");
         replacements[index] = std::move(bytes);
     };
+
+    for (const auto& edit : stringCommandEdits) {
+        if (edit.second != decodedString(edit.first))
+            setString(edit.first, edit.second);
+    }
 
     for (const auto& edit : edits) {
         const size_t offset = edit.first;
@@ -1291,7 +1381,7 @@ std::string decompileGsc(const std::string& inputPath, const std::string& encodi
     const auto raw = readFile(inputPath);
     try {
         const ParsedGsc gsc(inputPath);
-        return structuredEnvelope(raw, gsc) + TEXT_ENCODING + encoding + "\n" +
+        return structuredEnvelope(raw) + TEXT_ENCODING + encoding + "\n" +
                decompileListing(inputPath, encoding);
     } catch (const std::exception& e) {
         std::string message = e.what();

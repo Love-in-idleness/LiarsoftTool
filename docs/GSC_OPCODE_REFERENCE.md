@@ -9,7 +9,7 @@
 - **语义未知**：参数长度已经确定，可以结构化往返，但尚无可靠命令名；正文输出 `; opcode <十进制值> ...`。
 - **完全未知**：参数长度也未知。当前十套样本中没有出现；遇到时整份文件会明确标注无法反编译，并使用旧 `gsc-raw` 兼容回退。
 
-参数签名中的 `E` 为 RScript 表达式值，`D` 为 32 位无符号值，`H` 为 16 位无符号值，`S` 为 16 位有符号值。不同 RScript 代际的少数已命名命令具有不同签名，具体以 TSC 的 `;@gsc-instruction-schema` 与逐指令结构元数据为准。
+参数签名中的 `E` 为 RScript 表达式值，`D` 为 32 位无符号值，`H` 为 16 位无符号值，`S` 为 16 位有符号值。不同 RScript 代际的少数已命名命令具有不同签名，具体以 TSC 的 `;@gsc-schema` 为准；原代码字节由 `;@gsc-code` 保存，不再生成逐指令的 `;@gsc-instruction`。
 
 `pow`、`gmenuon`、`gmenuset`、`gmenuget` 和 `map` 的命名依据为 UBAI 所附 2012 年版 `RsComp.dll`（SHA-256 `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9`）：其编译器分派代码使用 `lstrcmpiA` 匹配命令名后直接写入对应 opcode。
 

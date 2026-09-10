@@ -136,13 +136,17 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 `--gsc-to-tsc` 支持 28 字节早期（含 CodeX 之前）头，以及采用 RScript 1.8、1.9
 或现代指令布局的 36 字节头；程序会根据完整指令边界、跳转目标和操作数结构
 自动选择布局，并将选择写入 TSC 元数据。输出中的
-`;@gsc-structure-v1` 注释逐条记录指令，并分别记录头、字符串、数据块和调试区段；
-它不再包含完整的 `gsc-raw`。未经修改时，直接输入该 TSC 即可由这些结构逐字节
+`;@gsc-structure-v1` 注释以 `;@gsc-code` 保存代码区、以 `;@gsc-string` 按索引
+保存各字符串，并分别记录头、索引、数据块和调试区段；生成结果不再包含
+`;@gsc-instruction` 或 `;@gsc-section strings`，也不包含完整的 `gsc-raw`。
+未经修改时，直接输入该 TSC 即可由这些结构逐字节
 重建 GSC。只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注
 无法反编译。TSC 还会用 `;@gsc-byte-format legacy-28/modern-36` 记录字节布局，
-回编时据此定位代码和字符串区并校验结构；旧版 TSC 没有该字段时仍从 GSC 头推断。
+回编时据此定位代码和字符串区并校验结构。旧版结构化 TSC 不再兼容；需要用当前版本
+从原 GSC 重新生成。
 生成时使用的文本编码也会写入元数据。修改已识别的 28 或 36 字节 GSC 对应的
 TXT/TXA 对白行后，程序会重建字符串表；修改已知定长指令的数值参数会就地更新代码。
+`*font` 的最后一个参数显示实际文本，而非字符串表索引；修改该文本也会重建字符串表。
 普通注释不参与生成；新增或删除指令、更换 opcode、改写表达式结构与重排控制流仍不支持。
 与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
 封包会先将这种 TSC 恢复或更新为 GSC。
@@ -309,17 +313,22 @@ and 36-byte headers using
 RScript 1.8, RScript 1.9, or modern instruction layouts. It selects a layout
 from complete instruction boundaries, jump targets, and operand structure, then
 records that choice in TSC metadata.
-For recognized layouts, `;@gsc-structure-v1` records individual instructions
-and named header, string, data-block, and debug sections rather than embedding a
+For recognized layouts, `;@gsc-structure-v1` stores the code section in
+`;@gsc-code`, stores each indexed string in `;@gsc-string`, and keeps named
+header, index, data-block, and debug sections. Generated TSC files contain
+neither `;@gsc-instruction` nor `;@gsc-section strings`, and do not embed a
 complete `gsc-raw`. Feeding an unchanged TSC back rebuilds the GSC byte-for-byte
 from that structure. Files with unknown instruction layouts retain the old
 `;@gsc-raw-v1` compatibility fallback and are explicitly marked unavailable for
 decompilation. `;@gsc-byte-format legacy-28/modern-36` records the byte layout,
-which is used to locate and validate code and string sections during rebuild;
-older TSC files without it remain compatible through header inference. The
-selected text encoding is also recorded. Editing TXT/TXA dialogue lines from a
+which is used to locate and validate code and string sections during rebuild.
+Older structured TSC files are not supported and should be regenerated from
+their original GSC files. The selected text encoding is also recorded. Editing
+TXT/TXA dialogue lines from a
 recognized 28- or 36-byte GSC rebuilds the string table; editing numeric
 operands of known fixed-size commands patches the original code in place.
+The final `*font` operand is the actual text rather than a string-table index;
+editing it rebuilds the string table as well.
 Ordinary comments are ignored. Inserting or deleting commands,
 changing opcodes, restructuring expressions, and rearranging control flow are
 not yet supported.
