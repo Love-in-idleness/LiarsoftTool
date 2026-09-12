@@ -75,8 +75,8 @@ void cg_decompress(
     for (int i = 0; i < indexSize; ++i)
         m_index[i] = *src++;
 
-    // Determine thresholds from actual table size (matching arc_unpacker / GARbro)
-    bool small = (indexCount < 0x1002);
+    // WCG tables at 0x1000 entries and above use the large-table bit coding.
+    bool small = (indexCount < 0x1000);
     int indexBitLength  = small ? 3 : 4;   // unk2 / index_bit_length
     int indexLengthLimit = small ? 6 : 14;  // unk1 / m_index_length_limit
 
@@ -138,7 +138,7 @@ void cg_decompress_16bpp(
     for (int i = 0; i < indexSize; ++i)
         m_index[i] = *src++;
 
-    bool small = (indexSize < 0x1002 * 2); // 0x2004 bytes, i.e. indexCount < 0x1002
+    bool small = (indexCount < 0x1000);
     int indexBitLength  = small ? 3 : 4;
     int indexLengthLimit = small ? 6 : 14;
 
