@@ -150,6 +150,25 @@ int main(int argc, char** argv) {
         std::cerr << "Canonical legacy GSC did not round-trip" << std::endl; return 1;
     }
 
+    std::vector<uint8_t> legacyTxt(28, 0), legacyTxtCode;
+    appendU16(legacyTxtCode, 81);
+    for (const uint32_t value : {0u, 123u, 0u, 0u, 0u, 1u, 1u})
+        appendU32(legacyTxtCode, value);
+    appendU16(legacyTxtCode, 8);
+    patchU32(legacyTxt, 4, 28); patchU32(legacyTxt, 8, legacyTxtCode.size());
+    patchU32(legacyTxt, 12, 8); patchU32(legacyTxt, 16, 16);
+    legacyTxt.insert(legacyTxt.end(), legacyTxtCode.begin(), legacyTxtCode.end());
+    appendU32(legacyTxt, 0); appendU32(legacyTxt, 11);
+    const std::string legacyTxtStrings("Wrong Name\0Text\0", 16);
+    legacyTxt.insert(legacyTxt.end(), legacyTxtStrings.begin(), legacyTxtStrings.end());
+    patchU32(legacyTxt, 0, legacyTxt.size());
+    save(temp, legacyTxt);
+    const auto legacyTxtListing = liarsoft::decompileGsc(temp.string());
+    if (!contains(legacyTxtListing, "*TXT 0 123 0 0 \"\" \"Text\" 1")) {
+        std::cerr << "Legacy TXT null name was decoded as string index zero" << std::endl;
+        return 1;
+    }
+
     std::vector<uint8_t> earlyModern(36, 0), earlyCode;
     appendU16(earlyCode, 38); appendU32(earlyCode, 1); appendU32(earlyCode, 2); appendU32(earlyCode, 3);
     appendU16(earlyCode, 105); appendU32(earlyCode, 4); appendU16(earlyCode, 8);

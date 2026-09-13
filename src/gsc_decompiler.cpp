@@ -701,9 +701,12 @@ std::string sourceInstruction(const ParsedGsc& gsc,
     }
     for (size_t i = 0; i < instruction.operands.size(); ++i) {
         out << ' ';
-        if (isStringOperand(instruction.opcode, i))
-            out << quoteString(gsc.string(static_cast<size_t>(instruction.operands[i]),
-                                          encoding));
+        if (isStringOperand(instruction.opcode, i)) {
+            const auto stringIndex = static_cast<size_t>(instruction.operands[i]);
+            // TXT uses zero as the sentinel for an absent speaker/name string.
+            out << quoteString(instruction.opcode == 81 && i == 4 && stringIndex == 0
+                ? "" : gsc.string(stringIndex, encoding));
+        }
         else if (isCodeTarget(instruction.opcode, i))
             out << "L_" << hex6(static_cast<size_t>(instruction.operands[i]));
         else if (instruction.kinds[i] == 'E')
