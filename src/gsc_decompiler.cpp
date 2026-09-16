@@ -66,6 +66,8 @@ constexpr const char* RAW_END = ";@gsc-raw-end";
 constexpr const char* BYTE_FORMAT = ";@gsc-byte-format ";
 constexpr const char* TEXT_ENCODING = ";@gsc-text-encoding ";
 constexpr const char* INSTRUCTION_SCHEMA = ";@gsc-schema ";
+constexpr const char* TRAILER = ";@gsc-trailer";
+constexpr const char* TRAILER_HEADER = ";@gsc-trailer-header";
 
 enum class InstructionSchema { PreCodeX, Early, RScript18, RScript19, Modern };
 
@@ -106,6 +108,44 @@ uint8_t hexDigit(char value) {
     if (value >= 'a' && value <= 'f') return static_cast<uint8_t>(value - 'a' + 10);
     if (value >= 'A' && value <= 'F') return static_cast<uint8_t>(value - 'A' + 10);
     throw std::runtime_error("invalid hexadecimal digit in GSC metadata");
+}
+
+std::string hexString(const std::vector<uint8_t>& data) {
+    static constexpr char HEX[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(data.size() * 2);
+    for (const auto byte : data) {
+        result.push_back(HEX[byte >> 4]);
+        result.push_back(HEX[byte & 0x0f]);
+    }
+    return result;
+}
+
+/// Splits a `;@gsc-...` metadata line into its prefix and its payload. The
+/// payload may be empty, but a prefix longer than the keyword is rejected so
+/// that `;@gsc-trailer-header` is never mistaken for `;@gsc-trailer`.
+bool matchMetadata(const std::string& line, const char* keyword, std::string& payload) {
+    const size_t length = std::char_traits<char>::length(keyword);
+    if (line.compare(0, length, keyword) != 0) return false;
+    if (line.size() > length && !std::isspace(static_cast<unsigned char>(line[length])))
+        return false;
+    payload = line.size() > length ? line.substr(length) : std::string();
+    return true;
+}
+
+std::vector<uint8_t> parseHexBytes(const std::string& payload, const char* keyword) {
+    std::istringstream fields(payload);
+    std::string text, extra;
+    if ((fields >> text) && (fields >> extra))
+        throw std::runtime_error(std::string("malformed ") + keyword + " metadata");
+    if (text.size() % 2)
+        throw std::runtime_error(std::string("odd ") + keyword + " payload length");
+    std::vector<uint8_t> result;
+    result.reserve(text.size() / 2);
+    for (size_t i = 0; i < text.size(); i += 2)
+        result.push_back(static_cast<uint8_t>((hexDigit(text[i]) << 4) |
+                                              hexDigit(text[i + 1])));
+    return result;
 }
 
 void writeU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
@@ -353,6 +393,12 @@ public:
     fs::path path;
     std::vector<uint8_t> code;
 
+    /// Bytes between the end of Section D and FileLength (modern headers only).
+    std::vector<uint8_t> trailer;
+    /// Header words [7] and [8], which size the two tables inside the trailer.
+    uint32_t trailerTableSize = 4;
+    uint32_t trailerNameSize = 1;
+
     InstructionSchema schema() const { return instructionSchema; }
     size_t headerSize() const { return earlyVmEncoding ? 28 : 36; }
 
@@ -473,7 +519,13 @@ private:
         strings = section(data, pos, header[4]);
         indexB = section(data, pos, header[5]);
         indexC = section(data, pos, header[6] * 2ull);
-        section(data, pos, header[0] - pos); // optional debug data
+        // Everything up to FileLength is the trailer: two debug tables sized by
+        // header[7] plus a names blob sized by header[8]. Compiled scripts
+        // carry an empty one, but the shipped data also names real symbols
+        // (e.g. "scmode", "REP001"), so it is carried into the TSC verbatim.
+        trailerTableSize = header[7];
+        trailerNameSize = header[8];
+        trailer = section(data, pos, header[0] - pos);
         validateStringOffsets();
     }
 
@@ -754,6 +806,8 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     size_t headerSize = 0;
     std::string encoding = fallbackEncoding;
     std::optional<InstructionSchema> selectedSchema;
+    std::optional<std::vector<uint8_t>> trailer;
+    std::optional<std::pair<uint32_t, uint32_t>> trailerHeader;
     std::vector<SourceInstruction> instructions;
     std::vector<SourceDataBlock> dataBlocks;
     std::unordered_map<std::string, size_t> labels;
@@ -784,6 +838,24 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
             if (selectedSchema) throw std::runtime_error("duplicate ;@gsc-schema metadata");
             selectedSchema = parseSchemaName(
                 line.substr(std::char_traits<char>::length(INSTRUCTION_SCHEMA)));
+            continue;
+        }
+        // Checked before `;@gsc-trailer`, whose keyword it extends.
+        std::string payload;
+        if (matchMetadata(line, TRAILER_HEADER, payload)) {
+            if (trailerHeader) throw std::runtime_error("duplicate ;@gsc-trailer-header metadata");
+            std::istringstream fields(payload);
+            std::string first, second, extra;
+            if (!(fields >> first >> second) || (fields >> extra))
+                throw std::runtime_error("line " + std::to_string(lineNo) +
+                                         ": malformed ;@gsc-trailer-header metadata");
+            trailerHeader = std::make_pair(parseOperand(first, 'D', lineNo),
+                                           parseOperand(second, 'D', lineNo));
+            continue;
+        }
+        if (matchMetadata(line, TRAILER, payload)) {
+            if (trailer) throw std::runtime_error("duplicate ;@gsc-trailer metadata");
+            trailer = parseHexBytes(payload, TRAILER);
             continue;
         }
         const auto tokens = tokenizeSource(line, lineNo);
@@ -875,6 +947,8 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     if (!selectedSchema) throw std::runtime_error("TSC has no ;@gsc-schema metadata");
     if (headerSize == 28 && *selectedSchema == InstructionSchema::Modern)
         throw std::runtime_error("modern schema requires a 36-byte GSC header");
+    if (headerSize == 28 && (trailer || trailerHeader))
+        throw std::runtime_error("the 28-byte GSC format has no trailer region");
 
     std::vector<std::vector<uint8_t>> strings(1);
     std::unordered_map<std::string, uint32_t> stringIndices{{"", 0}};
@@ -951,10 +1025,15 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
         data.push_back(static_cast<uint8_t>(value));
         data.push_back(static_cast<uint8_t>(value >> 8));
     }
-    const size_t modernTrailerSize = headerSize == 36 ? 9 : 0;
+    // The standard CodeX compiler writes two empty four-byte debug tables
+    // followed by a one-byte names terminator; `;@gsc-trailer` replaces that
+    // default with the exact bytes of the original file.
+    const std::vector<uint8_t> trailing = trailer
+        ? *trailer
+        : std::vector<uint8_t>(headerSize == 36 ? 9 : 0, 0);
     const uint64_t physicalSize = headerSize + code.size() + stringIndex.size() +
                                   stringPool.size() + dataIndex.size() + data.size() +
-                                  modernTrailerSize;
+                                  trailing.size();
     // The 28-byte format's first field counts Section D in 16-bit words,
     // although the file stores those words as two bytes each.
     const uint64_t declaredSize = headerSize == 28
@@ -971,17 +1050,15 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     writeU32(result, 20, static_cast<uint32_t>(dataIndex.size()));
     writeU32(result, 24, static_cast<uint32_t>(dataWords.size()));
     if (headerSize == 36) {
-        // The standard CodeX compiler writes two empty four-byte debug tables
-        // followed by a one-byte names terminator.
-        writeU32(result, 28, 4);
-        writeU32(result, 32, 1);
+        writeU32(result, 28, trailerHeader ? trailerHeader->first : 4);
+        writeU32(result, 32, trailerHeader ? trailerHeader->second : 1);
     }
     result.insert(result.end(), code.begin(), code.end());
     result.insert(result.end(), stringIndex.begin(), stringIndex.end());
     result.insert(result.end(), stringPool.begin(), stringPool.end());
     result.insert(result.end(), dataIndex.begin(), dataIndex.end());
     result.insert(result.end(), data.begin(), data.end());
-    result.insert(result.end(), modernTrailerSize, 0);
+    result.insert(result.end(), trailing.begin(), trailing.end());
     return result;
 }
 
@@ -1000,6 +1077,17 @@ static std::string decompileListing(const std::string& inputPath,
             schemaName(gsc.schema()),
         "; generated from " + gsc.path.filename().string(),
     };
+    if (gsc.headerSize() == 36) {
+        static const std::vector<uint8_t> emptyTrailer(9, 0);
+        if (gsc.trailerTableSize != 4 || gsc.trailerNameSize != 1) {
+            lines.push_back(std::string(TRAILER_HEADER) + " " +
+                            std::to_string(gsc.trailerTableSize) + " " +
+                            std::to_string(gsc.trailerNameSize));
+        }
+        if (gsc.trailer != emptyTrailer) {
+            lines.push_back(std::string(TRAILER) + " " + hexString(gsc.trailer));
+        }
+    }
     for (size_t index = 0; index < gsc.dataBlockCount(); ++index) {
         std::ostringstream line;
         const auto values = gsc.dataBlock(index);

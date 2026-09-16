@@ -1,6 +1,7 @@
 #include "gsc_decompiler.h"
 
 #include <cstdio>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -23,6 +24,15 @@ uint32_t readU32(const std::vector<uint8_t>& d, size_t p) {
 void save(const std::filesystem::path& p, const std::vector<uint8_t>& d) {
     std::ofstream out(p, std::ios::binary);
     out.write(reinterpret_cast<const char*>(d.data()), d.size());
+}
+std::vector<uint8_t> load(const std::filesystem::path& p) {
+    std::ifstream in(p, std::ios::binary);
+    in.seekg(0, std::ios::end);
+    const std::streamoff size = in.tellg();
+    in.seekg(0, std::ios::beg);
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    in.read(reinterpret_cast<char*>(data.data()), size);
+    return data;
 }
 bool contains(const std::string& text, const std::string& expected) {
     if (text.find(expected) != std::string::npos) return true;
@@ -98,7 +108,8 @@ int main(int argc, char** argv) {
         !contains(listing, "*font 40 400 250 0 0 \"Font Text\"") ||
         !contains(listing, "*gosub 99 \"select\" 8031 8032 0 0 0 0 0 0 0 0") ||
         !contains(listing, "*flagset 1 2 3") || !contains(listing, "*dynsel 1000 4") ||
-        !contains(listing, "*map 22 23 24") || !contains(listing, "*end")) return 1;
+        !contains(listing, "*map 22 23 24") || !contains(listing, "*end") ||
+        listing.find(";@gsc-trailer") != std::string::npos) return 1;
     if (liarsoft::restoreGscFromTsc(listing) != modern) {
         std::cerr << "Canonical modern GSC did not round-trip" << std::endl; return 1;
     }
@@ -141,6 +152,59 @@ int main(int argc, char** argv) {
             readU32(legacyDataGsc, 24)) {
         std::cerr << "Legacy declared size did not count Section D in words" << std::endl;
         return 1;
+    }
+
+    // The trailer (two debug tables plus a names blob) and the two header words
+    // that size it must be carried into the TSC and restored verbatim.
+    const auto makeEndOnlyGsc = [](uint32_t tableSize, uint32_t nameSize,
+                                   const std::vector<uint8_t>& trailer) {
+        std::vector<uint8_t> gsc(36, 0), code;
+        appendU16(code, 8);
+        patchU32(gsc, 4, 36); patchU32(gsc, 8, code.size());
+        patchU32(gsc, 12, 4); patchU32(gsc, 16, 1);
+        patchU32(gsc, 28, tableSize); patchU32(gsc, 32, nameSize);
+        gsc.insert(gsc.end(), code.begin(), code.end());
+        appendU32(gsc, 0); gsc.push_back(0);
+        gsc.insert(gsc.end(), trailer.begin(), trailer.end());
+        patchU32(gsc, 0, gsc.size());
+        return gsc;
+    };
+    const std::vector<uint8_t> namesTrailer = {
+        0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x10, 0x0b, 0x00, 0x00, 0x00, 's', 'c', 'm', 'o', 'd', 'e', 0x00};
+    const auto trailered = makeEndOnlyGsc(8, 8, namesTrailer);
+    save(temp, trailered);
+    const auto traileredListing = liarsoft::decompileGsc(temp.string());
+    if (!contains(traileredListing, ";@gsc-trailer-header 8 8") ||
+        !contains(traileredListing,
+                  ";@gsc-trailer 000000000100000000000000100b00000073636d6f646500") ||
+        liarsoft::restoreGscFromTsc(traileredListing) != trailered) {
+        std::cerr << "Debug tables and names were not preserved verbatim" << std::endl;
+        return 1;
+    }
+
+    const std::vector<uint8_t> oddTrailer = {0x00, 0x00, 0x00, 0x00, 0xe0, 0x66,
+                                             0xa7, 0x00, 0x00};
+    const auto oddTrailered = makeEndOnlyGsc(4, 1, oddTrailer);
+    save(temp, oddTrailered);
+    const auto oddListing = liarsoft::decompileGsc(temp.string());
+    if (!contains(oddListing, ";@gsc-trailer 00000000e066a70000") ||
+        oddListing.find(";@gsc-trailer-header") != std::string::npos ||
+        liarsoft::restoreGscFromTsc(oddListing) != oddTrailered) {
+        std::cerr << "Non-standard trailer was not preserved verbatim" << std::endl;
+        return 1;
+    }
+
+    bool trailerRejected = false;
+    try {
+        liarsoft::restoreGscFromTsc(
+            ";@gsc-byte-format legacy-28\n;@gsc-text-encoding CP932\n"
+            ";@gsc-schema early\n;@gsc-trailer 0000\n*end\n");
+    } catch (const std::exception&) {
+        trailerRejected = true;
+    }
+    if (!trailerRejected) {
+        std::cerr << "Legacy GSC accepted a trailer region" << std::endl; return 1;
     }
 
     std::vector<uint8_t> legacy(28, 0);
@@ -216,6 +280,25 @@ int main(int argc, char** argv) {
                 (headerSize == 36 && rebuilt.size() != readU32(rebuilt, 0))) {
                 std::cerr << "Invalid rebuilt declared size: " << item.path() << std::endl;
                 return 1;
+            }
+            const auto original = load(item.path());
+            if (headerSize == 36) {
+                // The trailer, and the two header words that size it, describe
+                // compiler-emitted data that the TSC carries verbatim.
+                const auto trailerOf = [](const std::vector<uint8_t>& data) {
+                    const size_t core = 36ull + readU32(data, 8) + readU32(data, 12) +
+                                        readU32(data, 16) + readU32(data, 20) +
+                                        readU32(data, 24) * 2ull;
+                    const size_t end = readU32(data, 0);
+                    return std::vector<uint8_t>(data.begin() + static_cast<ptrdiff_t>(core),
+                                                data.begin() + static_cast<ptrdiff_t>(end));
+                };
+                if (readU32(original, 28) != readU32(rebuilt, 28) ||
+                    readU32(original, 32) != readU32(rebuilt, 32) ||
+                    trailerOf(original) != trailerOf(rebuilt)) {
+                    std::cerr << "Trailer was not preserved: " << item.path() << std::endl;
+                    return 1;
+                }
             }
             save(temp, rebuilt);
             const auto second = liarsoft::decompileGsc(temp.string());

@@ -198,10 +198,24 @@ TSC 以 `*vm 0xHHHH ...` 保存完整可编译形式；下表给出高位族的�
 | `0xE***` | 取模 `%` | 2194 |
 | `0xF***` | 装载/移动 `mov` | 385805 |
 
+## TSC 元数据行
+
+| 行 | 含义 |
+|---|---|
+| `;@gsc-byte-format modern-36` / `legacy-28` | 头部长度与 Section D 的声明规则 |
+| `;@gsc-text-encoding <enc>` | 字符串正文的编码 |
+| `;@gsc-schema <name>` | 指令布局（`pre-codex`/`early`/`rscript18`/`rscript19`/`modern`） |
+| `;@gsc-trailer <hex>` | Section D 之后的全部尾部字节（两张调试表 + 名字表），原样写回；缺省为标准空的 9 字节 |
+| `;@gsc-trailer-header <u7> <u8>` | 头部第 7、8 个字，即尾部两张调试表与名字表的长度来源；缺省为 `4 1` |
+| `;@gsc-raw-v1 …` | 无法识别布局时的整文件原始回退 |
+
+霞外籠逗留記有 12 个脚本的尾部是 24 字节、含符号名 `scmode`（`u7=8 u8=8`），另有 1 个尾部为 177 字节全长零填充（`u7=4 u8=1`）；Evermaiden、Jeanne、Albatross、Khime、CNMI、Sevenbridge 的样本里也能看到 `REP001`、`TOP1`、`omake` 等名字表。这些数据不属于指令流，只有 `;@gsc-trailer*` 两行能保证它们不被回编吞掉。
+
 ## 当前验证范围
 
 - 兼容性资料中的 2043 个 GSC，以及已安装 CannonBall 的 626 个 GSC，均通过完整往返测试。
 - 往返测试比较重新反编译后的指令、标签、字符串和数据块，确保结构与执行语义一致。
-- 字符串按内容去重并重排索引，36 字节格式的调试区段也会规范化，因此不承诺逐字节相同。
+- 字符串按内容去重并重排索引，因此字符串编号不承诺逐字节相同；但尾部调试/名字表及其
+  两个头部长度字已逐字节往返，样本中 1454 个 36 字节头文件全部通过该检查。
 - 字符串引用已逐一核对：除重复项合并外，原文件的每个字符串都保留在回编结果中，且每条字符串引用解析出的文字不变（`*gosub` 的子程序名即由此确认）。
 - 样本来源包括 Evermaiden、Khime、Albatross、Forest、Houkago、Sevenbridge、Cannonball、霞外籠逗留記、CNMI、Jeanne。

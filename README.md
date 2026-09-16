@@ -139,8 +139,13 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 `*命令`、`*vm`、标签、`*datablock` 和字符串字面量组成，不保存原代码区或原字符串表。
 回编时会重新编码字符串，按内容去重，并重算字符串索引、偏移、代码、数据块及完整头部。
 因此生成结果保证结构和执行语义一致，但调试表、字符串编号和字节排列不保证与原文件完全
-相同。28 字节格式按旧引擎规则以 16 位字数计算 Section D 的声明长度；36 字节格式
-会生成标准空调试表和名字表终止符。
+相同。28 字节格式按旧引擎规则以 16 位字数计算 Section D 的声明长度；36 字节格式在默认
+情况下生成标准空调试表和名字表终止符。
+原文件若带有非空的调试/名字表（如 `scmode`、`REP001`），反编译会写出
+`;@gsc-trailer <hex>`（Section D 之后的全部尾部字节）以及
+`;@gsc-trailer-header <u7> <u8>`（头部第 7、8 个字，用于确定尾部两张表的长度，仅在非
+标准值 4/1 时出现），回编时原样写回；没有这两行时按标准空调试表处理。28 字节格式没有
+尾部区域，出现该元数据会直接报错。
 只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注无法反编译。
 `*TXT`/`*TXA` 的字符串参数、`*font` 的文字、`*folder` 路径、`*gosub` 的子程序名、
 选择题文字和字符串操作都直接出现在正文中。普通注释不参与生成；可以修改、新增、删除和重排完整指令，但标签及
@@ -317,7 +322,12 @@ offset, rebuilds code and data blocks, and writes the complete 28- or 36-byte
 container. The result is structurally and semantically equivalent; debug tables,
 string numbering, and byte layout need not be identical to the input. Legacy
 containers count Section D in 16-bit words when calculating the declared size;
-modern containers receive the standard empty debug tables and names terminator. Files with unknown
+modern containers receive the standard empty debug tables and names terminator.
+Files whose trailer (debug tables plus names blob, e.g. `scmode` or `REP001`)
+is not the standard empty one record it as `;@gsc-trailer <hex>` and, when the
+sizing header words differ from the standard 4/1, `;@gsc-trailer-header <u7> <u8>`;
+recompilation writes both back verbatim, while the 28-byte format rejects them.
+Files with unknown
 instruction layouts retain the `;@gsc-raw-v1` fallback and are explicitly marked
 unavailable for decompilation. Older structured TSC files are unsupported and
 must be regenerated from their original GSC files. TXT/TXA, font, folder,
