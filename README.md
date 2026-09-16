@@ -142,8 +142,8 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 相同。28 字节格式按旧引擎规则以 16 位字数计算 Section D 的声明长度；36 字节格式
 会生成标准空调试表和名字表终止符。
 只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注无法反编译。
-`*TXT`/`*TXA` 的字符串参数、`*font` 的文字、`*folder` 路径、选择题文字和字符串操作
-都直接出现在正文中。普通注释不参与生成；可以修改、新增、删除和重排完整指令，但标签及
+`*TXT`/`*TXA` 的字符串参数、`*font` 的文字、`*folder` 路径、`*gosub` 的子程序名、
+选择题文字和字符串操作都直接出现在正文中。普通注释不参与生成；可以修改、新增、删除和重排完整指令，但标签及
 各指令参数仍须符合所记录的 RScript schema。旧版结构化 TSC 不再兼容，须从原 GSC 重生成。
 与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
 封包会先将这种 TSC 恢复或更新为 GSC。
@@ -321,8 +321,8 @@ modern containers receive the standard empty debug tables and names terminator. 
 instruction layouts retain the `;@gsc-raw-v1` fallback and are explicitly marked
 unavailable for decompilation. Older structured TSC files are unsupported and
 must be regenerated from their original GSC files. TXT/TXA, font, folder,
-selection, and string-operation text appears directly in the source;
-editing it rebuilds the string table as well.
+gosub subroutine names, selection, and string-operation text appears directly
+in the source; editing it rebuilds the string table as well.
 Ordinary comments are ignored. Commands may be inserted, deleted, or reordered
 as long as labels and operands remain valid for the recorded RScript schema.
 Combined with `-R --unpack-only`, it generates `.tsc` throughout directory

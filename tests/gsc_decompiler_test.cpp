@@ -65,15 +65,19 @@ int main(int argc, char** argv) {
     appendU16(code, 141); appendU32(code, 18); appendU32(code, 19);
     appendU16(code, 142); appendU32(code, 20); appendU32(code, 21);
     appendU16(code, 220); appendU32(code, 22); appendU32(code, 23); appendU32(code, 24);
+    appendU16(code, 15);
+    appendU32(code, 99); appendU32(code, 4);
+    for (int i = 0; i < 10; ++i) appendU32(code, i == 0 ? 8031 : (i == 1 ? 8032 : 0));
     appendU16(code, 8);
 
     std::vector<uint8_t> modern(36, 0);
-    patchU32(modern, 4, 36); patchU32(modern, 8, code.size()); patchU32(modern, 12, 16);
-    const std::string strings("\0Name\0Text\0Font Text\0", 21);
+    patchU32(modern, 4, 36); patchU32(modern, 8, code.size()); patchU32(modern, 12, 20);
+    const std::string strings("\0Name\0Text\0Font Text\0select\0", 28);
     patchU32(modern, 16, strings.size());
     patchU32(modern, 28, 4); patchU32(modern, 32, 1);
     modern.insert(modern.end(), code.begin(), code.end());
     appendU32(modern, 0); appendU32(modern, 1); appendU32(modern, 6); appendU32(modern, 11);
+    appendU32(modern, 21);
     modern.insert(modern.end(), strings.begin(), strings.end());
     modern.insert(modern.end(), 9, 0);
     patchU32(modern, 0, modern.size());
@@ -92,6 +96,7 @@ int main(int argc, char** argv) {
         !contains(listing, "*jz L_000032") ||
         !contains(listing, "*TXT 0 123 0 0 \"Name\" \"Text\" 0") ||
         !contains(listing, "*font 40 400 250 0 0 \"Font Text\"") ||
+        !contains(listing, "*gosub 99 \"select\" 8031 8032 0 0 0 0 0 0 0 0") ||
         !contains(listing, "*flagset 1 2 3") || !contains(listing, "*dynsel 1000 4") ||
         !contains(listing, "*map 22 23 24") || !contains(listing, "*end")) return 1;
     if (liarsoft::restoreGscFromTsc(listing) != modern) {

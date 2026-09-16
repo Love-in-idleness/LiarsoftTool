@@ -393,6 +393,12 @@ private:
                 stringBytes(static_cast<size_t>(instruction.operands[1]));
                 for (size_t i = 7; i <= 11; ++i)
                     stringBytes(static_cast<size_t>(instruction.operands[i]));
+            } else if (instruction.opcode == 15) {
+                // Only the schemas that give gosub a second operand name a
+                // subroutine by string; the early layouts take a bare script
+                // number, which is not a string reference.
+                if (instruction.operands.size() > 1)
+                    stringBytes(static_cast<size_t>(instruction.operands[1]));
             } else if (instruction.opcode == 32) {
                 stringBytes(static_cast<size_t>(instruction.operands[5]));
             } else if (instruction.opcode == 81) {
@@ -672,6 +678,13 @@ InstructionSchema parseSchemaName(const std::string& value) {
 }
 
 bool isStringOperand(uint16_t opcode, size_t index) {
+    // gosub carries the name of the shared subroutine it enters as a string
+    // reference: every shipped script that calls the choice helper encodes the
+    // string "select" at this position, so the operand has to be pooled and
+    // renumbered like any other string reference. Treating it as a plain
+    // number drops the string from the rebuilt table and leaves the code
+    // pointing at a stale index.
+    if (opcode == 15) return index == 1;
     if (opcode == 14) return index == 1 || (index >= 7 && index <= 11);
     if (opcode == 32) return index == 5;
     if (opcode == 81) return index == 4 || index == 5;
