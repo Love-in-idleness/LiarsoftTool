@@ -109,7 +109,8 @@ int main(int argc, char** argv) {
         !contains(listing, "*gosub 99 \"select\" 8031 8032 0 0 0 0 0 0 0 0") ||
         !contains(listing, "*flagset 1 2 3") || !contains(listing, "*dynsel 1000 4") ||
         !contains(listing, "*map 22 23 24") || !contains(listing, "*end") ||
-        listing.find(";@gsc-trailer") != std::string::npos) return 1;
+        listing.find(";@gsc-trailer") != std::string::npos ||
+        listing.find(";@gsc-text-encoding") != std::string::npos) return 1;
     if (liarsoft::restoreGscFromTsc(listing) != modern) {
         std::cerr << "Canonical modern GSC did not round-trip" << std::endl; return 1;
     }
@@ -125,6 +126,32 @@ int main(int argc, char** argv) {
     if (!contains(editedListing, changedTxt) || !contains(editedListing, "\"Edited Font\"") ||
         editedGsc == modern) {
         std::cerr << "TSC body edits were not compiled into GSC" << std::endl; return 1;
+    }
+
+    // The output encoding is chosen by the caller. A stale
+    // `;@gsc-text-encoding` line left over from an older TSC must be ignored,
+    // and text the requested encoding cannot represent must fail loudly rather
+    // than being written as '?'.
+    const std::string staleEncoding =
+        ";@gsc-byte-format modern-36\n;@gsc-text-encoding GBK\n;@gsc-schema modern\n"
+        "*TXT 0 0 0 0 \"\" \"\xe8\xb6\x8a\xe8\xbf\x87\xe5\x89\x8d\xe6\x96\xb9\" 1\n*end\n";
+    const auto gbkGsc = liarsoft::restoreGscFromTsc(staleEncoding, "GBK");
+    save(temp, gbkGsc);
+    const auto gbkListing = liarsoft::decompileGsc(temp.string(), "GBK");
+    if (gbkListing.find(";@gsc-text-encoding") != std::string::npos ||
+        !contains(gbkListing, "\"\xe8\xb6\x8a\xe8\xbf\x87\xe5\x89\x8d\xe6\x96\xb9\"")) {
+        std::cerr << "Encoding metadata was emitted or the text was not preserved"
+                  << std::endl; return 1;
+    }
+    bool encodingRejected = false;
+    try {
+        liarsoft::restoreGscFromTsc(staleEncoding, "CP932");
+    } catch (const std::exception&) {
+        encodingRejected = true;
+    }
+    if (!encodingRejected) {
+        std::cerr << "Unencodable text was silently written instead of failing" << std::endl;
+        return 1;
     }
 
     const std::string dataSource =
@@ -262,18 +289,21 @@ int main(int argc, char** argv) {
         liarsoft::restoreGscFromTsc(unknownListing) != unknown) {
         std::cerr << "Unknown dialect did not use exact raw fallback" << std::endl; return 1;
     }
-    if (argc == 2) {
+    if (argc >= 2) {
+        // The requested encoding is authoritative, so the corpus mode takes it
+        // as an optional second argument (CP932 when omitted).
+        const std::string corpusEncoding = argc >= 3 ? argv[2] : "CP932";
         size_t checked = 0;
         for (const auto& item : std::filesystem::recursive_directory_iterator(argv[1])) {
             if (!item.is_regular_file() || item.path().extension() != ".gsc") continue;
-            const auto first = liarsoft::decompileGsc(item.path().string());
+            const auto first = liarsoft::decompileGsc(item.path().string(), corpusEncoding);
             if (first.find(";@gsc-raw-v1") != std::string::npos ||
                 first.find(";@gsc-code") != std::string::npos ||
                 first.find(";@gsc-string") != std::string::npos) {
                 std::cerr << "Non-structured corpus result: " << item.path() << std::endl;
                 return 1;
             }
-            const auto rebuilt = liarsoft::restoreGscFromTsc(first);
+            const auto rebuilt = liarsoft::restoreGscFromTsc(first, corpusEncoding);
             const auto headerSize = readU32(rebuilt, 4);
             if ((headerSize == 28 && rebuilt.size() - readU32(rebuilt, 0) !=
                                       readU32(rebuilt, 24)) ||
@@ -301,14 +331,15 @@ int main(int argc, char** argv) {
                 }
             }
             save(temp, rebuilt);
-            const auto second = liarsoft::decompileGsc(temp.string());
+            const auto second = liarsoft::decompileGsc(temp.string(), corpusEncoding);
             if (normalizeListing(first) != normalizeListing(second)) {
                 std::cerr << "Semantic round-trip mismatch: " << item.path() << std::endl;
                 return 1;
             }
             ++checked;
         }
-        std::cout << "Checked " << checked << " corpus GSC files" << std::endl;
+        std::cout << "Checked " << checked << " corpus GSC files (" << corpusEncoding
+                  << ")" << std::endl;
     }
     std::remove(temp.string().c_str());
     return 0;

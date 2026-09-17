@@ -147,6 +147,11 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 标准值 4/1 时出现），回编时原样写回；没有这两行时按标准空调试表处理。28 字节格式没有
 尾部区域，出现该元数据会直接报错。
 只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注无法反编译。
+TSC 正文始终是 UTF-8，且**不再记录**字符串编码：`--gsc-to-tsc` 的 `-e` 决定按何种编码
+解读原 GSC，`tsc → gsc` 的 `-e` 决定写出何种编码的 GSC。因此把日文 TSC 翻译成中文后，
+回编时用 `-e gbk` 即可得到中文版引擎需要的 GBK 文件；忘记指定编码时（默认 CP932），
+无法表示的文字会**直接报错**，而不是悄悄写成 `?`。旧 TSC 里遗留的 `;@gsc-text-encoding`
+行会被忽略（编码始终以 `-e` 为准）。
 `*TXT`/`*TXA` 的字符串参数、`*font` 的文字、`*folder` 路径、`*gosub` 的子程序名、
 选择题文字和字符串操作都直接出现在正文中。普通注释不参与生成；可以修改、新增、删除和重排完整指令，但标签及
 各指令参数仍须符合所记录的 RScript schema。旧版结构化 TSC 不再兼容，须从原 GSC 重生成。
@@ -330,7 +335,13 @@ recompilation writes both back verbatim, while the 28-byte format rejects them.
 Files with unknown
 instruction layouts retain the `;@gsc-raw-v1` fallback and are explicitly marked
 unavailable for decompilation. Older structured TSC files are unsupported and
-must be regenerated from their original GSC files. TXT/TXA, font, folder,
+must be regenerated from their original GSC files. The TSC body is always UTF-8
+and no longer records a string encoding: `-e` selects how the source GSC is read
+when decompiling and which encoding the rebuilt GSC is written in. A Japanese
+TSC can therefore be translated into Chinese and recompiled with `-e gbk` for a
+GBK-patched engine; when the requested encoding cannot represent a character the
+conversion fails with an error instead of silently writing `?`. A leftover
+`;@gsc-text-encoding` line in an older TSC is ignored. TXT/TXA, font, folder,
 gosub subroutine names, selection, and string-operation text appears directly
 in the source; editing it rebuilds the string table as well.
 Ordinary comments are ignored. Commands may be inserted, deleted, or reordered

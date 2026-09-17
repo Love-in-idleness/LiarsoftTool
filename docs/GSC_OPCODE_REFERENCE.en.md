@@ -230,11 +230,16 @@ each high-nibble family.
 | Line | Meaning |
 |---|---|
 | `;@gsc-byte-format modern-36` / `legacy-28` | Header length and the Section D declared-size rule |
-| `;@gsc-text-encoding <enc>` | Encoding of the string body |
 | `;@gsc-schema <name>` | Instruction layout (`pre-codex`/`early`/`rscript18`/`rscript19`/`modern`) |
 | `;@gsc-trailer <hex>` | Every trailing byte after Section D (the two debug tables plus the names blob), restored verbatim; defaults to the standard empty 9 bytes |
 | `;@gsc-trailer-header <u7> <u8>` | Header words 7 and 8, which size those tables and the names blob; defaults to `4 1` |
 | `;@gsc-raw-v1 …` | Whole-file raw fallback used when the instruction layout cannot be recognized |
+
+The TSC body is UTF-8 and does not record a string encoding: both reading a GSC
+with `--gsc-to-tsc` and writing one with `tsc → gsc` follow the command-line
+`-e` option (CP932 by default). A leftover `;@gsc-text-encoding` line in an
+older TSC is ignored, and a character the target encoding cannot represent is
+reported as an error instead of being written as `?`.
 
 Twelve scripts of 霞外籠逗留記 carry a 24-byte trailer naming the symbol
 `scmode` (`u7=8 u8=8`), and one carries a 177-byte all-zero trailer

@@ -45,7 +45,8 @@ static UINT codePageFromName(const std::string& name) {
 
 std::string convertEncoding(const std::string& input,
                             const std::string& fromEnc,
-                            const std::string& toEnc) {
+                            const std::string& toEnc,
+                            bool strict) {
     if (input.empty()) return {};
     const std::string canonicalFrom = normalizeEncodingName(fromEnc);
     const std::string canonicalTo = normalizeEncodingName(toEnc);
@@ -59,10 +60,17 @@ std::string convertEncoding(const std::string& input,
     MultiByteToWideChar(cpFrom, 0, input.data(), static_cast<int>(input.size()), wide.data(), wlen);
 
     // Convert UTF-16 → destination
-    int mlen = WideCharToMultiByte(cpTo, 0, wide.data(), wlen, nullptr, 0, nullptr, nullptr);
+    BOOL usedDefault = FALSE;
+    int mlen = WideCharToMultiByte(cpTo, WC_NO_BEST_FIT_CHARS, wide.data(), wlen, nullptr, 0,
+                                   nullptr, &usedDefault);
     if (mlen == 0) throw std::runtime_error("WideCharToMultiByte failed for " + canonicalTo);
     std::vector<char> multi(mlen);
-    WideCharToMultiByte(cpTo, 0, wide.data(), wlen, multi.data(), mlen, nullptr, nullptr);
+    usedDefault = FALSE;
+    WideCharToMultiByte(cpTo, WC_NO_BEST_FIT_CHARS, wide.data(), wlen, multi.data(), mlen,
+                        nullptr, &usedDefault);
+    if (strict && usedDefault)
+        throw std::runtime_error("text cannot be represented in " + canonicalTo +
+                                 ": some characters would become '?'");
 
     return std::string(multi.data(), mlen);
 }
@@ -73,7 +81,8 @@ std::string convertEncoding(const std::string& input,
 
 std::string convertEncoding(const std::string& input,
                             const std::string& fromEnc,
-                            const std::string& toEnc) {
+                            const std::string& toEnc,
+                            bool strict) {
     if (input.empty()) return {};
 
     const std::string canonicalFrom = normalizeEncodingName(fromEnc);
@@ -105,6 +114,13 @@ std::string convertEncoding(const std::string& input,
                 continue;
             }
             if (errno == EILSEQ || errno == EINVAL) {
+                if (strict) {
+                    const size_t bad = input.size() - inLeft;
+                    iconv_close(cd);
+                    throw std::runtime_error(
+                        "text cannot be represented in " + canonicalTo +
+                        ": invalid character at input byte " + std::to_string(bad));
+                }
                 output.append(outVec.data(), converted);
                 output += '?';
                 inBuf++;

@@ -64,7 +64,6 @@ constexpr const char* RAW_HEADER = ";@gsc-raw-v1 ";
 constexpr const char* RAW_CHUNK = ";@gsc-raw ";
 constexpr const char* RAW_END = ";@gsc-raw-end";
 constexpr const char* BYTE_FORMAT = ";@gsc-byte-format ";
-constexpr const char* TEXT_ENCODING = ";@gsc-text-encoding ";
 constexpr const char* INSTRUCTION_SCHEMA = ";@gsc-schema ";
 constexpr const char* TRAILER = ";@gsc-trailer";
 constexpr const char* TRAILER_HEADER = ";@gsc-trailer-header";
@@ -829,11 +828,8 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
             else throw std::runtime_error("unsupported GSC byte format: " + value);
             continue;
         }
-        if (line.compare(0, std::char_traits<char>::length(TEXT_ENCODING), TEXT_ENCODING) == 0) {
-            encoding = line.substr(std::char_traits<char>::length(TEXT_ENCODING));
-            if (encoding.empty()) throw std::runtime_error("empty GSC text encoding");
-            continue;
-        }
+        // A stale `;@gsc-text-encoding` line from an older TSC is ignored: the
+        // output encoding is always the one requested on the command line.
         if (line.compare(0, std::char_traits<char>::length(INSTRUCTION_SCHEMA), INSTRUCTION_SCHEMA) == 0) {
             if (selectedSchema) throw std::runtime_error("duplicate ;@gsc-schema metadata");
             selectedSchema = parseSchemaName(
@@ -953,7 +949,9 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     std::vector<std::vector<uint8_t>> strings(1);
     std::unordered_map<std::string, uint32_t> stringIndices{{"", 0}};
     auto addString = [&](const std::string& value) -> uint32_t {
-        const auto encoded = convertEncoding(value, "UTF-8", encoding);
+        // The requested encoding is authoritative; refuse to write '?' in place
+        // of characters it cannot represent.
+        const auto encoded = convertEncoding(value, "UTF-8", encoding, true);
         const auto found = stringIndices.find(encoded);
         if (found != stringIndices.end()) return found->second;
         if (strings.size() > std::numeric_limits<uint32_t>::max())
@@ -1072,7 +1070,6 @@ static std::string decompileListing(const std::string& inputPath,
     std::vector<std::string> lines = {
         std::string(BYTE_FORMAT) +
             (gsc.headerSize() == 28 ? "legacy-28" : "modern-36"),
-        std::string(TEXT_ENCODING) + encoding,
         std::string(INSTRUCTION_SCHEMA) +
             schemaName(gsc.schema()),
         "; generated from " + gsc.path.filename().string(),
@@ -1119,7 +1116,7 @@ std::string decompileGsc(const std::string& inputPath, const std::string& encodi
         std::string message = e.what();
         std::replace(message.begin(), message.end(), '\n', ' ');
         std::replace(message.begin(), message.end(), '\r', ' ');
-        return rawEnvelope(raw) + TEXT_ENCODING + encoding + "\n" +
+        return rawEnvelope(raw) +
                "; decompilation unavailable: " + message + "\n";
     }
 }

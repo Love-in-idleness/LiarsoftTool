@@ -203,11 +203,14 @@ TSC 以 `*vm 0xHHHH ...` 保存完整可编译形式；下表给出高位族的�
 | 行 | 含义 |
 |---|---|
 | `;@gsc-byte-format modern-36` / `legacy-28` | 头部长度与 Section D 的声明规则 |
-| `;@gsc-text-encoding <enc>` | 字符串正文的编码 |
 | `;@gsc-schema <name>` | 指令布局（`pre-codex`/`early`/`rscript18`/`rscript19`/`modern`） |
 | `;@gsc-trailer <hex>` | Section D 之后的全部尾部字节（两张调试表 + 名字表），原样写回；缺省为标准空的 9 字节 |
 | `;@gsc-trailer-header <u7> <u8>` | 头部第 7、8 个字，即尾部两张调试表与名字表的长度来源；缺省为 `4 1` |
 | `;@gsc-raw-v1 …` | 无法识别布局时的整文件原始回退 |
+
+TSC 正文是 UTF-8，且不记录字符串编码：读入 `--gsc-to-tsc` 与写出 `tsc → gsc` 都只以
+命令行的 `-e` 为准（默认 CP932）。旧 TSC 中遗留的 `;@gsc-text-encoding` 行会被忽略；
+目标编码无法表示某个字时会直接报错，而不会写成 `?`。
 
 霞外籠逗留記有 12 个脚本的尾部是 24 字节、含符号名 `scmode`（`u7=8 u8=8`），另有 1 个尾部为 177 字节全长零填充（`u7=4 u8=1`）；Evermaiden、Jeanne、Albatross、Khime、CNMI、Sevenbridge 的样本里也能看到 `REP001`、`TOP1`、`omake` 等名字表。这些数据不属于指令流，只有 `;@gsc-trailer*` 两行能保证它们不被回编吞掉。
 
