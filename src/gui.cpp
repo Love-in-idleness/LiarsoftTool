@@ -1,26 +1,13 @@
 #include "gui.h"
 #include <gtkmm.h>
 #include <iostream>
-#include <fstream>
 #include <thread>
-#include <mutex>
 #include <sstream>
-#include <filesystem>
 #include <algorithm>
+#include <utility>
 
-#include "gscfile.h"
-#include "gsc_decompiler.h"
-#include "transfile.h"
+#include "gui_common.h"
 #include "xflarchive.h"
-#include "wcg_decoder.h"
-#include "lim_decoder.h"
-#include "lwg_decoder.h"
-#include "wav_ogg.h"
-#include "exe_patch.h"
-#include "fileio.h"
-#include "stb_image.h"
-
-namespace fs = std::filesystem;
 
 // ---- Column record for the file list ----
 struct FileRecord : public Gtk::TreeModelColumnRecord {
@@ -44,84 +31,12 @@ static Gtk::CheckButton* g_gscToTscCheck = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
-static std::mutex g_mutex;
-static bool g_running = false;
 
-// ---- Helpers ----
-
-static std::string getExtension(const std::string& path) {
-    auto pos = path.rfind('.');
-    if (pos == std::string::npos) return "";
-    std::string ext = path.substr(pos);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    return ext;
-}
-
-static std::string replaceExtension(const std::string& path, const std::string& newExt) {
-    auto pos = path.rfind('.');
-    if (pos == std::string::npos) return path + newExt;
-    return path.substr(0, pos) + newExt;
-}
-
-static Glib::ustring guessOutput(const std::string& inputPath, const std::string& outDir,
-                                bool gscToTsc, const std::string& encoding) {
-    std::string ext = getExtension(inputPath);
-    fs::path in(inputPath);
-    fs::path base = outDir.empty() ? in.parent_path() : fs::path(outDir);
-    std::string stem = in.stem().string();
-
-    if (fs::is_directory(inputPath))
-        return (base / (in.filename().string() +
-                        (liarsoft::isLwgDirectory(inputPath) ? ".lwg" : ".xfl"))).string();
-    if (ext == ".gsc")      return (base / (stem + (gscToTsc ? ".tsc" : ".txt"))).string();
-    if (ext == ".tsc")      return (base / (stem + ".gsc")).string();
-    if (ext == ".txt")      return (base / (stem + ".gsc")).string();
-    if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
-    if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
-    if (ext == ".exe") {
-        const std::string suffix = encoding == "GBK" ? ".gbk.exe" :
-            encoding == "CP1251" ? ".cp1251.exe" : ".sjis.exe";
-        return (base / (stem + suffix)).string();
-    }
-    if (ext == ".wav")      return (base / (stem + ".ogg")).string();
-    if (ext == ".ogg")      return (base / (stem + ".wav")).string();
-    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
-        return (base / (stem + ".wcg")).string();
-    return (base / in.filename()).string();
-}
-
-static Glib::ustring guessType(const std::string& path, bool gscToTsc,
-                              const std::string& encoding) {
-    std::string ext = getExtension(path);
-    if (ext == ".gsc") return gscToTsc ? "GSC → TSC" : "GSC → TXT";
-    if (ext == ".tsc") return "TSC → GSC";
-    if (ext == ".txt") return "TXT → GSC";
-    if (ext == ".xfl") return "XFL → DIR";
-    if (ext == ".lwg") return "LWG → DIR";
-    if (ext == ".wcg") return "WCG → PNG";
-    if (ext == ".lim") return "LIM → PNG";
-    if (ext == ".exe") return "EXE → " + encoding;
-    if (ext == ".wav") return "WAV → OGG";
-    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
-        return "IMG → WCG";
-    if (fs::is_directory(path)) return "DIR → XFL/LWG";
-    return "?";
-}
-
-static bool isSupported(const std::string& path) {
-    std::string ext = getExtension(path);
-    return ext == ".gsc" || ext == ".tsc" || ext == ".txt" || ext == ".xfl" || ext == ".lwg" ||
-           ext == ".wcg" || ext == ".lim" || ext == ".wav" || ext == ".ogg" || ext == ".exe" ||
-           ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
-           fs::is_directory(path);
-}
-
-// ---- Forward declaration of the conversion worker ----
-static void convertOne(const std::string& inputPath,
-                       const std::string& outputPath,
-                       const std::string& encoding,
-                       const std::string& refPath,
-                       Gtk::TreeRow* row);
+struct ConversionJob {
+    std::string inputPath;
+    std::string outputPath;
+    Gtk::TreeModel::Path rowPath;
+};
 
 // ---- Add files to the list ----
 static void addFiles(const std::vector<std::string>& paths, const std::string& outDir) {
@@ -129,37 +44,34 @@ static void addFiles(const std::vector<std::string>& paths, const std::string& o
     const std::string encoding = g_encodingCombo ?
         g_encodingCombo->get_active_id() : "CP932";
     for (const auto& p : paths) {
-        if (!isSupported(p)) continue;
+        if (!liarsoft::gui::isSupported(p)) continue;
         auto row = *(g_store->append());
         row[g_columns.inputPath]  = p;
-        row[g_columns.outputPath] = guessOutput(p, outDir, gscToTsc, encoding);
-        row[g_columns.fileType]   = guessType(p, gscToTsc, encoding);
+        row[g_columns.outputPath] = liarsoft::gui::guessOutput(
+            p, outDir, gscToTsc, encoding);
+        row[g_columns.fileType]   = liarsoft::gui::guessType(
+            p, gscToTsc, encoding);
         row[g_columns.status]     = "Ready";
     }
 }
 
 // ---- Conversion worker thread ----
-static void convertAll(const std::string& encoding, const std::string& refPath,
+static void convertAll(std::vector<ConversionJob> jobs,
+                       const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
                        bool gscToTsc) {
-    g_running = true;
-    g_convertBtn->set_sensitive(false);
-
-    auto children = g_store->children();
-    int total = children.size();
+    int total = jobs.size();
     int done = 0;
     int totalWarnings = 0;
     std::vector<std::string> allWarnings;
+    const liarsoft::gui::ConversionOptions options{
+        encoding, refPath, recursive, gscToTsc, unpackOnly};
 
-    for (auto& child : children) {
-        if (!g_running) break;
-
-        std::string in  = static_cast<Glib::ustring>(child[g_columns.inputPath]);
-        std::string out = static_cast<Glib::ustring>(child[g_columns.outputPath]);
-        auto rowPath = g_store->get_path(child);
+    for (const auto& job : jobs) {
+        const std::string& in = job.inputPath;
+        const std::string& out = job.outputPath;
+        const auto& rowPath = job.rowPath;
         int processingNumber = done + 1;
-        std::string ext = getExtension(in);
-
         if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly,
                                             recursive)) {
             done++;
@@ -186,72 +98,7 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
         std::vector<std::string> warnings;
 
         try {
-            if (fs::is_directory(in)) {
-                if (unpackOnly)
-                    warnings = liarsoft::unpackDirectoryRecursively(in, encoding, gscToTsc);
-                else
-                    warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
-            } else if (ext == ".gsc") {
-                if (gscToTsc)
-                    liarsoft::decompileGscToFile(in, out, encoding);
-                else
-                    liarsoft::TransFile::fromGsc(
-                        liarsoft::GscFile::fromFile(in, encoding)).save(out);
-            } else if (ext == ".tsc") {
-                liarsoft::restoreGscFromTscFile(in, out, encoding);
-            } else if (ext == ".txt") {
-                std::string ref = refPath.empty() ? replaceExtension(in, ".gsc") : refPath;
-                auto trans = liarsoft::TransFile::fromFile(in);
-                auto gsc = trans.toGsc(ref, encoding);
-                gsc.save(out);
-            } else if (ext == ".xfl") {
-                auto arch = liarsoft::XflArchive::fromFile(in, encoding);
-                arch.extractToDirectory(out);
-                if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
-            } else if (ext == ".lwg") {
-                std::ifstream fs(in, std::ios::binary);
-                fs.seekg(0, std::ios::end);
-                size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
-                std::vector<uint8_t> raw(sz);
-                fs.read(reinterpret_cast<char*>(raw.data()), sz);
-                auto arch = liarsoft::LwgDecoder::decode(raw, encoding);
-                liarsoft::LwgDecoder::extractToDirectory(arch, out, encoding);
-                if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
-            } else if (ext == ".wcg") {
-                std::ifstream fs(in, std::ios::binary);
-                fs.seekg(0, std::ios::end);
-                size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
-                std::vector<uint8_t> raw(sz);
-                fs.read(reinterpret_cast<char*>(raw.data()), sz);
-                auto img = liarsoft::wcgDecode(raw);
-                liarsoft::wcgSavePng(img, out);
-            } else if (ext == ".lim") {
-                std::ifstream fs(in, std::ios::binary);
-                fs.seekg(0, std::ios::end);
-                size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
-                std::vector<uint8_t> raw(sz);
-                fs.read(reinterpret_cast<char*>(raw.data()), sz);
-                auto img = liarsoft::limDecode(raw);
-                liarsoft::limSavePng(img, out);
-            } else if (ext == ".wav") {
-                liarsoft::WavOggExtractor::extractToFile(in, out);
-            } else if (ext == ".ogg") {
-                std::string ref = refPath.empty() ? replaceExtension(in, ".wav") : refPath;
-                liarsoft::WavOggExtractor::embedToFile(in, ref, out);
-            } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
-                int w, h, ch;
-                unsigned char* px = stbi_load(in.c_str(), &w, &h, &ch, 4);
-                if (!px) throw std::runtime_error("Failed to load image");
-                auto wcgData = liarsoft::wcgEncode(px, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
-                stbi_image_free(px);
-                liarsoft::writeFileIfChanged(out, wcgData);
-            } else if (ext == ".exe") {
-                liarsoft::exeConvertFile(in, out, encoding);
-            } else {
-                throw std::runtime_error("Unsupported format");
-            }
+            warnings = liarsoft::gui::convert(in, out, options);
 
             for (const auto& warning : warnings)
                 std::cerr << "Warning: " << warning << std::endl;
@@ -304,7 +151,6 @@ static void convertAll(const std::string& encoding, const std::string& refPath,
             dialog.run();
         }
         g_convertBtn->set_sensitive(true);
-        g_running = false;
     });
 }
 
@@ -317,8 +163,10 @@ static void updateOutputPaths() {
     for (auto& child : g_store->children()) {
         const std::string input = static_cast<std::string>(
             static_cast<Glib::ustring>(child[g_columns.inputPath]));
-        child[g_columns.outputPath] = guessOutput(input, outDir, gscToTsc, encoding);
-        child[g_columns.fileType] = guessType(input, gscToTsc, encoding);
+        child[g_columns.outputPath] = liarsoft::gui::guessOutput(
+            input, outDir, gscToTsc, encoding);
+        child[g_columns.fileType] = liarsoft::gui::guessType(
+            input, gscToTsc, encoding);
     }
 }
 
@@ -337,7 +185,8 @@ static void onAddFiles(Gtk::Window* parent) {
     filterAll->add_pattern("*.txt");
     filterAll->add_pattern("*.xfl"); filterAll->add_pattern("*.lwg");
     filterAll->add_pattern("*.wcg"); filterAll->add_pattern("*.lim");
-    filterAll->add_pattern("*.wav");
+    filterAll->add_pattern("*.wav"); filterAll->add_pattern("*.ogg");
+    filterAll->add_pattern("*.exe");
     filterAll->add_pattern("*.png"); filterAll->add_pattern("*.jpg");
     filterAll->add_pattern("*.jpeg"); filterAll->add_pattern("*.bmp");
     dialog.add_filter(filterAll);
@@ -371,8 +220,9 @@ static void onChooseRef(Gtk::Window* parent) {
     dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
     dialog.add_button("Open", Gtk::RESPONSE_OK);
     auto filter = Gtk::FileFilter::create();
-    filter->set_name("GSC Files");
+    filter->set_name("GSC or WAV Files");
     filter->add_pattern("*.gsc");
+    filter->add_pattern("*.wav");
     dialog.add_filter(filter);
 
     if (dialog.run() == Gtk::RESPONSE_OK)
@@ -515,8 +365,16 @@ int runGui(int argc, char* argv[]) {
         bool packOnly = g_packOnlyCheck->get_active();
         bool unpackOnly = g_unpackOnlyCheck->get_active();
         bool gscToTsc = g_gscToTscCheck->get_active();
-        std::thread t(convertAll, enc, ref, recursive, packOnly, unpackOnly,
-                      gscToTsc);
+        std::vector<ConversionJob> jobs;
+        for (const auto& child : g_store->children()) {
+            jobs.push_back({
+                static_cast<Glib::ustring>(child[g_columns.inputPath]),
+                static_cast<Glib::ustring>(child[g_columns.outputPath]),
+                g_store->get_path(child)});
+        }
+        g_convertBtn->set_sensitive(false);
+        std::thread t(convertAll, std::move(jobs), enc, ref, recursive,
+                      packOnly, unpackOnly, gscToTsc);
         t.detach();
     });
 

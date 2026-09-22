@@ -11,27 +11,16 @@
 #include <string>
 #include <vector>
 #include <thread>
-#include <mutex>
-#include <filesystem>
+#include <memory>
 #include <algorithm>
 #include <cstring>
+#include <utility>
 
-#include "gscfile.h"
-#include "gsc_decompiler.h"
-#include "transfile.h"
+#include "gui_common.h"
 #include "xflarchive.h"
-#include "wcg_decoder.h"
-#include "lim_decoder.h"
-#include "lwg_decoder.h"
-#include "wav_ogg.h"
-#include "exe_patch.h"
-#include "fileio.h"
-#include "stb_image.h"
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "comdlg32.lib")
-
-namespace fs = std::filesystem;
 
 // ---- Globals ----
 static HWND g_hWnd, g_hListView, g_hBtnAdd, g_hBtnRemove, g_hBtnClear, g_hBtnConvert;
@@ -41,80 +30,34 @@ static HWND g_hLblEnc, g_hLblRef, g_hLblOutDir;
 static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly, g_hChkGscToTsc;
 static std::vector<std::string> g_inputs;
 static std::vector<std::string> g_outputs;
-static std::vector<std::string> g_statuses;
-static std::mutex g_mutex;
-static bool g_running = false;
+
+static constexpr UINT WM_CONVERSION_UPDATE = WM_APP + 1;
+
+struct ConversionUpdate {
+    int row = -1;
+    int progress = -1;
+    std::string rowStatus;
+    std::vector<std::string> warnings;
+    bool finished = false;
+};
+
+struct ConversionJob {
+    std::string inputPath;
+    std::string outputPath;
+};
+
+static void postConversionUpdate(ConversionUpdate update) {
+    auto* data = new ConversionUpdate(std::move(update));
+    if (!PostMessageA(g_hWnd, WM_CONVERSION_UPDATE, 0,
+                      reinterpret_cast<LPARAM>(data)))
+        delete data;
+}
 
 static std::string selectedEncoding() {
     const LRESULT selected = SendMessage(g_hCboEnc, CB_GETCURSEL, 0, 0);
     if (selected == 1) return "GBK";
     if (selected == 2) return "CP1251";
     return "CP932";
-}
-
-static std::string getExtension(const std::string& path) {
-    auto pos = path.rfind('.');
-    if (pos == std::string::npos) return "";
-    std::string ext = path.substr(pos);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    return ext;
-}
-
-static std::string replaceExtension(const std::string& path, const std::string& newExt) {
-    auto pos = path.rfind('.');
-    if (pos == std::string::npos) return path + newExt;
-    return path.substr(0, pos) + newExt;
-}
-
-static std::string guessOutput(const std::string& in, const std::string& outDir,
-                               bool gscToTsc, const std::string& encoding) {
-    std::string ext = getExtension(in);
-    fs::path p(in);
-    fs::path base = outDir.empty() ? p.parent_path() : fs::path(outDir);
-    std::string stem = p.stem().string();
-    if (fs::is_directory(in))
-        return (base / (p.filename().string() +
-                        (liarsoft::isLwgDirectory(in) ? ".lwg" : ".xfl"))).string();
-    if (ext == ".gsc") return (base / (stem + (gscToTsc ? ".tsc" : ".txt"))).string();
-    if (ext == ".tsc") return (base / (stem + ".gsc")).string();
-    if (ext == ".txt") return (base / (stem + ".gsc")).string();
-    if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
-    if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
-    if (ext == ".exe") {
-        const std::string suffix = encoding == "GBK" ? ".gbk.exe" :
-            encoding == "CP1251" ? ".cp1251.exe" : ".sjis.exe";
-        return (base / (stem + suffix)).string();
-    }
-    if (ext == ".wav") return (base / (stem + ".ogg")).string();
-    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
-        return (base / (stem + ".wcg")).string();
-    return (base / p.filename()).string();
-}
-
-static std::string guessType(const std::string& path, bool gscToTsc,
-                             const std::string& encoding) {
-    std::string ext = getExtension(path);
-    if (ext == ".gsc") return gscToTsc ? "GSC -> TSC" : "GSC -> TXT";
-    if (ext == ".tsc") return "TSC -> GSC";
-    if (ext == ".txt") return "TXT -> GSC";
-    if (ext == ".xfl") return "XFL -> DIR";
-    if (ext == ".lwg") return "LWG -> DIR";
-    if (ext == ".wcg") return "WCG -> PNG";
-    if (ext == ".lim") return "LIM -> PNG";
-    if (ext == ".wav") return "WAV -> OGG";
-    if (ext == ".ogg") return "OGG -> WAV";
-    if (ext == ".exe") return "EXE -> " + encoding;
-    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") return "IMG -> WCG";
-    if (fs::is_directory(path)) return "DIR -> XFL/LWG";
-    return "?";
-}
-
-static bool isSupported(const std::string& path) {
-    std::string ext = getExtension(path);
-    return ext == ".gsc" || ext == ".tsc" || ext == ".txt" || ext == ".xfl" || ext == ".lwg" ||
-           ext == ".wcg" || ext == ".lim" || ext == ".wav" || ext == ".ogg" || ext == ".exe" ||
-           ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
-           fs::is_directory(path);
 }
 
 // ---- ListView helpers ----
@@ -138,26 +81,27 @@ static void lvInsert(int idx, const std::string& in, const std::string& out, con
 
 static void lvSetStatus(int idx, const std::string& s) {
     LVITEM item = {};
+    item.mask = LVIF_TEXT;
     item.iItem = idx;
     item.iSubItem = 3;
     char buf[1024];
     strncpy(buf, s.c_str(), sizeof(buf)-1); buf[sizeof(buf)-1] = 0;
     item.pszText = buf;
     ListView_SetItem(g_hListView, &item);
-    g_statuses[idx] = s;
 }
 
 static void addFile(const std::string& path, const std::string& outDir) {
-    if (!isSupported(path)) return;
+    if (!liarsoft::gui::isSupported(path)) return;
     const bool gscToTsc = g_hChkGscToTsc &&
         SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
     const std::string encoding = selectedEncoding();
-    std::string out = guessOutput(path, outDir, gscToTsc, encoding);
+    std::string out = liarsoft::gui::guessOutput(
+        path, outDir, gscToTsc, encoding);
     int idx = g_inputs.size();
     g_inputs.push_back(path);
     g_outputs.push_back(out);
-    g_statuses.push_back("Ready");
-    lvInsert(idx, path, out, guessType(path, gscToTsc, encoding), "Ready");
+    lvInsert(idx, path, out,
+             liarsoft::gui::guessType(path, gscToTsc, encoding), "Ready");
     EnableWindow(g_hBtnConvert, TRUE);
 }
 
@@ -169,15 +113,16 @@ static void rebuildOutputs() {
         SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
     const std::string encoding = selectedEncoding();
     for (size_t i = 0; i < g_inputs.size(); ++i) {
-        g_outputs[i] = guessOutput(g_inputs[i], outDir, gscToTsc, encoding);
-        lvSetStatus(i, ""); // just refresh output col
-        // Actually need to update the output column
+        g_outputs[i] = liarsoft::gui::guessOutput(
+            g_inputs[i], outDir, gscToTsc, encoding);
         char buf[1024];
         strncpy(buf, g_outputs[i].c_str(), sizeof(buf)-1); buf[sizeof(buf)-1] = 0;
         LVITEM item = {};
+        item.mask = LVIF_TEXT;
         item.iItem = (int)i; item.iSubItem = 1; item.pszText = buf;
         ListView_SetItem(g_hListView, &item);
-        std::string type = guessType(g_inputs[i], gscToTsc, encoding);
+        std::string type = liarsoft::gui::guessType(
+            g_inputs[i], gscToTsc, encoding);
         strncpy(buf, type.c_str(), sizeof(buf)-1); buf[sizeof(buf)-1] = 0;
         item.iSubItem = 2; item.pszText = buf;
         ListView_SetItem(g_hListView, &item);
@@ -185,103 +130,50 @@ static void rebuildOutputs() {
 }
 
 // ---- Conversion worker ----
-static void convertAll(const std::string& encoding, const std::string& refPath,
+static void convertAll(std::vector<ConversionJob> jobs,
+                       const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
                        bool gscToTsc) {
-    g_running = true;
-    EnableWindow(g_hBtnConvert, FALSE);
     std::vector<std::string> allWarnings;
+    const liarsoft::gui::ConversionOptions options{
+        encoding, refPath, recursive, gscToTsc, unpackOnly};
+    const size_t total = jobs.size();
     
-    for (size_t i = 0; i < g_inputs.size(); ++i) {
-        if (!g_running) break;
-        std::string in = g_inputs[i];
-        std::string out = g_outputs[i];
-        std::string ext = getExtension(in);
+    for (size_t i = 0; i < total; ++i) {
+        const std::string& in = jobs[i].inputPath;
+        const std::string& out = jobs[i].outputPath;
         std::vector<std::string> warnings;
-        
-        SendMessage(g_hProgress, PBM_SETPOS, (WPARAM)(i * 100 / g_inputs.size()), 0);
+
+        postConversionUpdate({static_cast<int>(i),
+                              static_cast<int>(i * 100 / total),
+                              "Processing..."});
         if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly,
                                             recursive)) {
-            lvSetStatus((int)i, "SKIPPED");
+            postConversionUpdate({static_cast<int>(i),
+                                  static_cast<int>((i + 1) * 100 / total),
+                                  "SKIPPED"});
             continue;
         }
         
         try {
-            if (fs::is_directory(in)) {
-                if (unpackOnly)
-                    warnings = liarsoft::unpackDirectoryRecursively(in, encoding, gscToTsc);
-                else
-                    warnings = liarsoft::packDirectoryToFile(in, out, encoding, recursive);
-            } else if (ext == ".gsc") {
-                if (gscToTsc)
-                    liarsoft::decompileGscToFile(in, out, encoding);
-                else
-                    liarsoft::TransFile::fromGsc(
-                        liarsoft::GscFile::fromFile(in, encoding)).save(out);
-            } else if (ext == ".tsc") {
-                liarsoft::restoreGscFromTscFile(in, out, encoding);
-            } else if (ext == ".txt") {
-                std::string ref = refPath.empty() ? replaceExtension(in, ".gsc") : refPath;
-                liarsoft::TransFile::fromFile(in).toGsc(ref, encoding).save(out);
-            } else if (ext == ".xfl") {
-                liarsoft::XflArchive::fromFile(in, encoding).extractToDirectory(out);
-                if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
-            } else if (ext == ".lwg") {
-                std::ifstream fs(in, std::ios::binary);
-                fs.seekg(0, std::ios::end); size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
-                std::vector<uint8_t> raw(sz); fs.read((char*)raw.data(), sz);
-                auto arch = liarsoft::LwgDecoder::decode(raw, encoding);
-                liarsoft::LwgDecoder::extractToDirectory(arch, out, encoding);
-                if (recursive)
-                    warnings = liarsoft::unpackDirectoryRecursively(out, encoding, gscToTsc);
-            } else if (ext == ".wcg") {
-                std::ifstream fs(in, std::ios::binary);
-                fs.seekg(0, std::ios::end); size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
-                std::vector<uint8_t> raw(sz); fs.read((char*)raw.data(), sz);
-                liarsoft::wcgSavePng(liarsoft::wcgDecode(raw), out);
-            } else if (ext == ".lim") {
-                std::ifstream fs(in, std::ios::binary);
-                fs.seekg(0, std::ios::end); size_t sz = fs.tellg(); fs.seekg(0, std::ios::beg);
-                std::vector<uint8_t> raw(sz); fs.read((char*)raw.data(), sz);
-                liarsoft::limSavePng(liarsoft::limDecode(raw), out);
-            } else if (ext == ".wav") {
-                liarsoft::WavOggExtractor::extractToFile(in, out);
-            } else if (ext == ".ogg") {
-                std::string ref = refPath.empty() ? replaceExtension(in, ".wav") : refPath;
-                liarsoft::WavOggExtractor::embedToFile(in, ref, out);
-            } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
-                int w, h, ch;
-                unsigned char* px = stbi_load(in.c_str(), &w, &h, &ch, 4);
-                if (!px) throw std::runtime_error("Failed to load");
-                auto d = liarsoft::wcgEncode(px, (uint32_t)w, (uint32_t)h);
-                stbi_image_free(px);
-                liarsoft::writeFileIfChanged(out, d);
-            } else if (ext == ".exe") {
-                liarsoft::exeConvertFile(in, out, encoding);
-            }
+            warnings = liarsoft::gui::convert(in, out, options);
             allWarnings.insert(allWarnings.end(), warnings.begin(), warnings.end());
-            lvSetStatus((int)i, warnings.empty()
-                ? "OK" : "WARN (" + std::to_string(warnings.size()) + ")");
+            postConversionUpdate({static_cast<int>(i),
+                                  static_cast<int>((i + 1) * 100 / total),
+                                  warnings.empty() ? "OK" :
+                                      "WARN (" + std::to_string(warnings.size()) + ")"});
         } catch (const std::exception& e) {
-            lvSetStatus((int)i, std::string("FAIL: ") + e.what());
+            postConversionUpdate({static_cast<int>(i),
+                                  static_cast<int>((i + 1) * 100 / total),
+                                  std::string("FAIL: ") + e.what()});
         }
     }
-    
-    SendMessage(g_hProgress, PBM_SETPOS, 100, 0);
-    SetWindowTextA(g_hStatus, allWarnings.empty() ? "Done." : "Done with warnings.");
-    if (!allWarnings.empty()) {
-        std::string message;
-        size_t shown = std::min<size_t>(allWarnings.size(), 20);
-        for (size_t i = 0; i < shown; ++i)
-            message += "- " + allWarnings[i] + "\r\n";
-        if (shown < allWarnings.size())
-            message += "... and " + std::to_string(allWarnings.size() - shown) + " more.";
-        MessageBoxA(g_hWnd, message.c_str(), "Completed with warnings",
-                    MB_OK | MB_ICONWARNING);
-    }
-    EnableWindow(g_hBtnConvert, TRUE);
-    g_running = false;
+
+    ConversionUpdate finished;
+    finished.progress = 100;
+    finished.warnings = std::move(allWarnings);
+    finished.finished = true;
+    postConversionUpdate(std::move(finished));
 }
 
 // ---- Dialog callbacks ----
@@ -289,7 +181,7 @@ static void onAddFiles() {
     char buf[8192] = {};
     OPENFILENAMEA ofn = {sizeof(ofn)};
     ofn.hwndOwner = g_hWnd;
-    ofn.lpstrFilter = "All Supported\0*.gsc;*.tsc;*.txt;*.xfl;*.lwg;*.wcg;*.lim;*.wav;*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0";
+    ofn.lpstrFilter = "All Supported\0*.gsc;*.tsc;*.txt;*.xfl;*.lwg;*.wcg;*.lim;*.wav;*.ogg;*.exe;*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0";
     ofn.lpstrFile = buf;
     ofn.nMaxFile = sizeof(buf);
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
@@ -316,13 +208,12 @@ static void onRemoveSelected() {
         ListView_DeleteItem(g_hListView, sel);
         g_inputs.erase(g_inputs.begin() + sel);
         g_outputs.erase(g_outputs.begin() + sel);
-        g_statuses.erase(g_statuses.begin() + sel);
     }
 }
 
 static void onClear() {
     ListView_DeleteAllItems(g_hListView);
-    g_inputs.clear(); g_outputs.clear(); g_statuses.clear();
+    g_inputs.clear(); g_outputs.clear();
     SendMessage(g_hProgress, PBM_SETPOS, 0, 0);
     SetWindowTextA(g_hStatus, "Ready.");
     EnableWindow(g_hBtnConvert, FALSE);
@@ -347,7 +238,7 @@ static void onChooseRef() {
     char buf[MAX_PATH] = {};
     OPENFILENAMEA ofn = {sizeof(ofn)};
     ofn.hwndOwner = g_hWnd;
-    ofn.lpstrFilter = "GSC Files\0*.gsc\0";
+    ofn.lpstrFilter = "GSC or WAV Files\0*.gsc;*.wav\0";
     ofn.lpstrFile = buf;
     ofn.nMaxFile = sizeof(buf);
     ofn.Flags = OFN_FILEMUSTEXIST;
@@ -363,8 +254,13 @@ static void onConvert() {
     bool packOnly = SendMessage(g_hChkPackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool unpackOnly = SendMessage(g_hChkUnpackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool gscToTsc = SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    std::thread t(convertAll, encoding, refPath, recursive, packOnly, unpackOnly,
-                  gscToTsc);
+    std::vector<ConversionJob> jobs;
+    jobs.reserve(g_inputs.size());
+    for (size_t i = 0; i < g_inputs.size(); ++i)
+        jobs.push_back({g_inputs[i], g_outputs[i]});
+    EnableWindow(g_hBtnConvert, FALSE);
+    std::thread t(convertAll, std::move(jobs), encoding, refPath, recursive,
+                  packOnly, unpackOnly, gscToTsc);
     t.detach();
 }
 
@@ -382,6 +278,32 @@ static void onDropFiles(HDROP hDrop) {
 // ---- Window procedure ----
 static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
+    case WM_CONVERSION_UPDATE: {
+        std::unique_ptr<ConversionUpdate> update(
+            reinterpret_cast<ConversionUpdate*>(lParam));
+        if (update->row >= 0)
+            lvSetStatus(update->row, update->rowStatus);
+        if (update->progress >= 0)
+            SendMessage(g_hProgress, PBM_SETPOS, update->progress, 0);
+        if (update->finished) {
+            SetWindowTextA(g_hStatus, update->warnings.empty()
+                ? "Done." : "Done with warnings.");
+            if (!update->warnings.empty()) {
+                std::string message;
+                const size_t shown = std::min<size_t>(update->warnings.size(), 20);
+                for (size_t i = 0; i < shown; ++i)
+                    message += "- " + update->warnings[i] + "\r\n";
+                if (shown < update->warnings.size())
+                    message += "... and " +
+                        std::to_string(update->warnings.size() - shown) + " more.";
+                MessageBoxA(g_hWnd, message.c_str(), "Completed with warnings",
+                            MB_OK | MB_ICONWARNING);
+            }
+            EnableWindow(g_hBtnConvert, TRUE);
+        }
+        return 0;
+    }
+
     case WM_CREATE: {
         INITCOMMONCONTROLSEX icc = {sizeof(icc), ICC_LISTVIEW_CLASSES | ICC_PROGRESS_CLASS};
         InitCommonControlsEx(&icc);

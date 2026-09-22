@@ -9,10 +9,12 @@ if(NOT WIN32)
     find_package(Iconv REQUIRED)
 endif()
 
-# Find GTKmm for GUI
-find_package(PkgConfig)
-if(PKG_CONFIG_FOUND)
-    pkg_check_modules(GTKMM gtkmm-3.0)
+# Find GTKmm for the Linux GUI
+if(NOT WIN32)
+    find_package(PkgConfig)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(GTKMM gtkmm-3.0)
+    endif()
 endif()
 
 # Include directories
@@ -71,9 +73,10 @@ endif()
 # ---- GUI target ----
 if(WIN32)
     # Windows: use native Win32 GUI (no extra deps)
-    add_executable(liarsofttool-gui
+    add_executable(liarsofttool-gui WIN32
         src/gui_main.cpp
         src/gui_win32.cpp
+        src/gui_common.cpp
         ${COMMON_SOURCES}
     )
     target_link_libraries(liarsofttool-gui PRIVATE comctl32 comdlg32 ole32)
@@ -84,6 +87,7 @@ elseif(GTKMM_FOUND)
     add_executable(liarsofttool-gui
         src/gui_main.cpp
         src/gui.cpp
+        src/gui_common.cpp
         ${COMMON_SOURCES}
     )
     target_include_directories(liarsofttool-gui PRIVATE ${GTKMM_INCLUDE_DIRS})
@@ -96,7 +100,7 @@ endif()
 
 # Install
 install(TARGETS liarsofttool DESTINATION bin)
-if(GTKMM_FOUND)
+if(WIN32 OR GTKMM_FOUND)
     install(TARGETS liarsofttool-gui DESTINATION bin)
 endif()
 
@@ -133,6 +137,15 @@ if(BUILD_TESTING)
         target_link_options(gsc_decompiler_test PRIVATE -static-libgcc -static-libstdc++)
     endif()
     add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
+
+    add_executable(gui_common_test
+        tests/gui_common_test.cpp src/gui_common.cpp ${COMMON_SOURCES})
+    if(NOT WIN32)
+        target_link_libraries(gui_common_test PRIVATE Iconv::Iconv)
+    else()
+        target_link_options(gui_common_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME gui_common COMMAND gui_common_test)
 
     add_test(NAME directory_packing
         COMMAND ${CMAKE_COMMAND}
