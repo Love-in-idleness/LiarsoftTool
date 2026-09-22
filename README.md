@@ -49,7 +49,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | EXE 编码转换 | `liarsofttool -e gbk game.exe` |
 | 批量转换 | `liarsofttool *.png` 或 `liarsofttool * -e gbk` |
 
-> **提示**：日文版用 `cp932`（Windows-31J，默认；`shift_jis` 等旧别名也会映射到 CP932），中文版用 `-e gbk`，西里尔/英文版用 `-e cp1251`。CP1251 也是引擎默认正确显示英语的编码。
+> **提示**：日文版用 `cp932`（Windows-31J，默认；`shift_jis` 等旧别名也会映射到 CP932），中文版用 `-e gbk`，西里尔/英文版用 `-e cp1251`。EXE 转换会同步经典 RScript 的禁则标点表；运行时仍需使用与文本匹配的 Windows 系统代码页或 Locale Emulator（CP932/936/1251）。
 
 ### 编译
 
@@ -127,7 +127,7 @@ make -j$(nproc)
 | TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
-| EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数 (`0x80`/`0x86`/`0xCC`)，并统一所有已识别位置为目标值 |
+| EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换经典 RScript 的日文、中文或俄文禁则标点表 |
 | WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
 
@@ -179,9 +179,9 @@ liarsofttool cgview/bg.png                         # → bg.wcg
 liarsofttool cgview/                               # → cgview.lwg
 
 # --- EXE 编码转换 ---
-liarsofttool -e gbk game.exe        # 转为 GBK 字体 charset
-liarsofttool -e cp1251 game.exe     # 转为 CP1251 字体 charset (Russian)
-liarsofttool -e cp932 game.exe      # 转为 CP932 字体 charset
+liarsofttool -e gbk game.exe        # 转换 GBK 字体及中文禁则表
+liarsofttool -e cp1251 game.exe     # 转换 CP1251 字体及俄文禁则表
+liarsofttool -e cp932 game.exe      # 恢复 CP932 字体及日文禁则表
 # 输出 name.gbk.exe / name.cp1251.exe / name.sjis.exe，不覆盖原文件
 
 # --- 音频往返 ---
@@ -202,6 +202,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 ### 已知限制
 
 - **多级目录**：XFL/LWG 中文件均扁平存放。
+- **EXE 排版规则**：禁则表转换只应用于完整匹配已知经典 RScript 机器码结构的程序；其他引擎版本仍只转换已识别的字体 charset。
 
 ---
 
@@ -231,7 +232,7 @@ liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 | EXE encoding convert | `liarsofttool -e gbk game.exe` |
 | Batch convert | `liarsofttool *.png` or `liarsofttool * -e gbk` |
 
-> **Tip:** Use `cp932` for Japanese (Windows-31J, default; legacy `shift_jis` aliases also map to CP932), `-e gbk` for Chinese, and `-e cp1251` for Cyrillic/English texts. CP1251 is also the engine's default for correct English rendering.
+> **Tip:** Use `cp932` for Japanese (Windows-31J, default; legacy `shift_jis` aliases also map to CP932), `-e gbk` for Chinese, and `-e cp1251` for Cyrillic/English texts. EXE conversion also updates classic RScript line-break punctuation tables. Run the game under the matching Windows system code page or Locale Emulator (CP932/936/1251).
 > Output paths default to the input file's directory when omitted.
 
 ### Build
@@ -309,7 +310,7 @@ When exactly two args have different extensions, the second is treated as output
 | TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
 | WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
-| EXE | `.exe` | CP932/GBK/CP1251 | Normalizes recognized font charset operands (`0x80`/`0x86`/`0xCC`) to the selected target |
+| EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and classic RScript Japanese, Chinese, or Russian line-break punctuation tables |
 | WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
@@ -372,9 +373,9 @@ liarsofttool cgview/bg.png                         # → bg.wcg
 liarsofttool cgview/                               # → cgview.lwg
 
 # --- EXE encoding conversion ---
-liarsofttool -e gbk game.exe        # Set the GBK font charset
-liarsofttool -e cp1251 game.exe     # Set the CP1251 font charset (Russian)
-liarsofttool -e cp932 game.exe      # Set the CP932 font charset
+liarsofttool -e gbk game.exe        # Set GBK font and Chinese line-break rules
+liarsofttool -e cp1251 game.exe     # Set CP1251 font and Russian line-break rules
+liarsofttool -e cp932 game.exe      # Restore CP932 font and Japanese line-break rules
 # Output: name.gbk.exe / name.cp1251.exe / name.sjis.exe; original untouched
 
 # --- Audio roundtrip ---
@@ -398,6 +399,7 @@ Recursive unpacking opens nested XFL/LWG archives and performs GSC→TXT, WCG/LI
 ### Known Limitations
 
 - **Subdirectories**: all files in XFL/LWG archives are flat (no nesting).
+- **EXE line breaking**: punctuation-table conversion is applied only when a known classic RScript machine-code structure matches in full; other engine versions still receive only recognized font-charset changes.
 
 ---
 
