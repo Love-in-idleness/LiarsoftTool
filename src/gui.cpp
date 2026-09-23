@@ -27,7 +27,7 @@ static Gtk::Entry* g_outDirEntry = nullptr;
 static Gtk::CheckButton* g_recursiveCheck = nullptr;
 static Gtk::CheckButton* g_packOnlyCheck = nullptr;
 static Gtk::CheckButton* g_unpackOnlyCheck = nullptr;
-static Gtk::CheckButton* g_gscToTscCheck = nullptr;
+static Gtk::CheckButton* g_gscToTxtCheck = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
@@ -40,7 +40,7 @@ struct ConversionJob {
 
 // ---- Add files to the list ----
 static void addFiles(const std::vector<std::string>& paths, const std::string& outDir) {
-    const bool gscToTsc = g_gscToTscCheck && g_gscToTscCheck->get_active();
+    const bool gscToTsc = !g_gscToTxtCheck || !g_gscToTxtCheck->get_active();
     const std::string encoding = g_encodingCombo ?
         g_encodingCombo->get_active_id() : "CP932";
     for (const auto& p : paths) {
@@ -157,7 +157,7 @@ static void convertAll(std::vector<ConversionJob> jobs,
 // ---- Update output paths when output dir changes ----
 static void updateOutputPaths() {
     std::string outDir = g_outDirEntry->get_text();
-    const bool gscToTsc = g_gscToTscCheck && g_gscToTscCheck->get_active();
+    const bool gscToTsc = !g_gscToTxtCheck || !g_gscToTxtCheck->get_active();
     const std::string encoding = g_encodingCombo ?
         g_encodingCombo->get_active_id() : "CP932";
     for (auto& child : g_store->children()) {
@@ -299,15 +299,15 @@ int runGui(int argc, char* argv[]) {
         "Recursively pack/unpack archives and convert their resources");
     g_packOnlyCheck = Gtk::manage(new Gtk::CheckButton("Pack only"));
     g_unpackOnlyCheck = Gtk::manage(new Gtk::CheckButton("Unpack only"));
-    g_gscToTscCheck = Gtk::manage(new Gtk::CheckButton("GSC → TSC"));
-    g_gscToTscCheck->set_tooltip_text(
-        "Generate annotated TSC instead of TXT when decoding GSC files");
-    g_gscToTscCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
+    g_gscToTxtCheck = Gtk::manage(new Gtk::CheckButton("GSC → TXT"));
+    g_gscToTxtCheck->set_tooltip_text(
+        "Generate legacy TXT instead of structured TSC when decoding GSC files");
+    g_gscToTxtCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
     g_encodingCombo->signal_changed().connect(sigc::ptr_fun(&updateOutputPaths));
     optionsBar->pack_start(*g_recursiveCheck, false, false);
     optionsBar->pack_start(*g_packOnlyCheck, false, false);
     optionsBar->pack_start(*g_unpackOnlyCheck, false, false);
-    optionsBar->pack_start(*g_gscToTscCheck, false, false);
+    optionsBar->pack_start(*g_gscToTxtCheck, false, false);
     mainBox->pack_start(*optionsBar, false, false);
 
     // --- File list ---
@@ -364,7 +364,7 @@ int runGui(int argc, char* argv[]) {
         bool recursive = g_recursiveCheck->get_active();
         bool packOnly = g_packOnlyCheck->get_active();
         bool unpackOnly = g_unpackOnlyCheck->get_active();
-        bool gscToTsc = g_gscToTscCheck->get_active();
+        bool gscToTsc = !g_gscToTxtCheck->get_active();
         std::vector<ConversionJob> jobs;
         for (const auto& child : g_store->children()) {
             jobs.push_back({

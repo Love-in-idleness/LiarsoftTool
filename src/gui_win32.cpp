@@ -27,7 +27,7 @@ static HWND g_hWnd, g_hListView, g_hBtnAdd, g_hBtnRemove, g_hBtnClear, g_hBtnCon
 static HWND g_hBtnRef, g_hBtnOutDir;
 static HWND g_hCboEnc, g_hEditRef, g_hEditOutDir, g_hProgress, g_hStatus;
 static HWND g_hLblEnc, g_hLblRef, g_hLblOutDir;
-static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly, g_hChkGscToTsc;
+static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly, g_hChkGscToTxt;
 static std::vector<std::string> g_inputs;
 static std::vector<std::string> g_outputs;
 
@@ -92,8 +92,8 @@ static void lvSetStatus(int idx, const std::string& s) {
 
 static void addFile(const std::string& path, const std::string& outDir) {
     if (!liarsoft::gui::isSupported(path)) return;
-    const bool gscToTsc = g_hChkGscToTsc &&
-        SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    const bool gscToTsc = !g_hChkGscToTxt ||
+        SendMessage(g_hChkGscToTxt, BM_GETCHECK, 0, 0) != BST_CHECKED;
     const std::string encoding = selectedEncoding();
     std::string out = liarsoft::gui::guessOutput(
         path, outDir, gscToTsc, encoding);
@@ -109,8 +109,8 @@ static void rebuildOutputs() {
     char buf[1024];
     GetWindowTextA(g_hEditOutDir, buf, sizeof(buf));
     std::string outDir(buf);
-    const bool gscToTsc = g_hChkGscToTsc &&
-        SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    const bool gscToTsc = !g_hChkGscToTxt ||
+        SendMessage(g_hChkGscToTxt, BM_GETCHECK, 0, 0) != BST_CHECKED;
     const std::string encoding = selectedEncoding();
     for (size_t i = 0; i < g_inputs.size(); ++i) {
         g_outputs[i] = liarsoft::gui::guessOutput(
@@ -253,7 +253,7 @@ static void onConvert() {
     bool recursive = SendMessage(g_hChkRecursive, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool packOnly = SendMessage(g_hChkPackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool unpackOnly = SendMessage(g_hChkUnpackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    bool gscToTsc = SendMessage(g_hChkGscToTsc, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    bool gscToTsc = SendMessage(g_hChkGscToTxt, BM_GETCHECK, 0, 0) != BST_CHECKED;
     std::vector<ConversionJob> jobs;
     jobs.reserve(g_inputs.size());
     for (size_t i = 0; i < g_inputs.size(); ++i)
@@ -333,7 +333,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         g_hChkUnpackOnly = CreateWindowA("BUTTON", "Unpack only",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
             210, 42, 105, 20, hWnd, (HMENU)109, NULL, NULL);
-        g_hChkGscToTsc = CreateWindowA("BUTTON", "GSC -> TSC",
+        g_hChkGscToTxt = CreateWindowA("BUTTON", "GSC -> TXT",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
             320, 42, 190, 20, hWnd, (HMENU)110, NULL, NULL);
         
@@ -453,7 +453,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         SetWindowPos(g_hChkRecursive,  NULL, 10,  42,  95, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkPackOnly,   NULL, 110, 42,  95, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkUnpackOnly, NULL, 210, 42, 105, 20, SWP_NOZORDER);
-        SetWindowPos(g_hChkGscToTsc,   NULL, 320, 42, 190, 20, SWP_NOZORDER);
+        SetWindowPos(g_hChkGscToTxt,   NULL, 320, 42, 190, 20, SWP_NOZORDER);
         SetWindowPos(g_hListView, NULL, m, 65, w - 2*m, lvH, SWP_NOZORDER);
 
         // --- Resize ListView columns: Type+Status fixed, Input+Output split 50/50 ---
