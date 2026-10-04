@@ -84,14 +84,16 @@ int main(int argc, char** argv) {
             controls.entries={
                 {"slide", {'W','G'}, 690, 4, 8, 2},
                 {"slide", {}, 7, -1, 8, 0},
-                {"slide_lev_f", {}, -10, 12, 8, 0}
+                {"slide_lev_f", {}, -10, 12, 8, 0},
+                {"</Layer set>", {}, 0, 0, 56, 0},
+                {"a&b<id>\"'&lt;", {'W','G'}, 1, 2, 40, 2}
             };
             const auto controlDirectory=directory/"controls";
             LwgDecoder::extractToDirectory(controls,controlDirectory.string(),"CP932");
             const auto packedControls=LwgPacker::pack(controlDirectory.string(),"CP932");
             const auto restored=LwgDecoder::decode(packedControls,"CP932");
             const size_t dataSizeField=24+get32(packedControls,20);
-            require(get32(packedControls,dataSizeField)==2 &&
+            require(get32(packedControls,dataSizeField)==4 &&
                     get32(packedControls,dataSizeField)==packedControls.size()-dataSizeField-4,
                     "LWG payload length is written as padding instead of its size");
             require(restored.width==controls.width && restored.height==controls.height &&
@@ -105,7 +107,16 @@ int main(int argc, char** argv) {
                         actual.data==original.data,
                         "Empty LWG entry changed or reused a same-named image");
             }
-            controls.entries.erase(controls.entries.begin());
+            std::ifstream meta(controlDirectory/".meta.xml");
+            const std::string xml((std::istreambuf_iterator<char>(meta)),
+                                   std::istreambuf_iterator<char>());
+            require(xml.find("&lt;/Layer set&gt;")!=std::string::npos &&
+                    xml.find("a&amp;b&lt;id&gt;&quot;&apos;&amp;lt;")!=std::string::npos,
+                    "LWG names are not escaped as XML text");
+            controls.entries.erase(std::remove_if(controls.entries.begin(),
+                controls.entries.end(), [](const auto& entry) {
+                    return !entry.data.empty();
+                }), controls.entries.end());
             const auto emptyDirectory=directory/"empty_controls";
             LwgDecoder::extractToDirectory(controls,emptyDirectory.string(),"CP932");
             rejects([&]{LwgPacker::pack(emptyDirectory.string(),"CP932");},

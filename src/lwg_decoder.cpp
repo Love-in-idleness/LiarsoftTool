@@ -43,6 +43,31 @@ static std::string decodeName(const std::string& raw, const std::string& enc) {
     return convertEncoding(raw, enc, "UTF-8");
 }
 
+// Layer names are XML text, not markup (e.g. Photoshop's </Layer set>).
+// Decode in one pass so a literal "&lt;" survives as "&amp;lt;" on disk.
+static std::string xmlName(const std::string& name, bool escape) {
+    const std::array<std::pair<char, const char*>, 5> entities = {{
+        {'&', "&amp;"}, {'<', "&lt;"}, {'>', "&gt;"},
+        {'\"', "&quot;"}, {'\'', "&apos;"}
+    }};
+    std::string result;
+    for (size_t i = 0; i < name.size();) {
+        bool matched = false;
+        for (const auto& entity : entities) {
+            if (escape ? name[i] == entity.first :
+                         name.compare(i, std::strlen(entity.second), entity.second) == 0) {
+                if (escape) result += entity.second;
+                else result += entity.first;
+                i += escape ? 1 : std::strlen(entity.second);
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) result += name[i++];
+    }
+    return result;
+}
+
 // ---- Helper: sanitize filename ----
 
 static std::string sanitizeFilename(const std::string& name) {
@@ -154,7 +179,7 @@ void LwgDecoder::extractToDirectory(const Archive& archive, const std::string& d
                   + std::to_string(e.y) + "\" flag=\""
                   + std::to_string(static_cast<int>(e.flag)) + "\""
                   + (e.data.empty() ? " empty=\"1\"" : "") + ">"
-                  + e.name + "</Item>\n";
+                  + xmlName(e.name, true) + "</Item>\n";
         }
         meta += "  </Items>\n";
         meta += "</Canvas>\n";
@@ -232,7 +257,7 @@ static MetaInfo parseMetaXml(const std::string& filePath) {
         std::string name = itemsXml.substr(itemTagEnd + 1, itemClose - itemTagEnd - 1);
 
         MetaEntry me;
-        me.name = name;
+        me.name = xmlName(name, false);
 
         auto getAttr = [&](const std::string& attr) -> std::string {
             auto ap = tagContent.find(attr + "=\"");
@@ -302,7 +327,9 @@ std::vector<uint8_t> LwgPacker::pack(
             continue;
         }
 
-        auto wanted = lower(me.name);
+        // Extraction replaces filesystem-reserved characters, while metadata
+        // retains the actual engine layer name. Resolve the extracted filename.
+        auto wanted = lower(sanitizeFilename(me.name));
         auto file = std::find_if(files.begin(), files.end(), [&](const fs::path& path) {
             return lower(path.filename().string()) == wanted;
         });
