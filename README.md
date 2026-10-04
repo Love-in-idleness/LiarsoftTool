@@ -134,6 +134,8 @@ make -j$(nproc)
 
 WCG 编码默认使用两个 16 位颜色对；任一颜色对达到 65536 种时，自动改用独立 A/R/G/B 通道，避免调色板计数溢出并保持像素无损。仅透明度的 WCG 导出为 RGB 全零、透明度保留的 PNG，不补造颜色。四通道路径已根据 Cannonball 原程序验证静态逻辑，其他引擎的游戏内兼容性仍需测试；PNG 的 ICC/gamma 等元数据不会写入 WCG。
 
+LWG 的零数据条目仍会写入 `.meta.xml`，以 `empty="1"` 保留名字、坐标、Flag 和顺序；回编不会误用同名图片填充它们。旧版解包已经丢失的条目需从原 LWG 重新提取。仅有空条目、没有有效资源的封包仍会报错。
+
 GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空格）和多行。
 
 `--gsc-to-tsc` 支持 28 字节早期（含 CodeX 之前）头，以及采用 RScript 1.8、1.9
@@ -321,6 +323,8 @@ When exactly two args have different extensions, the second is treated as output
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
 WCG encoding normally uses two 16-bit color pairs. If either pair has all 65536 values, it switches to separate A/R/G/B streams without losing pixels or overflowing the palette count. Alpha-only WCG files export as PNG with zero RGB and preserved alpha, without inventing colors. The four-channel path follows Cannonball's statically verified decoder; in-game compatibility with other engines still needs testing. PNG ICC/gamma metadata is not stored in WCG.
+
+Zero-data LWG entries remain in `.meta.xml` with `empty="1"`, preserving their names, coordinates, flags, and order without borrowing a same-named image when repacked. Re-extract the original LWG to recover entries discarded by older versions. An archive containing only empty entries still fails to pack.
 
 GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and multi-line.
 
