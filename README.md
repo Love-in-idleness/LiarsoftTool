@@ -98,6 +98,7 @@ make -j$(nproc)
 - 编码选择（CP932 / GBK / CP1251）、参考 GSC 指定、输出目录，以及递归/仅封包/仅解包/GSC→TXT 开关；GSC 默认转换为结构化 TSC
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
+- 警告与错误提示提供“Copy details”一键复制，包含完整诊断信息及输入/输出路径，方便反馈问题
 - Linux 使用 GTK3，Windows 使用原生 Win32 API（零额外 DLL 依赖）
 
 ### 命令行参数
@@ -282,6 +283,7 @@ Run `liarsofttool-gui` or double-click the executable:
 - Encoding selector (CP932 / GBK / CP1251), optional reference, output directory, and recursive/pack-only/unpack-only/GSC→TXT toggles; GSC defaults to structured TSC output
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
+- Warning/error dialogs offer **Copy details**, copying the complete diagnostics and input/output paths for bug reports
 - Linux: GTK3 backend. Windows: native Win32 API (zero extra DLL dependencies)
 
 ### CLI Options

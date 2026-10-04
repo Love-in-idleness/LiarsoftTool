@@ -2,8 +2,6 @@
 #include <gtkmm.h>
 #include <iostream>
 #include <thread>
-#include <sstream>
-#include <algorithm>
 #include <utility>
 
 #include "gui_common.h"
@@ -31,6 +29,30 @@ static Gtk::CheckButton* g_gscToTxtCheck = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
+static Gtk::Window* g_window = nullptr;
+
+static void showDiagnostics(const std::string& report, bool hasErrors) {
+    Gtk::Dialog dialog(hasErrors ? "Completed with errors" : "Completed with warnings",
+                       *g_window, true);
+    dialog.set_default_size(680, 400);
+    Gtk::ScrolledWindow scroll;
+    scroll.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    Gtk::TextView text;
+    text.set_editable(false);
+    text.set_wrap_mode(Gtk::WRAP_WORD_CHAR);
+    text.get_buffer()->set_text(report);
+    scroll.add(text);
+    dialog.get_content_area()->pack_start(scroll);
+    auto* copy = dialog.add_button("Copy details", 1);
+    dialog.add_button("Close", Gtk::RESPONSE_CLOSE);
+    dialog.show_all_children();
+    while (dialog.run() == 1) {
+        auto clipboard = Gtk::Clipboard::get();
+        clipboard->set_text(report);
+        clipboard->store();
+        copy->set_label("Copied! Copy again");
+    }
+}
 
 struct ConversionJob {
     std::string inputPath;
@@ -63,7 +85,8 @@ static void convertAll(std::vector<ConversionJob> jobs,
     int total = jobs.size();
     int done = 0;
     int totalWarnings = 0;
-    std::vector<std::string> allWarnings;
+    bool hasErrors = false;
+    std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
     const liarsoft::gui::ConversionOptions options{
         encoding, refPath, recursive, gscToTsc, unpackOnly};
 
@@ -103,7 +126,8 @@ static void convertAll(std::vector<ConversionJob> jobs,
             for (const auto& warning : warnings)
                 std::cerr << "Warning: " << warning << std::endl;
             totalWarnings += static_cast<int>(warnings.size());
-            allWarnings.insert(allWarnings.end(), warnings.begin(), warnings.end());
+            for (const auto& warning : warnings)
+                diagnostics.push_back({false, in, out, warning});
             std::string rowStatus = warnings.empty()
                 ? "OK" : "WARN (" + std::to_string(warnings.size()) + ")";
             std::string detail = warnings.empty() ? "" : warnings.front();
@@ -122,6 +146,8 @@ static void convertAll(std::vector<ConversionJob> jobs,
         } catch (const std::exception& e) {
             done++;
             std::string err = e.what();
+            hasErrors = true;
+            diagnostics.push_back({true, in, out, err});
             Glib::signal_idle().connect_once([rowPath, done, total, err]() {
                 auto row = g_store->get_iter(rowPath);
                 if (row) (*row)[g_columns.status] = "FAILED: " + err;
@@ -133,23 +159,13 @@ static void convertAll(std::vector<ConversionJob> jobs,
         }
     }
 
-    Glib::signal_idle().connect_once([totalWarnings, allWarnings]() {
+    const std::string report = liarsoft::gui::formatDiagnostics(diagnostics);
+    Glib::signal_idle().connect_once([totalWarnings, hasErrors, report]() {
         g_progress->set_fraction(1.0);
-        g_statusLabel->set_text(totalWarnings == 0
+        g_statusLabel->set_text(hasErrors ? "Completed with errors." : totalWarnings == 0
             ? "All done."
             : Glib::ustring::format("Done with ", totalWarnings, " warning(s)."));
-        if (!allWarnings.empty()) {
-            std::ostringstream message;
-            size_t shown = std::min<size_t>(allWarnings.size(), 20);
-            for (size_t i = 0; i < shown; ++i)
-                message << "- " << allWarnings[i] << '\n';
-            if (shown < allWarnings.size())
-                message << "... and " << allWarnings.size() - shown << " more.";
-            Gtk::MessageDialog dialog("Completed with warnings", false,
-                                      Gtk::MESSAGE_WARNING, Gtk::BUTTONS_OK, true);
-            dialog.set_secondary_text(message.str());
-            dialog.run();
-        }
+        if (!report.empty()) showDiagnostics(report, hasErrors);
         g_convertBtn->set_sensitive(true);
     });
 }
@@ -263,6 +279,7 @@ int runGui(int argc, char* argv[]) {
     auto app = Gtk::Application::create(argc, argv, "io.github.liarsofttool");
 
     Gtk::Window window;
+    g_window = &window;
     window.set_title("LiarsoftTool");
     window.set_default_size(800, 500);
 

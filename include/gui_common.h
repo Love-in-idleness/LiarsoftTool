@@ -13,6 +13,15 @@ struct ConversionOptions {
     bool unpackOnly = false;
 };
 
+struct ConversionDiagnostic {
+    bool error = false;
+    std::string inputPath;
+    std::string outputPath;
+    std::string message;
+};
+
+std::string formatDiagnostics(const std::vector<ConversionDiagnostic>& diagnostics);
+
 std::string extension(const std::string& path);
 std::string replaceExtension(const std::string& path,
                              const std::string& newExtension);

@@ -37,8 +37,9 @@ struct ConversionUpdate {
     int row = -1;
     int progress = -1;
     std::string rowStatus;
-    std::vector<std::string> warnings;
+    std::string report;
     bool finished = false;
+    bool hasErrors = false;
 };
 
 struct ConversionJob {
@@ -51,6 +52,70 @@ static void postConversionUpdate(ConversionUpdate update) {
     if (!PostMessageA(g_hWnd, WM_CONVERSION_UPDATE, 0,
                       reinterpret_cast<LPARAM>(data)))
         delete data;
+}
+
+// This frontend uses ANSI file paths; publish Unicode text to the clipboard.
+static std::wstring diagnosticText(const std::string& text) {
+    const int size = MultiByteToWideChar(CP_ACP, 0, text.data(),
+                                        static_cast<int>(text.size()), nullptr, 0);
+    std::wstring result(size, L'\0');
+    if (size) MultiByteToWideChar(CP_ACP, 0, text.data(),
+                                 static_cast<int>(text.size()), &result[0], size);
+    return result;
+}
+
+static bool copyDiagnostics(HWND owner, const std::wstring& report) {
+    const size_t bytes = (report.size() + 1) * sizeof(wchar_t);
+    HGLOBAL data = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    if (!data) return false;
+    void* target = GlobalLock(data);
+    if (!target) { GlobalFree(data); return false; }
+    std::memcpy(target, report.c_str(), bytes);
+    GlobalUnlock(data);
+    if (!OpenClipboard(owner)) { GlobalFree(data); return false; }
+    const bool copied = EmptyClipboard() &&
+        SetClipboardData(CF_UNICODETEXT, data) != nullptr;
+    CloseClipboard();
+    if (!copied) GlobalFree(data); // On success, the clipboard owns the data.
+    return copied;
+}
+
+static HRESULT CALLBACK diagnosticDialogCallback(HWND window, UINT notification,
+        WPARAM button, LPARAM, LONG_PTR report) {
+    if (notification == TDN_BUTTON_CLICKED && button == 100) {
+        const bool copied = copyDiagnostics(window,
+            *reinterpret_cast<const std::wstring*>(report));
+        SendMessageW(window, TDM_SET_ELEMENT_TEXT, TDE_FOOTER,
+            reinterpret_cast<LPARAM>(copied ? L"Details copied to clipboard." :
+                L"Could not access the clipboard. Please try again."));
+        return S_FALSE; // Copying does not close the dialog.
+    }
+    return S_OK;
+}
+
+static void showDiagnostics(const std::string& report, bool hasErrors) {
+    const std::wstring fullText = diagnosticText(report);
+    // Keep the native dialog manageable; copying always includes the entire report.
+    std::wstring preview = fullText.substr(0, 2000);
+    if (preview.size() < fullText.size())
+        preview += L"\n... (Copy details includes all remaining diagnostics.)";
+    const TASKDIALOG_BUTTON copyButton{100, L"Copy details"};
+    TASKDIALOGCONFIG dialog{};
+    dialog.cbSize = sizeof(dialog);
+    dialog.hwndParent = g_hWnd;
+    dialog.dwCommonButtons = TDCBF_CLOSE_BUTTON;
+    dialog.pszWindowTitle = L"LiarsoftTool";
+    dialog.pszMainInstruction = hasErrors ? L"Completed with errors" :
+                                           L"Completed with warnings";
+    dialog.pszMainIcon = hasErrors ? TD_ERROR_ICON : TD_WARNING_ICON;
+    dialog.pszContent = preview.c_str();
+    dialog.pszFooter = L"Copy details copies the complete report.";
+    dialog.cButtons = 1;
+    dialog.pButtons = &copyButton;
+    dialog.pfCallback = diagnosticDialogCallback;
+    dialog.lpCallbackData = reinterpret_cast<LONG_PTR>(&fullText);
+    if (FAILED(TaskDialogIndirect(&dialog, nullptr, nullptr, nullptr)))
+        MessageBoxW(g_hWnd, fullText.c_str(), L"Conversion diagnostics", MB_OK | MB_ICONERROR);
 }
 
 static std::string selectedEncoding() {
@@ -134,7 +199,8 @@ static void convertAll(std::vector<ConversionJob> jobs,
                        const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
                        bool gscToTsc) {
-    std::vector<std::string> allWarnings;
+    bool hasErrors = false;
+    std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
     const liarsoft::gui::ConversionOptions options{
         encoding, refPath, recursive, gscToTsc, unpackOnly};
     const size_t total = jobs.size();
@@ -157,12 +223,15 @@ static void convertAll(std::vector<ConversionJob> jobs,
         
         try {
             warnings = liarsoft::gui::convert(in, out, options);
-            allWarnings.insert(allWarnings.end(), warnings.begin(), warnings.end());
+            for (const auto& warning : warnings)
+                diagnostics.push_back({false, in, out, warning});
             postConversionUpdate({static_cast<int>(i),
                                   static_cast<int>((i + 1) * 100 / total),
                                   warnings.empty() ? "OK" :
                                       "WARN (" + std::to_string(warnings.size()) + ")"});
         } catch (const std::exception& e) {
+            hasErrors = true;
+            diagnostics.push_back({true, in, out, e.what()});
             postConversionUpdate({static_cast<int>(i),
                                   static_cast<int>((i + 1) * 100 / total),
                                   std::string("FAIL: ") + e.what()});
@@ -171,7 +240,8 @@ static void convertAll(std::vector<ConversionJob> jobs,
 
     ConversionUpdate finished;
     finished.progress = 100;
-    finished.warnings = std::move(allWarnings);
+    finished.report = liarsoft::gui::formatDiagnostics(diagnostics);
+    finished.hasErrors = hasErrors;
     finished.finished = true;
     postConversionUpdate(std::move(finished));
 }
@@ -286,19 +356,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         if (update->progress >= 0)
             SendMessage(g_hProgress, PBM_SETPOS, update->progress, 0);
         if (update->finished) {
-            SetWindowTextA(g_hStatus, update->warnings.empty()
+            SetWindowTextA(g_hStatus, update->hasErrors ? "Completed with errors." : update->report.empty()
                 ? "Done." : "Done with warnings.");
-            if (!update->warnings.empty()) {
-                std::string message;
-                const size_t shown = std::min<size_t>(update->warnings.size(), 20);
-                for (size_t i = 0; i < shown; ++i)
-                    message += "- " + update->warnings[i] + "\r\n";
-                if (shown < update->warnings.size())
-                    message += "... and " +
-                        std::to_string(update->warnings.size() - shown) + " more.";
-                MessageBoxA(g_hWnd, message.c_str(), "Completed with warnings",
-                            MB_OK | MB_ICONWARNING);
-            }
+            if (!update->report.empty())
+                showDiagnostics(update->report, update->hasErrors);
             EnableWindow(g_hBtnConvert, TRUE);
         }
         return 0;

@@ -22,6 +22,21 @@ namespace fs = std::filesystem;
 
 namespace liarsoft::gui {
 
+std::string formatDiagnostics(const std::vector<ConversionDiagnostic>& diagnostics) {
+    if (diagnostics.empty()) return "";
+    const auto errors = std::count_if(diagnostics.begin(), diagnostics.end(),
+        [](const ConversionDiagnostic& diagnostic) { return diagnostic.error; });
+    std::string report = "LiarsoftTool conversion diagnostics\nErrors: " +
+        std::to_string(errors) + "\nWarnings: " +
+        std::to_string(diagnostics.size() - errors) + "\n";
+    for (const auto& diagnostic : diagnostics) {
+        report += diagnostic.error ? "\n[Error]\n" : "\n[Warning]\n";
+        report += "Input: " + diagnostic.inputPath + "\nOutput: " +
+            diagnostic.outputPath + "\n" + diagnostic.message + "\n";
+    }
+    return report;
+}
+
 std::string extension(const std::string& path) {
     const auto pos = path.rfind('.');
     if (pos == std::string::npos) return "";
