@@ -136,6 +136,30 @@ std::vector<uint8_t> makeRegisterFixture(const KinsokuTable& table,
     return data;
 }
 
+std::vector<std::vector<uint8_t>> scheduledFonts(uint8_t charset) {
+    return {
+        {0x55,0x55,0x55,0x55,0x68,charset,0,0,0,0x55,0x55,0x55,
+         0x68,0xBC,0x02,0,0,0x55,0x55,0x55,0x6A,0x0E,0x8B,0xF8,
+         0xFF,0x15,0x24,0x30,0x47,0},
+        {0x6A,0,0x6A,0,0x6A,0,0xF7,0xDF,0x6A,0,0x68,charset,0,0,0,
+         0x1B,0xFF,0x6A,0,0x81,0xE7,0xBC,0x02,0,0,0x6A,0,0x51,0x57,
+         0x6A,0,0x81,0xE5,0xFF,0xFF,0,0,0x6A,0,0x6A,0,0x55,
+         0xFF,0x15,0x24,0x60,0x47,0},
+        {0x6A,0,0x6A,0,0x6A,0,0xF7,0xDF,0x6A,0,0x68,charset,0,0,0,
+         0x1B,0xFF,0x6A,0,0x81,0xE7,0xBC,0x02,0,0,0x6A,0,0x51,0x57,
+         0x6A,0,0x81,0xE3,0xFF,0xFF,0,0,0x6A,0,0x6A,0,0x53,
+         0xFF,0x15,0x24,0x30,0x47,0},
+        {0x53,0x8B,0x4C,0x24,0x5C,0x53,0x53,0xF7,0xD8,0x53,
+         0x68,charset,0,0,0,0x1B,0xC0,0x53,0x53,0x25,0xBC,0x02,0,0,
+         0x52,0x50,0x53,0x53,0x81,0xE1,0xFF,0xFF,0,0,0x53,0x51,
+         0xFF,0x15,0x24,0x30,0x47,0},
+        {0x6A,0,0x8B,0x4C,0x24,0x58,0x6A,0,0x6A,0,0xF7,0xD8,0x6A,0,
+         0x68,charset,0,0,0,0x1B,0xC0,0x6A,0,0x6A,0,0x25,0xBC,0x02,0,0,
+         0x52,0x50,0x6A,0,0x6A,0,0x81,0xE1,0xFF,0xFF,0,0,0x6A,0,0x51,
+         0xFF,0x15,0x24,0x60,0x47,0}
+    };
+}
+
 std::vector<uint8_t> makeKinsokuFixture(const KinsokuTable& table,
                                         uint8_t charset) {
     std::vector<uint8_t> data = {0x4D,0x5A,0x90};
@@ -190,6 +214,26 @@ int main() {
     notFont.back() = 0xD7; // Different call register: not the observed font path.
     require(liarsoft::exeConvertEncoding(notFont, 0x80, 0x86) == notFont);
 
+    const auto scheduled932 = scheduledFonts(0x80);
+    const auto scheduledGbk = scheduledFonts(0x86);
+    const auto scheduled1251 = scheduledFonts(0xCC);
+    for (size_t i = 0; i < scheduled932.size(); ++i) {
+        const auto& font = scheduled932[i];
+        require(liarsoft::exeConvertEncoding(font, 0x80, 0x86) == scheduledGbk[i]);
+        require(liarsoft::exeConvertEncoding(scheduledGbk[i], 0x86, 0xCC) == scheduled1251[i]);
+        require(liarsoft::exeConvertEncoding(scheduled1251[i], 0xCC, 0x80) == font);
+        for (size_t size = 0; size < font.size(); ++size) {
+            const std::vector<uint8_t> truncated(font.begin(), font.begin() + size);
+            require(liarsoft::exeConvertEncoding(truncated, 0x80, 0x86) == truncated);
+        }
+        auto altered = font;
+        altered[font.size() - 5] = 0x16; // Not CALL [IAT].
+        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
+        altered = font;
+        altered[0] ^= 1; // Wrong argument/register shape.
+        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
+    }
+
     const auto cp932 = makeKinsokuFixture(kCp932Kinsoku, 0x80);
     const auto gbk = makeKinsokuFixture(kGbkKinsoku, 0x86);
     const auto cp1251 = makeKinsokuFixture(kCp1251Kinsoku, 0xCC);
@@ -238,6 +282,12 @@ int main() {
     writeFile(input, optimizedFont);
     liarsoft::exeConvertFile(input, output, "CP1251");
     require(readFile(output) == interleavedFont(0xCC));
+
+    for (size_t i = 0; i < scheduled932.size(); ++i) {
+        writeFile(input, scheduled932[i]);
+        liarsoft::exeConvertFile(input, output, "CP1251");
+        require(readFile(output) == scheduled1251[i]);
+    }
 
     // A patched font charset does not imply that punctuation tables were patched.
     auto mixedRegister = register932;

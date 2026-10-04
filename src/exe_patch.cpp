@@ -4,6 +4,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <cstring>
+#include <initializer_list>
 
 namespace liarsoft {
 
@@ -202,6 +203,45 @@ bool isInterleavedFont(const std::vector<uint8_t>& data, size_t offset,
         std::memcmp(data.data() + offset + 10, tail, sizeof(tail)) == 0;
 }
 
+// Jeanne/Kagerou schedule weight/height calculations between argument pushes,
+// or push known-zero EBP/EBX instead of immediate zero. Match the complete
+// observed call shape; only the four-byte CreateFontA IAT address is variable.
+// offset points at PUSH charset, so all variants share the same write position.
+bool isScheduledFont(const std::vector<uint8_t>& data, size_t offset,
+                      uint8_t charset) {
+    auto matches = [&](size_t prefixSize, std::initializer_list<int> pattern) {
+        if (offset < prefixSize) return false;
+        const size_t start = offset - prefixSize;
+        if (pattern.size() > data.size() - start) return false;
+        size_t i = start;
+        for (int byte : pattern) {
+            if (byte >= 0 && data[i] != byte) return false;
+            ++i;
+        }
+        return true;
+    };
+    if (matches(4, {
+        0x55,0x55,0x55,0x55,0x68,charset,0,0,0,0x55,0x55,0x55,
+        0x68,0xBC,0x02,0,0,0x55,0x55,0x55,0x6A,0x0E,0x8B,0xF8,
+        0xFF,0x15,-1,-1,-1,-1})) return true;
+    for (bool ebp : {false, true}) {
+        if (matches(10, {
+            0x6A,0,0x6A,0,0x6A,0,0xF7,0xDF,0x6A,0,0x68,charset,0,0,0,
+            0x1B,0xFF,0x6A,0,0x81,0xE7,0xBC,0x02,0,0,0x6A,0,0x51,0x57,
+            0x6A,0,0x81,ebp ? 0xE5 : 0xE3,0xFF,0xFF,0,0,0x6A,0,0x6A,0,
+            ebp ? 0x55 : 0x53,0xFF,0x15,-1,-1,-1,-1})) return true;
+    }
+    return matches(10, {
+        0x53,0x8B,0x4C,0x24,0x5C,0x53,0x53,0xF7,0xD8,0x53,
+        0x68,charset,0,0,0,0x1B,0xC0,0x53,0x53,0x25,0xBC,0x02,0,0,
+        0x52,0x50,0x53,0x53,0x81,0xE1,0xFF,0xFF,0,0,0x53,0x51,
+        0xFF,0x15,-1,-1,-1,-1}) || matches(14, {
+        0x6A,0,0x8B,0x4C,0x24,0x58,0x6A,0,0x6A,0,0xF7,0xD8,0x6A,0,
+        0x68,charset,0,0,0,0x1B,0xC0,0x6A,0,0x6A,0,0x25,0xBC,0x02,0,0,
+        0x52,0x50,0x6A,0,0x6A,0,0x81,0xE1,0xFF,0xFF,0,0,0x6A,0,0x51,
+        0xFF,0x15,-1,-1,-1,-1});
+}
+
 bool hasCharsetPattern(const std::vector<uint8_t>& data, uint8_t value) {
     const uint8_t pattern1[17] = {
         0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,
@@ -220,6 +260,8 @@ bool hasCharsetPattern(const std::vector<uint8_t>& data, uint8_t value) {
     }
     for (size_t i = 0; i + 46 <= data.size(); ++i)
         if (isInterleavedFont(data, i, value)) return true;
+    for (size_t i = 0; i + 5 <= data.size(); ++i)
+        if (data[i] == 0x68 && isScheduledFont(data, i, value)) return true;
     return false;
 }
 
@@ -265,6 +307,9 @@ std::vector<uint8_t> exeConvertEncoding(const std::vector<uint8_t>& data,
             i += 45;
         }
     }
+    for (size_t i = 0; i + 5 <= out.size(); ++i)
+        if (out[i] == 0x68 && isScheduledFont(out, i, fromByte))
+            out[i + 1] = toByte;
     convertKinsokuTables(out, fromByte, toByte);
     return out;
 }
