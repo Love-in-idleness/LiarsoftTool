@@ -181,7 +181,7 @@ static std::vector<uint8_t> packPass(const uint8_t* bgra, size_t n, int data, ui
                   [](auto& a, auto& b) { return a.second > b.second; });
     }
     
-    bool smallIndex = freq.size() < 0x1002;
+    bool smallIndex = freq.size() <= 0x1000;
     uint32_t baseLength = smallIndex ? 3 : 4;
     uint32_t baseIndexLength = smallIndex ? 7 : 15;
     

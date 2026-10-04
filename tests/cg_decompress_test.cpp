@@ -116,6 +116,37 @@ int main() {
         require(output == Bytes({0x78, 0x56}) && source == extendedBlock.data() + extendedBlock.size(),
                 "Extended index decoding regressed");
 
+        // Independent engine-format fixtures: the last valid index at the
+        // exact 4096/4097 boundary, not just our encoder reading its own output.
+        for (unsigned count : {4096, 4097}) {
+            Bytes block;
+            append32(block, 2);
+            append32(block, count == 4096 ? 3 : 2);
+            append16(block, count);
+            append16(block, 0);
+            block.resize(12 + count * 2, 0);
+            block[12 + (count - 1) * 2] = 0x34;
+            block[13 + (count - 1) * 2] = 0x12;
+            const Bytes bits = count == 4096 ? Bytes{0xff, 0x7f, 0xf0} : Bytes{0xd0, 0x00};
+            block.insert(block.end(), bits.begin(), bits.end());
+            source = block.data();
+            liarsoft::cg_decompress_16bpp(output, 2, source, 0, palette,
+                                         block.data() + block.size());
+            require(output == Bytes({0x34, 0x12}), "4096/4097 palette boundary is incorrect");
+        }
+
+        for (unsigned count : {4095, 4096, 4097, 4098, 65535}) {
+            Bytes rgba(count * 4), expected(count * 4);
+            for (unsigned i = 0; i < count; ++i) {
+                rgba[i*4] = 11; rgba[i*4+1] = i >> 8;
+                rgba[i*4+2] = i; rgba[i*4+3] = 255;
+                expected[i*4] = i; expected[i*4+1] = i >> 8;
+                expected[i*4+2] = 11; expected[i*4+3] = 255;
+            }
+            require(liarsoft::wcgDecode(liarsoft::wcgEncode(rgba, count, 1)).pixels == expected,
+                    "Palette boundary encoding did not round trip losslessly");
+        }
+
         auto broken = compact;
         broken.resize(20);
         rejectsWcg(broken, "Truncated block header was accepted");
