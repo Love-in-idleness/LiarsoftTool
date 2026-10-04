@@ -127,7 +127,7 @@ make -j$(nproc)
 | GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容现代头（36B）及早期头（28B），自动按 HeaderLength 适配 |
 | TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
 | WCG | `.wcg` | ↔ PNG | 8 位 RGBA 像素无损转换，支持配对通道、独立四通道及透明度遮罩 |
-| LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
+| LIM | `.lim` | → PNG | 独立颜色/透明度通道或仅透明度；16-bit BGR565 绿色透明键及可选 Alpha |
 | EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换经典 RScript 的日文、中文或俄文禁则标点表 |
 | WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
@@ -315,7 +315,7 @@ When exactly two args have different extensions, the second is treated as output
 | GSC | `.gsc` | extract/inject | Game script. Compatible with modern 36B and early 28B headers; auto-adapts to HeaderLength |
 | TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
 | WCG | `.wcg` | ↔ PNG | Lossless 8-bit RGBA pixels; paired channels, four separate channels, and alpha masks |
-| LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
+| LIM | `.lim` | → PNG | Separate color/alpha channels or alpha-only; 16-bit BGR565 green key and optional alpha |
 | EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and classic RScript Japanese, Chinese, or Russian line-break punctuation tables |
 | WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
