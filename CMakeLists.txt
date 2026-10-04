@@ -147,6 +147,14 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME gui_common COMMAND gui_common_test)
 
+    add_executable(cg_decompress_test
+        tests/cg_decompress_test.cpp src/cg_decompress.cpp src/wcg_decoder.cpp
+        src/lim_decoder.cpp src/fileio.cpp src/stb_impl.cpp)
+    if(WIN32)
+        target_link_options(cg_decompress_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME cg_decompress COMMAND cg_decompress_test)
+
     add_test(NAME directory_packing
         COMMAND ${CMAKE_COMMAND}
             -DTOOL=$<TARGET_FILE:liarsofttool>

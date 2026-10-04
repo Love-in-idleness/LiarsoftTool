@@ -55,8 +55,8 @@ WcgImage wcgDecode(const std::vector<uint8_t>& data) {
     std::vector<uint8_t> pixels(n * 4, 0);
     std::vector<uint8_t> m_index;
 
-    cg_decompress(pixels, 2, 4, p, 2, 0, m_index);
-    cg_decompress(pixels, 0, 4, p, 2, 0, m_index);
+    cg_decompress(pixels, 2, 4, p, 2, 0, m_index, data.data() + data.size());
+    cg_decompress(pixels, 0, 4, p, 2, 0, m_index, data.data() + data.size());
 
     // Invert alpha (matches arc_unpacker and GARbro)
     for (size_t i = 3; i < pixels.size(); i += 4)

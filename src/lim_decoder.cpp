@@ -28,6 +28,7 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
         throw std::runtime_error("Not a valid LIM image");
 
     const uint8_t* p = data.data() + 2; // skip "LM"
+    const uint8_t* end = data.data() + data.size();
     
     auto rU16 = [&](){ uint16_t v = p[0] | (p[1]<<8); p += 2; return v; };
     auto rU32 = [&](){ uint32_t v = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24); p += 4; return v; };
@@ -50,7 +51,7 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
         std::vector<uint8_t> raw(n * 4, 0);
         uint8_t mask = 0xFF;
         for (int ch = 3; ch >= 0; --ch) {
-            cg_decompress(raw, static_cast<size_t>(ch), 4, p, 1, 3, m_index);
+            cg_decompress(raw, static_cast<size_t>(ch), 4, p, 1, 3, m_index, end);
             for (size_t i = static_cast<size_t>(ch); i < raw.size(); i += 4)
                 raw[i] ^= mask;
             mask = 0;
@@ -70,16 +71,11 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
         // Decode BGR565 image
         if (flags & 0x10) {
             if (flags & 0xE0) {
-                
-                // For 16bpp, read header and determine card
-                const uint8_t* save = p;
-                uint32_t imgSz = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24); p += 4;
-                uint32_t rem  = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24); p += 4;
-                uint16_t idxCnt = p[0] | (p[1]<<8); p += 2;
-                int card16 = (static_cast<int>(idxCnt) * 2 > 8192) ? 4 : 3;
-                p = save; // reset
-                cg_decompress_16bpp(raw16, n * 2, p, card16, m_index);
+                // Table coding is determined by the shared decompressor.
+                cg_decompress_16bpp(raw16, n * 2, p, 0, m_index, end);
             } else {
+                if (n * 2 > static_cast<size_t>(end - p))
+                    throw std::runtime_error("Truncated LIM 16bpp pixels");
                 for (size_t i = 0; i < n * 2; ++i)
                     raw16[i] = *p++;
             }
@@ -90,8 +86,10 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
         if (hasAlpha) {
             if (flags & 0xE00) {
                 alpha.resize(n, 0);
-                cg_decompress(alpha, 0, 1, p, 1, 3, m_index);
+                cg_decompress(alpha, 0, 1, p, 1, 3, m_index, end);
             } else {
+                if (n > static_cast<size_t>(end - p))
+                    throw std::runtime_error("Truncated LIM alpha channel");
                 alpha.assign(p, p + n);
                 p += n;
             }

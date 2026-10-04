@@ -1,4 +1,5 @@
 #include "cg_decompress.h"
+#include <algorithm>
 #include <stdexcept>
 
 namespace liarsoft {
@@ -7,15 +8,18 @@ static inline uint16_t readU16(const uint8_t*& p) {
     uint16_t v = p[0] | (p[1]<<8); p += 2; return v;
 }
 static inline uint32_t readU32(const uint8_t*& p) {
-    uint32_t v = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24); p += 4; return v;
+    uint32_t v = uint32_t(p[0]) | (uint32_t(p[1])<<8) |
+                 (uint32_t(p[2])<<16) | (uint32_t(p[3])<<24);
+    p += 4; return v;
 }
 
 // MSB-first bit reader
-static int getBits(int n, const uint8_t*& src, int& remaining, int& current, int& bits) {
+static int getBits(int n, const uint8_t*& src, size_t& remaining, int& current, int& bits) {
     int v = 0;
     while (n > 0) {
         if (current == 0) {
-            if (remaining == 0) return -1;
+            if (remaining == 0)
+                throw std::runtime_error("Truncated bit stream in cg_decompress");
             bits = static_cast<int>(*src++);
             --remaining;
             current = 8;
@@ -34,7 +38,7 @@ static int getBits(int n, const uint8_t*& src, int& remaining, int& current, int
 // `index_bit_length` = 3 for small tables, 4 for large.
 // `index_length_limit` = 6 for small tables, 14 for large.
 static int getIndex(int indexLength,
-                    const uint8_t*& src, int& remaining, int& current, int& bits,
+                    const uint8_t*& src, size_t& remaining, int& current, int& bits,
                     int indexLengthLimit)
 {
     int count = indexLength - 1;
@@ -60,20 +64,35 @@ void cg_decompress(
     const uint8_t*& src,
     size_t inputShift,
     int /*card*/,
-    std::vector<uint8_t>& m_index)
+    std::vector<uint8_t>& m_index,
+    const uint8_t* end)
 {
-    readU32(src); // size_orig
-    int remaining = static_cast<int>(readU32(src)); // size_comp
+    if ((inputShift != 1 && inputShift != 2) || outputShift < inputShift ||
+        outputOffset >= outputShift || inputShift > outputShift - outputOffset ||
+        output.size() % outputShift != 0)
+        throw std::runtime_error("Invalid output layout in cg_decompress");
+    if (src > end || static_cast<size_t>(end - src) < 12)
+        throw std::runtime_error("Truncated block header in cg_decompress");
+    const uint32_t originalSize = readU32(src);
+    size_t remaining = readU32(src); // size_comp, including block padding
+    if (originalSize != output.size() / outputShift * inputShift)
+        throw std::runtime_error("Invalid image size in cg_decompress");
 
     int indexCount = static_cast<int>(readU16(src));
     int indexSize  = indexCount * static_cast<int>(inputShift);
-    if (static_cast<size_t>(indexSize) > m_index.size())
-        m_index.resize(indexSize);
-
     readU16(src); // skip 2 bytes (junk in WCG, indexed in LIM)
 
+    if (indexCount == 0)
+        throw std::runtime_error("Empty palette in cg_decompress");
+    const size_t available = static_cast<size_t>(end - src);
+    if (static_cast<size_t>(indexSize) > available ||
+        remaining > available - static_cast<size_t>(indexSize))
+        throw std::runtime_error("Truncated palette or compressed block in cg_decompress");
+    if (static_cast<size_t>(indexSize) > m_index.size())
+        m_index.resize(indexSize);
     for (int i = 0; i < indexSize; ++i)
         m_index[i] = *src++;
+    const uint8_t* nextBlock = src + remaining;
 
     // WCG tables at 0x1000 entries and above use the large-table bit coding.
     bool small = (indexCount < 0x1000);
@@ -82,91 +101,46 @@ void cg_decompress(
 
     int current = 0, bits = 0;
     size_t dst = outputOffset;
+    size_t pixelsRemaining = output.size() / outputShift;
 
-    while (dst < output.size()) {
+    while (pixelsRemaining > 0) {
         int seqLen = 1;
         int len = getBits(indexBitLength, src, remaining, current, bits);
-        if (len == -1) break;
-
         if (len == 0) {
             seqLen = getBits(4, src, remaining, current, bits) + 2;
-            if (seqLen == -1 + 2) break; // getBits returned -1
             len = getBits(indexBitLength, src, remaining, current, bits);
         }
-        if (len == 0 || len == -1) break;
+        if (len == 0)
+            throw std::runtime_error("Invalid index length in cg_decompress");
 
         int idx = getIndex(len, src, remaining, current, bits, indexLengthLimit);
-        if (idx < 0) break;
-
-        if (inputShift == 1) {
-            for (int k = 0; k < seqLen; ++k) {
-                if (dst >= output.size()) break;
-                output[dst] = m_index[idx];
-                dst += outputShift;
-                if (dst >= output.size()) break;
-            }
-        } else { // inputShift == 2
-            int base = idx * 2;
-            for (int k = 0; k < seqLen; ++k) {
-                if (dst + 1 >= output.size()) break;
-                output[dst]   = m_index[base];
-                output[dst+1] = m_index[base + 1];
-                dst += outputShift;
-                if (dst >= output.size()) break;
-            }
+        if (idx < 0 || idx >= indexCount)
+            throw std::runtime_error("Palette index out of range in cg_decompress");
+        if (static_cast<size_t>(seqLen) > pixelsRemaining)
+            throw std::runtime_error("Pixel run exceeds image size in cg_decompress");
+        pixelsRemaining -= seqLen;
+        for (int k = 0; k < seqLen; ++k) {
+            std::copy_n(m_index.data() + idx * inputShift, inputShift,
+                        output.data() + dst);
+            dst += outputShift;
         }
     }
+    // Finishing the pixels may leave unused bytes (e.g. Khime's one-byte pad).
+    // The next channel starts at the declared end, not the last byte read.
+    src = nextBlock;
 }
 
 void cg_decompress_16bpp(
     std::vector<uint8_t>& output,
     size_t outputSize,
     const uint8_t*& src,
-    int /*card*/,
-    std::vector<uint8_t>& m_index)
+    int card,
+    std::vector<uint8_t>& m_index,
+    const uint8_t* end)
 {
-    readU32(src); // imageSize
-    int remaining = static_cast<int>(readU32(src));
-
-    int indexCount = static_cast<int>(readU16(src));
-    int indexSize  = indexCount * 2;
-    if (static_cast<size_t>(indexSize) > m_index.size())
-        m_index.resize(indexSize);
-
-    readU16(src); // skip
-
-    for (int i = 0; i < indexSize; ++i)
-        m_index[i] = *src++;
-
-    bool small = (indexCount < 0x1000);
-    int indexBitLength  = small ? 3 : 4;
-    int indexLengthLimit = small ? 6 : 14;
-
-    int current = 0, bits = 0;
-    size_t dst = 0;
-
-    while (dst < outputSize) {
-        int seqLen = 1;
-        int len = getBits(indexBitLength, src, remaining, current, bits);
-        if (len == -1) break;
-
-        if (len == 0) {
-            seqLen = getBits(4, src, remaining, current, bits) + 2;
-            if (seqLen == -1 + 2) break;
-            len = getBits(indexBitLength, src, remaining, current, bits);
-        }
-        if (len == 0 || len == -1) break;
-
-        int idx = getIndex(len, src, remaining, current, bits, indexLengthLimit);
-        if (idx < 0) break;
-
-        int base = idx * 2;
-        for (int k = 0; k < seqLen; ++k) {
-            if (dst + 1 >= outputSize) break;
-            output[dst++] = m_index[base];
-            output[dst++] = m_index[base + 1];
-        }
-    }
+    if (outputSize != output.size())
+        throw std::runtime_error("Invalid 16bpp output size in cg_decompress");
+    cg_decompress(output, 0, 2, src, 2, card, m_index, end);
 }
 
 } // namespace liarsoft
