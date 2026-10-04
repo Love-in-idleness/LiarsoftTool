@@ -95,7 +95,7 @@ void cg_decompress(
     const uint8_t* nextBlock = src + remaining;
 
     // Cannonball.exe 0x4404dd uses unsigned JA: 4096 still uses 3-bit coding.
-    bool small = (indexCount <= 0x1000);
+    bool small = (inputShift == 1 || indexCount <= 0x1000);
     int indexBitLength  = small ? 3 : 4;   // unk2 / index_bit_length
     int indexLengthLimit = small ? 6 : 14;  // unk1 / m_index_length_limit
 

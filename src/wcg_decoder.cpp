@@ -27,7 +27,7 @@ void appendPngBytes(void* context, void* data, int size) {
 
 } // namespace
 
-// ---- Decode (matches GARbro Reader / arc_unpacker wcg_image_decoder) ----
+// ---- Decode (Cannonball.exe's paired and single-channel paths) ----
 
 WcgImage wcgDecode(const std::vector<uint8_t>& data) {
     if (data.size() < 16 || data[0] != 'W' || data[1] != 'G')
@@ -37,7 +37,7 @@ WcgImage wcgDecode(const std::vector<uint8_t>& data) {
     
     // version u16
     uint16_t ver = p[0] | (p[1]<<8); p += 2;
-    if ((ver & 0xF) != 1 || (ver & 0x1C0) != 64)
+    if ((ver & 0xF) != 1)
         throw std::runtime_error("WCG: unsupported version");
     
     // depth u16
@@ -55,8 +55,18 @@ WcgImage wcgDecode(const std::vector<uint8_t>& data) {
     std::vector<uint8_t> pixels(n * 4, 0);
     std::vector<uint8_t> m_index;
 
-    cg_decompress(pixels, 2, 4, p, 2, 0, m_index, data.data() + data.size());
-    cg_decompress(pixels, 0, 4, p, 2, 0, m_index, data.data() + data.size());
+    const uint8_t* end = data.data() + data.size();
+    if ((ver & 0x1C0) == 0x40) {
+        cg_decompress(pixels, 2, 4, p, 2, 0, m_index, end);
+        cg_decompress(pixels, 0, 4, p, 2, 0, m_index, end);
+    } else {
+        // Cannonball.exe 0x43c0da: A first, then R/G/B only when bit 0x10
+        // is set. Mask-only files have no RGB data; leave those bytes zero.
+        cg_decompress(pixels, 3, 4, p, 1, 3, m_index, end);
+        if (ver & 0x10)
+            for (int channel = 2; channel >= 0; --channel)
+                cg_decompress(pixels, channel, 4, p, 1, 3, m_index, end);
+    }
 
     // Invert alpha (matches arc_unpacker and GARbro)
     for (size_t i = 3; i < pixels.size(); i += 4)
@@ -83,7 +93,7 @@ void wcgSavePng(const WcgImage& img, const std::string& path) {
     writeFileIfChanged(path, buf.bytes);
 }
 
-// ---- Encode (matches GARbro Writer.Pack) ----
+// ---- Encode (paired channels, or lossless single-channel fallback) ----
 
 static void wU16(std::vector<uint8_t>& out, uint16_t v) {
     out.push_back(v & 0xFF); out.push_back((v>>8) & 0xFF);
@@ -150,35 +160,31 @@ static void putIndex(GbBitWriter& bw, uint16_t index,
     }
 }
 
-// Pack one pass (data=0 for low/RA pass, data=1 for high/BG pass? No - original uses offset into data array)
-// GARbro Writer.Pack: first call with (1, 0xff00), second with (0, 0)
-// The 'data' parameter is the starting offset in the pixel array for this pass.
-// mask is XOR'd with the word before index lookup.
-static std::vector<uint8_t> packPass(const uint8_t* bgra, size_t n, int data, uint16_t mask) {
+// Alpha has already been inverted. An empty result requests single-channel
+// fallback: 65536 paired colors cannot fit in the on-disk uint16_t count.
+static std::vector<uint8_t> packPass(const uint8_t* bgra, size_t n, int offset, int stride) {
     std::vector<uint8_t> out;
     GbBitWriter bw(out);
     
     // Build frequency-sorted index (GARbro BuildIndex)
     std::unordered_map<uint16_t, uint16_t> index;  // color -> palette_index
     std::vector<std::pair<uint16_t, uint32_t>> freq;
+    auto colorAt = [&](size_t pixel) {
+        const uint8_t* p = bgra + pixel * 4 + offset;
+        return static_cast<uint16_t>(p[0] | (stride == 2 ? uint16_t(p[1]) << 8 : 0));
+    };
     
     {
         std::unordered_map<uint16_t, uint32_t> freqMap;
         for (size_t i = 0; i < n; ++i) {
-            uint8_t b0, b1;
-            if (data == 1) {
-                b0 = bgra[i*4 + 2];          // R (BGRA offset 2)
-                b1 = bgra[i*4 + 3] ^ 0xFF;    // A inverted
-            } else {
-                b0 = bgra[i*4 + 0];          // B
-                b1 = bgra[i*4 + 1];          // G
-            }
-            uint16_t word = b0 | (static_cast<uint16_t>(b1) << 8);
-            freqMap[word ^ mask]++;
+            freqMap[colorAt(i)]++;
         }
+        if (freqMap.size() > 0xffff) return {};
         for (auto& kv : freqMap) freq.push_back({kv.first, kv.second});
         std::sort(freq.begin(), freq.end(),
-                  [](auto& a, auto& b) { return a.second > b.second; });
+                  [](auto& a, auto& b) {
+                      return a.second != b.second ? a.second > b.second : a.first < b.first;
+                  });
     }
     
     bool smallIndex = freq.size() <= 0x1000;
@@ -195,39 +201,20 @@ static std::vector<uint8_t> packPass(const uint8_t* bgra, size_t n, int data, ui
     // Write palette (GARbro BuildIndex writes palette during index building)
     uint16_t j = 0;
     for (auto& kv : freq) {
-        wU16(out, kv.first);
+        out.push_back(kv.first & 0xff);
+        if (stride == 2) out.push_back(kv.first >> 8);
         index[kv.first] = j++;
     }
     
     // Encode pixels (GARbro Pack)
     for (size_t i = 0; i < n; ) {
-        uint8_t b0, b1;
-        if (data == 1) {
-            b0 = bgra[i*4 + 2];
-            b1 = bgra[i*4 + 3] ^ 0xFF;
-        } else {
-            b0 = bgra[i*4 + 0];
-            b1 = bgra[i*4 + 1];
-        }
-        uint16_t word = b0 | (static_cast<uint16_t>(b1) << 8);
-        uint16_t color = word ^ mask;
-        auto it = index.find(color);
-        if (it == index.end()) it = index.begin();
-        uint16_t idx = it->second;
+        uint16_t color = colorAt(i);
+        uint16_t idx = index.at(color);
         
         uint32_t runLen = 1;
         ++i;
         while (i < n) {
-            uint8_t nb0, nb1;
-            if (data == 1) {
-                nb0 = bgra[i*4 + 2];
-                nb1 = bgra[i*4 + 3] ^ 0xFF;
-            } else {
-                nb0 = bgra[i*4 + 0];
-                nb1 = bgra[i*4 + 1];
-            }
-            uint16_t nw = nb0 | (static_cast<uint16_t>(nb1) << 8);
-            if ((nw ^ mask) != color) break;
+            if (colorAt(i) != color) break;
             ++runLen;
             ++i;
             if (runLen >= 0x11) break;
@@ -242,11 +229,11 @@ static std::vector<uint8_t> packPass(const uint8_t* bgra, size_t n, int data, ui
     bw.flush();
     
     // Patch header
-    uint32_t dataSize = static_cast<uint32_t>(out.size() - headerPos - 12 - freq.size() * 2);
+    uint32_t dataSize = static_cast<uint32_t>(out.size() - headerPos - 12 - freq.size() * stride);
     uint8_t* hdr = out.data() + headerPos;
-    uint32_t pixels_x2 = static_cast<uint32_t>(n * 2);
-    hdr[0] = pixels_x2 & 0xFF; hdr[1] = (pixels_x2 >> 8) & 0xFF;
-    hdr[2] = (pixels_x2 >> 16) & 0xFF; hdr[3] = (pixels_x2 >> 24) & 0xFF;
+    uint32_t originalSize = static_cast<uint32_t>(n * stride);
+    hdr[0] = originalSize & 0xFF; hdr[1] = (originalSize >> 8) & 0xFF;
+    hdr[2] = (originalSize >> 16) & 0xFF; hdr[3] = (originalSize >> 24) & 0xFF;
     hdr[4] = dataSize & 0xFF; hdr[5] = (dataSize >> 8) & 0xFF;
     hdr[6] = (dataSize >> 16) & 0xFF; hdr[7] = (dataSize >> 24) & 0xFF;
     
@@ -261,13 +248,17 @@ std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t hei
         bgra[i*4+0] = rgba[i*4+2]; // B
         bgra[i*4+1] = rgba[i*4+1]; // G
         bgra[i*4+2] = rgba[i*4+0]; // R
-        bgra[i*4+3] = rgba[i*4+3]; // A
+        bgra[i*4+3] = rgba[i*4+3] ^ 0xff; // WCG stores inverted alpha
     }
+
+    auto pass1 = packPass(bgra.data(), n, 2, 2); // R + inverted alpha
+    auto pass2 = pass1.empty() ? std::vector<uint8_t>{} : packPass(bgra.data(), n, 0, 2);
+    const bool paired = !pass1.empty() && !pass2.empty();
     
     std::vector<uint8_t> out;
     // Header: magic + version + depth + pad + width + height
     out.push_back('W'); out.push_back('G');
-    wU16(out, 0x0271);       // version (low nibble=1, bits 6-8=64)
+    wU16(out, paired ? 0x0271 : 0x0231); // paired or A/R/G/B streams
     wU16(out, 32);           // depth
     wU16(out, 0x4000);       // pad/skip
     
@@ -275,11 +266,15 @@ std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t hei
     wU32(out, width);
     wU32(out, height);
     
-    auto pass1 = packPass(bgra.data(), n, 1, 0); // low: R+A, mask=0xFF00
-    auto pass2 = packPass(bgra.data(), n, 0, 0);      // high: B+G, mask=0
-    
-    out.insert(out.end(), pass1.begin(), pass1.end());
-    out.insert(out.end(), pass2.begin(), pass2.end());
+    if (paired) {
+        out.insert(out.end(), pass1.begin(), pass1.end());
+        out.insert(out.end(), pass2.begin(), pass2.end());
+    } else {
+        for (int channel = 3; channel >= 0; --channel) {
+            const auto pass = packPass(bgra.data(), n, channel, 1);
+            out.insert(out.end(), pass.begin(), pass.end());
+        }
+    }
     return out;
 }
 

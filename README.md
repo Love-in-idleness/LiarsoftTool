@@ -126,11 +126,13 @@ make -j$(nproc)
 | LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
 | GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容现代头（36B）及早期头（28B），自动按 HeaderLength 适配 |
 | TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
-| WCG | `.wcg` | ↔ PNG | 32-bit BGRA，两次 CG 解压/压缩（有损） |
+| WCG | `.wcg` | ↔ PNG | 8 位 RGBA 像素无损转换，支持配对通道、独立四通道及透明度遮罩 |
 | LIM | `.lim` | → PNG | 32-bit 四通道 或 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换经典 RScript 的日文、中文或俄文禁则标点表 |
 | WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
+
+WCG 编码默认使用两个 16 位颜色对；任一颜色对达到 65536 种时，自动改用独立 A/R/G/B 通道，避免调色板计数溢出并保持像素无损。仅透明度的 WCG 导出为 RGB 全零、透明度保留的 PNG，不补造颜色。四通道路径已根据 Cannonball 原程序验证静态逻辑，其他引擎的游戏内兼容性仍需测试；PNG 的 ICC/gamma 等元数据不会写入 WCG。
 
 GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空格）和多行。
 
@@ -310,11 +312,13 @@ When exactly two args have different extensions, the second is treated as output
 | LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
 | GSC | `.gsc` | extract/inject | Game script. Compatible with modern 36B and early 28B headers; auto-adapts to HeaderLength |
 | TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
-| WCG | `.wcg` | ↔ PNG | 32-bit BGRA, dual-pass CG compress/decompress (lossy) |
+| WCG | `.wcg` | ↔ PNG | Lossless 8-bit RGBA pixels; paired channels, four separate channels, and alpha masks |
 | LIM | `.lim` | → PNG | 32-bit 4-channel or 16-bit BGR565+Alpha |
 | EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and classic RScript Japanese, Chinese, or Russian line-break punctuation tables |
 | WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
+
+WCG encoding normally uses two 16-bit color pairs. If either pair has all 65536 values, it switches to separate A/R/G/B streams without losing pixels or overflowing the palette count. Alpha-only WCG files export as PNG with zero RGB and preserved alpha, without inventing colors. The four-channel path follows Cannonball's statically verified decoder; in-game compatibility with other engines still needs testing. PNG ICC/gamma metadata is not stored in WCG.
 
 GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and multi-line.
 

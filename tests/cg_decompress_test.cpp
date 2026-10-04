@@ -70,6 +70,22 @@ int main() {
         require(liarsoft::wcgDecode(liarsoft::wcgEncode(rgba, 1, 1)).pixels == bgra,
                 "WCG encoder/decoder round trip regressed");
 
+        auto single = imageHeader('W', 0x231, 32);
+        for (uint8_t channel : {0x00, 0x11, 0x22, 0x33})
+            appendBlock(single, {channel}, {0x20, 0xdd});
+        require(liarsoft::wcgDecode(single).pixels == bgra,
+                "Single-channel WCG decoding or block padding is incorrect");
+        auto mask = imageHeader('W', 0x201, 32);
+        appendBlock(mask, {0x80}, {0x20, 0xdd});
+        require(liarsoft::wcgDecode(mask).pixels == Bytes({0, 0, 0, 0x7f}),
+                "Alpha-only WCG did not preserve the mask");
+        auto truncatedSingle = single;
+        truncatedSingle.pop_back();
+        rejectsWcg(truncatedSingle, "Truncated single-channel WCG was accepted");
+        auto truncatedMask = mask;
+        truncatedMask.resize(16);
+        rejectsWcg(truncatedMask, "Missing WCG mask was accepted");
+
         // All four LIM channels use the same block framing, one byte per index.
         auto lim = imageHeader('L', 0, 32);
         for (uint8_t channel : {0x00, 0x11, 0x22, 0x33})
@@ -145,6 +161,26 @@ int main() {
             }
             require(liarsoft::wcgDecode(liarsoft::wcgEncode(rgba, count, 1)).pixels == expected,
                     "Palette boundary encoding did not round trip losslessly");
+        }
+
+        // Exhaust every 16-bit pair: overflow may occur in either pass, or both.
+        for (int overflowingPass : {0, 1, 2}) {
+            Bytes rgba(65536 * 4), expected(65536 * 4);
+            for (unsigned i = 0; i < 65536; ++i) {
+                rgba[i*4] = overflowingPass == 0 ? 11 : i & 255;
+                rgba[i*4+1] = overflowingPass == 1 ? 22 : i >> 8;
+                rgba[i*4+2] = overflowingPass == 1 ? 33 : i & 255;
+                rgba[i*4+3] = overflowingPass == 0 ? 255 : 255 - (i >> 8);
+                expected[i*4] = rgba[i*4+2]; expected[i*4+1] = rgba[i*4+1];
+                expected[i*4+2] = rgba[i*4]; expected[i*4+3] = rgba[i*4+3];
+            }
+            const auto encoded = liarsoft::wcgEncode(rgba, 256, 256);
+            require(encoded[2] == 0x31 && encoded[3] == 0x02,
+                    "65536-color pairs did not switch to single-channel WCG");
+            require(liarsoft::wcgDecode(encoded).pixels == expected,
+                    "Single-channel fallback changed colors or alpha");
+            require(liarsoft::wcgEncode(rgba, 256, 256) == encoded,
+                    "Equal-frequency palette ordering is not deterministic");
         }
 
         auto broken = compact;
