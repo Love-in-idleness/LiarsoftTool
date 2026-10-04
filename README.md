@@ -192,7 +192,7 @@ liarsofttool audio.wav                         # 嵌入式 → audio.ogg；标�
 liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
 ```
 
-OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771`），不能使用普通 PCM WAV；输入必须是完整的单流 Ogg Vorbis，声道数和采样率需与参考文件一致。不符合条件会报错，递归封包时会警告并跳过，不覆盖原文件。封装时根据新音频重建 `fact` 采样数及 RIFF/data 长度，保留参考文件的编解码器参数。普通 PCM 音频需要按原格式制作 PCM WAV，而不是把 Ogg 字节塞进 PCM 容器。
+OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771` 或 `0x6751`），不能使用普通 PCM WAV；输入必须是完整的单流 Ogg Vorbis，声道数和采样率需与参考文件一致。不符合条件会报错，递归封包时会警告并跳过，不覆盖原文件。封装时根据新音频重建 `fact` 采样数及 RIFF/data 长度，保留参考文件的编解码器参数和格式标记。普通 PCM 音频需要按原格式制作 PCM WAV，而不是把 Ogg 字节塞进 PCM 容器。
 
 > 提示：所有输出文件采用"内容相同则不重写"策略——若生成结果与磁盘上已有文件二进制完全一致，将跳过写入以保留原文件的修改时间，方便增量/批量转换时避免无关文件被标记为已修改。
 
@@ -391,7 +391,7 @@ liarsofttool audio.wav                         # embedded → audio.ogg; standar
 liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
 ```
 
-OGG→WAV requires an RScript Ogg-in-WAV template (format `0x6771`), not a
+OGG→WAV requires an RScript Ogg-in-WAV template (format `0x6771` or `0x6751`), not a
 standard PCM WAV. The input must be a complete single-stream Ogg Vorbis file
 with the template's channel count and sample rate. Invalid inputs fail without
 overwriting the original; recursive packing warns and skips them. The new

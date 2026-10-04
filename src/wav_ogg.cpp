@@ -33,7 +33,8 @@ bool isVorbisWavHeader(const std::vector<uint8_t>& data) {
     return data.size() >= WavOggExtractor::OGG_OFFSET &&
            std::memcmp(data.data(), "RIFF", 4) == 0 &&
            std::memcmp(data.data() + 8, "WAVEfmt ", 8) == 0 &&
-           readU32(data, 16) == 26 && readU16(data, 20) == 0x6771 &&
+           readU32(data, 16) == 26 &&
+           (readU16(data, 20) == 0x6771 || readU16(data, 20) == 0x6751) &&
            readU16(data, 36) == 8 &&
            std::memcmp(data.data() + 46, "fact", 4) == 0 &&
            readU32(data, 50) == 4 &&
@@ -205,7 +206,7 @@ std::vector<uint8_t> WavOggExtractor::embed(
     const std::vector<uint8_t>& oggData,
     const std::vector<uint8_t>& refWavData) {
     if (!isVorbisWavHeader(refWavData))
-        throw std::runtime_error("Reference must be an RScript Ogg-in-WAV template (format 0x6771), "
+        throw std::runtime_error("Reference must be an RScript Ogg-in-WAV template (format 0x6771 or 0x6751), "
                                  "not a PCM WAV; PCM replacement requires PCM audio");
     if (oggData.size() > std::numeric_limits<uint32_t>::max() - OGG_OFFSET)
         throw std::runtime_error("Ogg data is too large for a WAV container");

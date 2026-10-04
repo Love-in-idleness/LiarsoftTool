@@ -114,6 +114,17 @@ int main(int argc, char** argv) {
                 readU32(wav, 54) == 1257, "WAV sizes, fact or alignment are invalid");
         require(std::equal(ref.begin() + 20, ref.begin() + 46, wav.begin() + 20),
                 "Opaque codec parameters were changed");
+        // Evermaiden wav.xfl/2559.wav uses Vorbis mode 3, not mode 3+.
+        auto mode3Ref = ref; mode3Ref[20] = 0x51;
+        const auto mode3Wav = Audio::embed(clean, mode3Ref);
+        require(Audio::hasEmbeddedOgg(mode3Wav) && Audio::extract(mode3Wav) == clean,
+                "Vorbis format 0x6751 was not recognized");
+        require(mode3Wav[20] == 0x51 && mode3Wav[21] == 0x67 &&
+                std::equal(mode3Ref.begin() + 20, mode3Ref.begin() + 46, mode3Wav.begin() + 20),
+                "Vorbis mode or codec parameters changed");
+        auto unsupportedRef = ref; unsupportedRef[20] = 0x50;
+        rejects([&] { Audio::embed(clean, unsupportedRef); },
+                "Unverified Vorbis format was accepted");
         auto withTags = wav;
         withTags.insert(withTags.end(), {'L','I','S','T',0,0,0,0});
         require(Audio::extract(withTags) == clean, "Trailing RIFF metadata became audio");
@@ -173,6 +184,8 @@ int main(int argc, char** argv) {
             save("badref.ogg", clean);
             save("badref.wav", pcm);
             save("pcm.wav", pcm);
+            save("mode3.wav", mode3Wav);
+            save("mode3.ogg", clean);
         }
     } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;

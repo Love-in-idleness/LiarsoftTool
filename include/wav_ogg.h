@@ -28,7 +28,7 @@ public:
     /// Returns the extracted OGG data, or empty if no OGG found.
     static std::vector<uint8_t> extract(const std::vector<uint8_t>& wavData);
 
-    /// Wrap one complete Ogg Vorbis stream using an RScript format-0x6771 WAV
+    /// Wrap one complete Ogg Vorbis stream using an RScript 0x6771/0x6751 WAV
     /// header. Channels/rate must match; lengths and fact samples are rebuilt.
     static std::vector<uint8_t> embed(const std::vector<uint8_t>& oggData,
                                       const std::vector<uint8_t>& refWavData);
