@@ -4,6 +4,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <stdexcept>
 
 #include "exe_patch.h"
@@ -177,12 +178,11 @@ std::vector<std::string> convert(const std::string& inputPath,
     } else if (ext == ".png" || ext == ".jpg" ||
                ext == ".jpeg" || ext == ".bmp") {
         int width, height, channels;
-        unsigned char* pixels = stbi_load(
-            inputPath.c_str(), &width, &height, &channels, 4);
+        std::unique_ptr<unsigned char, decltype(&stbi_image_free)> pixels(
+            stbi_load(inputPath.c_str(), &width, &height, &channels, 4), stbi_image_free);
         if (!pixels) throw std::runtime_error("Failed to load image");
         const auto data = liarsoft::wcgEncode(
-            pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-        stbi_image_free(pixels);
+            pixels.get(), static_cast<uint32_t>(width), static_cast<uint32_t>(height));
         liarsoft::writeFileIfChanged(outputPath, data);
     } else if (ext == ".exe") {
         liarsoft::exeConvertFile(inputPath, outputPath, options.encoding);

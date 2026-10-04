@@ -42,10 +42,15 @@ void appendBlock(Bytes& out, const Bytes& palette, const Bytes& compressed) {
     out.insert(out.end(), compressed.begin(), compressed.end());
 }
 
-void rejectsWcg(const Bytes& data, const char* message) {
-    try { liarsoft::wcgDecode(data); }
+template<class Function>
+void rejects(Function function, const char* message) {
+    try { function(); }
     catch (const std::runtime_error&) { return; }
     throw std::runtime_error(message);
+}
+
+void rejectsWcg(const Bytes& data, const char* message) {
+    rejects([&] { liarsoft::wcgDecode(data); }, message);
 }
 
 } // namespace
@@ -213,6 +218,38 @@ int main() {
         rejectsWcg(broken, "Truncated extended index was accepted");
         broken[30] = 0;
         rejectsWcg(broken, "Incomplete pixel data was silently accepted");
+
+        require(liarsoft::checkedRgbaSize(1920, 1080) == 1920u * 1080 * 4,
+                "Valid image size was changed");
+        for (const auto& dimensions : std::vector<std::pair<uint32_t, uint32_t>>{
+                 {0, 1}, {1, 0}, {0x80000000u, 0x80000000u}, {0x40000000u, 1},
+                 {65536, 65536}, {0x400000, 1}, {1, 0x10000000}}) {
+            auto bad = compact;
+            bad.resize(8);
+            append32(bad, dimensions.first);
+            append32(bad, dimensions.second);
+            bad.insert(bad.end(), compact.begin() + 16, compact.end());
+            rejectsWcg(bad, "Invalid/overflowing WCG dimensions were accepted");
+            bad[0] = 'L'; bad[1] = 'M';
+            rejects([&] { liarsoft::limDecode(bad); }, "Invalid LIM dimensions were accepted");
+            rejects([&] { liarsoft::wcgEncode(rgba, dimensions.first, dimensions.second); },
+                    "Invalid encoder dimensions were accepted");
+        }
+        auto oversized = compact;
+        oversized[9] = 0x10; // width 4097 but only two tiny blocks: reject before allocation
+        rejectsWcg(oversized, "Impossible WCG expansion was accepted");
+        auto oversizedLim = lim;
+        oversizedLim[9] = 0x10;
+        rejects([&] { liarsoft::limDecode(oversizedLim); }, "Impossible LIM expansion was accepted");
+        rejects([&] { liarsoft::wcgEncode(Bytes{1, 2, 3}, 1, 1); },
+                "Short RGBA buffer was accepted");
+        rejects([&] { liarsoft::wcgEncode(Bytes(5), 1, 1); },
+                "Mismatched RGBA buffer was accepted");
+        rejects([&] { liarsoft::wcgEncode(nullptr, 1, 1); }, "Null RGBA buffer was accepted");
+        rejects([&] { liarsoft::wcgSavePng({1, 1, Bytes(3)}, "unused-invalid.png"); },
+                "Short BGRA PNG buffer was accepted");
+        rejects([&] { liarsoft::limSavePng({1, 1, Bytes(3)}, "unused-invalid.png"); },
+                "Short LIM PNG buffer was accepted");
 
         std::cout << "CG block padding, WCG/LIM pixels and malformed-input checks passed\n";
         return 0;

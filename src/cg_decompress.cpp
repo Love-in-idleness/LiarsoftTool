@@ -1,8 +1,21 @@
 #include "cg_decompress.h"
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 namespace liarsoft {
+
+size_t checkedRgbaSize(uint32_t width, uint32_t height) {
+    // Leave room for PNG filter bytes, deflate expansion and signed-int buffer
+    // growth; stb's per-row filter score also sums up to 128 per channel byte.
+    const uint64_t maxBytes = std::min<uint64_t>(std::numeric_limits<int>::max(),
+                                               std::numeric_limits<size_t>::max()) / 2 - 64;
+    if (width == 0 || height == 0 || width > std::numeric_limits<int>::max() / 512 ||
+        uint64_t(width) * height > maxBytes / 4 ||
+        (uint64_t(width) * 4 + 1) * height > maxBytes)
+        throw std::runtime_error("Invalid or unsupported image dimensions");
+    return static_cast<size_t>(width) * height * 4;
+}
 
 static inline uint16_t readU16(const uint8_t*& p) {
     uint16_t v = p[0] | (p[1]<<8); p += 2; return v;

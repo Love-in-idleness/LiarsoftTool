@@ -31,7 +31,7 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
     const uint8_t* end = data.data() + data.size();
     
     auto rU16 = [&](){ uint16_t v = p[0] | (p[1]<<8); p += 2; return v; };
-    auto rU32 = [&](){ uint32_t v = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24); p += 4; return v; };
+    auto rU32 = [&](){ uint32_t v = uint32_t(p[0]) | (uint32_t(p[1])<<8) | (uint32_t(p[2])<<16) | (uint32_t(p[3])<<24); p += 4; return v; };
 
     uint16_t flags = rU16();
     uint16_t bppF  = rU16();
@@ -39,7 +39,10 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
     uint32_t w = rU32();
     uint32_t h = rU32();
     int bpp = (bppF == 0x10) ? 16 : 32;
-    size_t n = static_cast<size_t>(w) * h;
+    const size_t imageSize = checkedRgbaSize(w, h);
+    const size_t n = imageSize / 4;
+    if ((bpp == 32 || (flags & 0x110)) && n > uint64_t(data.size() - 16) * 17)
+        throw std::runtime_error("LIM dimensions exceed the available pixel data");
 
     std::vector<uint8_t> m_index; // reusable palette
     LimImage img;
@@ -111,6 +114,8 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
 }
 
 void limSavePng(const LimImage& img, const std::string& path) {
+    if (img.pixels.size() != checkedRgbaSize(img.width, img.height))
+        throw std::runtime_error("LIM pixel buffer does not match image dimensions");
     PngBuffer buf;
     if (!stbi_write_png_to_func(appendPngBytes, &buf, img.width, img.height, 4,
                                 img.pixels.data(), img.width * 4))

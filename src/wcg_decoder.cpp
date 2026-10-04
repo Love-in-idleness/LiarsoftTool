@@ -47,12 +47,16 @@ WcgImage wcgDecode(const std::vector<uint8_t>& data) {
     
     p += 2; // skip 2
     
-    uint32_t w = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24); p += 4;
-    uint32_t h = p[0] | (p[1]<<8) | (p[2]<<16) | (p[3]<<24); p += 4;
-    size_t n = static_cast<size_t>(w) * h;
+    uint32_t w = uint32_t(p[0]) | (uint32_t(p[1])<<8) | (uint32_t(p[2])<<16) | (uint32_t(p[3])<<24); p += 4;
+    uint32_t h = uint32_t(p[0]) | (uint32_t(p[1])<<8) | (uint32_t(p[2])<<16) | (uint32_t(p[3])<<24); p += 4;
+    const size_t imageSize = checkedRgbaSize(w, h);
+    // One run emits at most 17 pixels and takes more than one byte. Even
+    // counting every remaining byte as compressed data is a conservative cap.
+    if (imageSize / 4 > uint64_t(data.size() - 16) * 17)
+        throw std::runtime_error("WCG dimensions exceed the available pixel data");
 
     // Output is BGRA8888 (matching arc_unpacker)
-    std::vector<uint8_t> pixels(n * 4, 0);
+    std::vector<uint8_t> pixels(imageSize, 0);
     std::vector<uint8_t> m_index;
 
     const uint8_t* end = data.data() + data.size();
@@ -77,8 +81,11 @@ WcgImage wcgDecode(const std::vector<uint8_t>& data) {
 
 void wcgSavePng(const WcgImage& img, const std::string& path) {
     // Convert BGRA → RGBA for PNG output
-    size_t n = static_cast<size_t>(img.width) * img.height;
-    std::vector<uint8_t> rgba(n * 4);
+    const size_t imageSize = checkedRgbaSize(img.width, img.height);
+    if (img.pixels.size() != imageSize)
+        throw std::runtime_error("WCG pixel buffer does not match image dimensions");
+    const size_t n = imageSize / 4;
+    std::vector<uint8_t> rgba(imageSize);
     for (size_t i = 0; i < n; ++i) {
         rgba[i*4+0] = img.pixels[i*4+2]; // B→R
         rgba[i*4+1] = img.pixels[i*4+1]; // G→G
@@ -242,8 +249,10 @@ static std::vector<uint8_t> packPass(const uint8_t* bgra, size_t n, int offset, 
 
 std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t height) {
     // rgba is RGBA8888 — convert to BGRA for the encoder
-    size_t n = static_cast<size_t>(width) * height;
-    std::vector<uint8_t> bgra(n * 4);
+    const size_t imageSize = checkedRgbaSize(width, height);
+    if (!rgba) throw std::runtime_error("Missing RGBA pixel buffer");
+    const size_t n = imageSize / 4;
+    std::vector<uint8_t> bgra(imageSize);
     for (size_t i = 0; i < n; ++i) {
         bgra[i*4+0] = rgba[i*4+2]; // B
         bgra[i*4+1] = rgba[i*4+1]; // G
@@ -262,7 +271,6 @@ std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t hei
     wU16(out, 32);           // depth
     wU16(out, 0x4000);       // pad/skip
     
-    std::vector<uint8_t> w(width * 4);
     wU32(out, width);
     wU32(out, height);
     
@@ -279,6 +287,8 @@ std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t hei
 }
 
 std::vector<uint8_t> wcgEncode(const std::vector<uint8_t>& rgba, uint32_t width, uint32_t height) {
+    if (rgba.size() != checkedRgbaSize(width, height))
+        throw std::runtime_error("RGBA pixel buffer does not match image dimensions");
     return wcgEncode(rgba.data(), width, height);
 }
 

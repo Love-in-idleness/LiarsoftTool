@@ -17,6 +17,7 @@
 #include <cstring>
 #include <algorithm>
 #include <filesystem>
+#include <memory>
 #include <algorithm>
 
 namespace fs = std::filesystem;
@@ -294,10 +295,10 @@ static bool processOne(const std::string& inputPath,
     } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
         std::cout << "Converting to WCG: " << inputPath << std::endl;
         int w, h, ch;
-        unsigned char* px = stbi_load(inputPath.c_str(), &w, &h, &ch, 4);
+        std::unique_ptr<unsigned char, decltype(&stbi_image_free)> px(
+            stbi_load(inputPath.c_str(), &w, &h, &ch, 4), stbi_image_free);
         if (!px) throw std::runtime_error("Failed to load image: " + inputPath);
-        auto wcgData = liarsoft::wcgEncode(px, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
-        stbi_image_free(px);
+        auto wcgData = liarsoft::wcgEncode(px.get(), static_cast<uint32_t>(w), static_cast<uint32_t>(h));
         if (out.empty()) out = replaceExtension(inputPath, ".wcg");
         liarsoft::writeFileIfChanged(out, wcgData);
         std::cout << "Saved " << w << "x" << h << " WCG to: " << out << std::endl;

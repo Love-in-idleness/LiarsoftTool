@@ -7,6 +7,10 @@
 
 namespace liarsoft {
 
+/// Checked size for an RGBA/BGRA image. Bounds also keep stb's signed-int
+/// strides/buffer lengths and the original 32-bit engine sizes representable.
+size_t checkedRgbaSize(uint32_t width, uint32_t height);
+
 /**
  * CG decompression — used by both WCG and LIM formats.
  *
