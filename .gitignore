@@ -1,4 +1,5 @@
 build/
+.codex/config.toml
 .vscode/
 test/
 
