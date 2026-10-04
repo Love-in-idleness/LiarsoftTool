@@ -68,7 +68,7 @@ static std::string guessExt(const std::vector<uint8_t>& data) {
 // ---- LWG Decoder ----
 
 bool LwgDecoder::isRecognized(const std::vector<uint8_t>& data) {
-    if (data.size() < 16) return false;
+    if (data.size() < 28) return false; // 24-byte header and 4-byte table terminator.
     return data[0] == 'L' && data[1] == 'G' && data[2] == 0x01 && data[3] == 0x00;
 }
 
@@ -78,8 +78,12 @@ LwgDecoder::Archive LwgDecoder::decode(const std::vector<uint8_t>& data,
         throw std::runtime_error("Not a valid LWG archive");
 
     size_t pos = MAGIC_SIZE;
+    size_t limit = data.size();
     auto readU32 = [&]() -> uint32_t {
-        uint32_t v = data[pos] | (data[pos+1]<<8) | (data[pos+2]<<16) | (data[pos+3]<<24);
+        if (pos > limit || limit - pos < 4)
+            throw std::runtime_error("LWG: truncated table field");
+        uint32_t v = uint32_t(data[pos]) | (uint32_t(data[pos+1])<<8) |
+                     (uint32_t(data[pos+2])<<16) | (uint32_t(data[pos+3])<<24);
         pos += 4; return v;
     };
     auto readI32 = [&]() -> int32_t {
@@ -94,9 +98,14 @@ LwgDecoder::Archive LwgDecoder::decode(const std::vector<uint8_t>& data,
     uint32_t fileCount = readU32();
     pos += 4; // skip unknown
     uint32_t tableSize = readU32();
-    size_t dataStart = pos + tableSize + 4;
+    if (tableSize > data.size() - 28 || fileCount > tableSize / 18)
+        throw std::runtime_error("LWG: invalid table size or entry count");
+    limit = pos + tableSize;
+    const size_t dataStart = limit + 4;
 
     for (uint32_t i = 0; i < fileCount; ++i) {
+        if (pos > limit || limit - pos < 18)
+            throw std::runtime_error("LWG: truncated table entry");
         LwgEntry entry;
         entry.x    = readI32();
         entry.y    = readI32();
@@ -104,15 +113,18 @@ LwgDecoder::Archive LwgDecoder::decode(const std::vector<uint8_t>& data,
         uint32_t offset = readU32();
         entry.size = readU32();
         uint8_t nameLen = data[pos++];
+        if (nameLen > limit - pos)
+            throw std::runtime_error("LWG: filename extends past the table");
 
         std::string rawName(data.begin() + static_cast<ptrdiff_t>(pos),
                             data.begin() + static_cast<ptrdiff_t>(pos + nameLen));
         pos += nameLen;
         entry.name = decodeName(rawName, encoding);
 
-        size_t fileOff = dataStart + offset;
-        if (fileOff + entry.size > data.size())
+        if (offset > data.size() - dataStart ||
+            entry.size > data.size() - dataStart - offset)
             throw std::runtime_error("LWG: data out of bounds: " + entry.name);
+        const size_t fileOff = dataStart + offset;
         entry.data.assign(data.begin() + static_cast<ptrdiff_t>(fileOff),
                           data.begin() + static_cast<ptrdiff_t>(fileOff + entry.size));
 
@@ -335,6 +347,8 @@ std::vector<uint8_t> LwgPacker::pack(
     uint32_t tableSize = 0;
     for (const auto& pe : packEntries) {
         auto encoded = encodeName(pe.meta.name, encoding);
+        if (encoded.size() > 255)
+            throw std::runtime_error("LWG filename exceeds 255 encoded bytes: " + pe.meta.name);
         tableSize += static_cast<uint32_t>(9 + 4 + 4 + 1 + encoded.size());
     }
     writeU32(tableSize);

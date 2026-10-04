@@ -16,7 +16,7 @@
 #include <filesystem>
 #include <set>
 #include "encoding.h"
-#include <regex>
+#include <limits>
 
 namespace fs = std::filesystem;
 
@@ -410,38 +410,14 @@ static std::string decodeFileName(const std::vector<uint8_t>& raw,
     return convertEncoding(s, encoding, "UTF-8");
 }
 
-// ---- Natural sort helper ----
-
-static bool naturalCompare(const std::string& a, const std::string& b) {
-    // Try numeric prefix match first (e.g. "0001.gsc")
-    std::regex numPattern(R"(^(\d{4})\..*)");
-    std::smatch ma, mb;
-    bool aNum = std::regex_match(a, ma, numPattern);
-    bool bNum = std::regex_match(b, mb, numPattern);
-    if (aNum && bNum) {
-        return std::stoi(ma[1].str()) < std::stoi(mb[1].str());
-    }
-    // Fall back to natural sort with embedded numbers
-    std::regex re(R"((\d+)|(\D+))");
-    auto itA = std::sregex_iterator(a.begin(), a.end(), re);
-    auto itB = std::sregex_iterator(b.begin(), b.end(), re);
-    auto end = std::sregex_iterator();
-
-    while (itA != end && itB != end) {
-        std::string pa = itA->str();
-        std::string pb = itB->str();
-        ++itA; ++itB;
-
-        if (std::isdigit(pa[0]) && std::isdigit(pb[0])) {
-            int na = std::stoi(pa);
-            int nb = std::stoi(pb);
-            if (na != nb) return na < nb;
-        } else if (pa != pb) {
-            return pa < pb;
-        }
-    }
-    return itA == end && itB != end;
+static void checkArchiveName(const std::string& name) {
+    if (name.empty() || name == "." || name == ".." ||
+        name.find_first_of("/\\:") != std::string::npos ||
+        name.find('\0') != std::string::npos)
+        throw std::runtime_error("Unsafe XFL filename: " + name);
 }
+
+// ---- Engine-compatible ASCII resource-name ordering ----
 
 // ---- Factory methods ----
 
@@ -475,6 +451,10 @@ XflArchive XflArchive::fromBytes(const std::vector<uint8_t>& data, const std::st
     if (fileCount < 0 || tableSize < 0) {
         throw std::runtime_error("Corrupt XFL archive header");
     }
+    if (static_cast<size_t>(tableSize) > reader.remaining() ||
+        fileCount > tableSize / 40)
+        throw std::runtime_error("Corrupt XFL table size or entry count");
+    const size_t dataStart = 12 + static_cast<size_t>(tableSize);
 
     // Read chunk table
     for (int32_t i = 0; i < fileCount; ++i) {
@@ -482,20 +462,23 @@ XflArchive XflArchive::fromBytes(const std::vector<uint8_t>& data, const std::st
 
         // Read fixed-width filename (0x20 = 32 bytes)
         std::vector<uint8_t> nameBytes = reader.readBytes(0x20);
+        if (std::find(nameBytes.begin(), nameBytes.end(), 0) == nameBytes.end())
+            throw std::runtime_error("XFL filename is not null-terminated");
         entry.fileName = decodeFileName(nameBytes, enc);
+        checkArchiveName(entry.fileName);
 
         // Read offset and size
         int32_t offset = reader.readInt32();
         int32_t size = reader.readInt32();
 
-        if (size < 0) {
-            throw std::runtime_error("Corrupt XFL entry: negative file size");
+        if (size < 0 || offset < 0) {
+            throw std::runtime_error("Corrupt XFL entry: negative offset or file size");
         }
 
         // Read file data (offset is relative to start of data section)
         // The data section starts after header + table
-        size_t dataStart = 12 + static_cast<size_t>(tableSize); // 12 = magic + tableSize + fileCount
-        if (dataStart + offset + size > data.size()) {
+        if (static_cast<size_t>(offset) > data.size() - dataStart ||
+            static_cast<size_t>(size) > data.size() - dataStart - offset) {
             throw std::runtime_error("Corrupt XFL entry: data offset out of bounds");
         }
         entry.data.assign(data.begin() + static_cast<ptrdiff_t>(dataStart + offset),
@@ -523,9 +506,9 @@ void XflArchive::addDirectory(const std::string& dirPath) {
         }
     }
 
-    // Sort: numeric (0001) first, then natural
+    // The engine uses case-insensitive string binary search, not natural sort.
     std::sort(files.begin(), files.end(), [](const fs::path& a, const fs::path& b) {
-        return naturalCompare(a.string(), b.string());
+        return lower(a.string()) < lower(b.string());
     });
 
     for (const auto& file : files) {
@@ -553,9 +536,34 @@ void XflArchive::save(const std::string& path) const {
 
 std::vector<uint8_t> XflArchive::toBytes() const {
     BigEndianWriter writer;
+    struct StoredEntry {
+        const XflEntry* entry;
+        std::vector<uint8_t> name;
+        std::string key;
+    };
+    std::vector<StoredEntry> stored;
+    for (const auto& entry : entries) {
+        checkArchiveName(entry.fileName);
+        auto name = encodeFileName(entry.fileName, encoding);
+        if (name.size() > 31)
+            throw std::runtime_error("XFL filename exceeds 31 encoded bytes: " + entry.fileName);
+        auto key = lower(decodeFileName(name, encoding));
+        stored.push_back({&entry, std::move(name), std::move(key)});
+    }
+    // ASCII resource names match Cannonball.exe 0x41ab27 (lstrcmpiA).
+    // Non-ASCII Windows locale collation is not emulated here.
+    std::sort(stored.begin(), stored.end(), [](const StoredEntry& a, const StoredEntry& b) {
+        return a.key < b.key;
+    });
+    for (size_t i = 1; i < stored.size(); ++i)
+        if (stored[i - 1].key == stored[i].key)
+            throw std::runtime_error("Duplicate case-insensitive XFL filename: " + stored[i].entry->fileName);
 
     const uint32_t magic = 0x0001424C;
     const uint32_t entrySize = 0x20 + 4 + 4; // 40 bytes per entry
+    const uint32_t maximum = std::numeric_limits<int32_t>::max();
+    if (entries.size() > maximum / entrySize)
+        throw std::runtime_error("XFL table exceeds the supported size");
     uint32_t tableSize = static_cast<uint32_t>(entries.size()) * entrySize;
     uint32_t fileCount = static_cast<uint32_t>(entries.size());
 
@@ -567,22 +575,18 @@ std::vector<uint8_t> XflArchive::toBytes() const {
     // Compute cumulative offsets for file data
     uint32_t dataOffset = 0;
     std::vector<uint32_t> offsets;
-    for (const auto& entry : entries) {
+    for (const auto& item : stored) {
+        const auto& entry = *item.entry;
+        if (entry.data.size() > maximum - dataOffset)
+            throw std::runtime_error("XFL payload exceeds the supported size");
         offsets.push_back(dataOffset);
         dataOffset += static_cast<uint32_t>(entry.data.size());
     }
 
     // Write chunk table
-    for (size_t i = 0; i < entries.size(); ++i) {
-        const auto& entry = entries[i];
-
-        // Encode file name in the archive encoding
-        auto nameBytes = encodeFileName(entry.fileName, encoding);
-
-        // Write fixed-width name (0x20 bytes, null-padded)
-        if (nameBytes.size() > 0x1F) {
-            nameBytes.resize(0x1F); // truncate to 31 bytes
-        }
+    for (size_t i = 0; i < stored.size(); ++i) {
+        const auto& entry = *stored[i].entry;
+        const auto& nameBytes = stored[i].name;
         std::vector<uint8_t> paddedName(0x20, 0);
         std::copy(nameBytes.begin(), nameBytes.end(), paddedName.begin());
         writer.writeBytes(paddedName);
@@ -592,8 +596,8 @@ std::vector<uint8_t> XflArchive::toBytes() const {
     }
 
     // Write file data
-    for (const auto& entry : entries) {
-        writer.writeBytes(entry.data);
+    for (const auto& item : stored) {
+        writer.writeBytes(item.entry->data);
     }
 
     return writer.data();
@@ -602,6 +606,7 @@ std::vector<uint8_t> XflArchive::toBytes() const {
 // ---- Unpack ----
 
 void XflArchive::extractToDirectory(const std::string& dirPath) const {
+    for (const auto& entry : entries) checkArchiveName(entry.fileName);
     createDirectory(dirPath);
 
     for (const auto& entry : entries) {

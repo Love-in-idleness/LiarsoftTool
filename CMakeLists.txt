@@ -147,6 +147,14 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME gui_common COMMAND gui_common_test)
 
+    add_executable(archive_test tests/archive_test.cpp ${COMMON_SOURCES})
+    if(NOT WIN32)
+        target_link_libraries(archive_test PRIVATE Iconv::Iconv)
+    else()
+        target_link_options(archive_test PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+    add_test(NAME archive COMMAND archive_test ${CMAKE_CURRENT_BINARY_DIR}/archive_test_data)
+
     add_executable(cg_decompress_test
         tests/cg_decompress_test.cpp src/cg_decompress.cpp src/wcg_decoder.cpp
         src/lim_decoder.cpp src/fileio.cpp src/stb_impl.cpp)
