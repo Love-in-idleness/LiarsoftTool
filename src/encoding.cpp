@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #ifdef _WIN32
@@ -52,22 +53,30 @@ std::string convertEncoding(const std::string& input,
     const std::string canonicalTo = normalizeEncodingName(toEnc);
     UINT cpFrom = codePageFromName(canonicalFrom);
     UINT cpTo   = codePageFromName(canonicalTo);
+    if (input.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+        throw std::runtime_error("Input is too large for Windows encoding conversion");
 
     // Convert source → UTF-16 (wide)
-    int wlen = MultiByteToWideChar(cpFrom, 0, input.data(), static_cast<int>(input.size()), nullptr, 0);
+    const DWORD inputFlags = strict ? MB_ERR_INVALID_CHARS : 0;
+    int wlen = MultiByteToWideChar(cpFrom, inputFlags, input.data(), static_cast<int>(input.size()), nullptr, 0);
     if (wlen == 0) throw std::runtime_error("MultiByteToWideChar failed for " + canonicalFrom);
     std::vector<wchar_t> wide(wlen);
-    MultiByteToWideChar(cpFrom, 0, input.data(), static_cast<int>(input.size()), wide.data(), wlen);
+    if (MultiByteToWideChar(cpFrom, inputFlags, input.data(), static_cast<int>(input.size()), wide.data(), wlen) != wlen)
+        throw std::runtime_error("MultiByteToWideChar failed for " + canonicalFrom);
 
     // Convert UTF-16 → destination
+    // UTF-8 forbids WC_NO_BEST_FIT_CHARS and a non-null lpUsedDefaultChar.
+    const DWORD outputFlags = cpTo == CP_UTF8 ? (strict ? WC_ERR_INVALID_CHARS : 0) : WC_NO_BEST_FIT_CHARS;
     BOOL usedDefault = FALSE;
-    int mlen = WideCharToMultiByte(cpTo, WC_NO_BEST_FIT_CHARS, wide.data(), wlen, nullptr, 0,
-                                   nullptr, &usedDefault);
+    BOOL* defaultResult = cpTo == CP_UTF8 ? nullptr : &usedDefault;
+    int mlen = WideCharToMultiByte(cpTo, outputFlags, wide.data(), wlen, nullptr, 0,
+                                   nullptr, defaultResult);
     if (mlen == 0) throw std::runtime_error("WideCharToMultiByte failed for " + canonicalTo);
     std::vector<char> multi(mlen);
     usedDefault = FALSE;
-    WideCharToMultiByte(cpTo, WC_NO_BEST_FIT_CHARS, wide.data(), wlen, multi.data(), mlen,
-                        nullptr, &usedDefault);
+    if (WideCharToMultiByte(cpTo, outputFlags, wide.data(), wlen, multi.data(), mlen,
+                           nullptr, defaultResult) != mlen)
+        throw std::runtime_error("WideCharToMultiByte failed for " + canonicalTo);
     if (strict && usedDefault)
         throw std::runtime_error("text cannot be represented in " + canonicalTo +
                                  ": some characters would become '?'");

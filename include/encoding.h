@@ -7,7 +7,7 @@ namespace liarsoft {
 
 /// Convert a string between encodings.
 /// `fromEnc` and `toEnc` are encoding names (e.g. "CP932", "GBK", "UTF-8").
-/// With `strict`, characters the target encoding cannot represent raise an
+/// With `strict`, malformed input and characters the target encoding cannot represent raise an
 /// error instead of being replaced with '?', so that silently corrupted game
 /// text cannot be produced.
 std::string convertEncoding(const std::string& input,
