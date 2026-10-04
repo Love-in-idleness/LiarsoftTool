@@ -28,7 +28,8 @@ public:
     /// Returns the extracted OGG data, or empty if no OGG found.
     static std::vector<uint8_t> extract(const std::vector<uint8_t>& wavData);
 
-    /// Wrap Ogg data using the 66-byte header from a reference WAV.
+    /// Wrap one complete Ogg Vorbis stream using an RScript format-0x6771 WAV
+    /// header. Channels/rate must match; lengths and fact samples are rebuilt.
     static std::vector<uint8_t> embed(const std::vector<uint8_t>& oggData,
                                       const std::vector<uint8_t>& refWavData);
 
@@ -37,7 +38,7 @@ public:
     static bool extractToFile(const std::string& wavPath, const std::string& oggPath);
 
     /// Embed Ogg Vorbis data into a WAV container.
-    /// Uses the first 66 bytes of `refWavPath` as the WAV header template.
+    /// Uses the validated first 66 bytes of `refWavPath` as the header template.
     static void embedToFile(const std::string& oggPath, const std::string& refWavPath,
                             const std::string& wavPath);
 };

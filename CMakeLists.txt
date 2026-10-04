@@ -158,6 +158,7 @@ if(BUILD_TESTING)
     add_test(NAME directory_packing
         COMMAND ${CMAKE_COMMAND}
             -DTOOL=$<TARGET_FILE:liarsofttool>
+            -DAUDIO_TEST=$<TARGET_FILE:wav_ogg_test>
             -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/directory_packing_test
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/directory_packing_test.cmake)

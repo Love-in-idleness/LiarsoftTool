@@ -140,11 +140,12 @@ file(WRITE "${TEST_ROOT}/convert/orphan.txt" "#original\n>translation\n")
 file(WRITE "${TEST_ROOT}/convert/orphan.ogg" "missing-template")
 file(WRITE "${TEST_ROOT}/convert/broken.png" "not-an-image")
 file(WRITE "${TEST_ROOT}/convert/broken.wcg" "stale-conversion")
-file(WRITE "${TEST_ROOT}/convert/audio.wav"
-    "HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
-string(ASCII 1 one)
-file(WRITE "${TEST_ROOT}/convert/audio.ogg"
-    "OggSAAAAAAAAAAAAAAAAAAAAAA${one}${one}Z")
+execute_process(COMMAND "${AUDIO_TEST}" "${TEST_ROOT}/convert"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result)
+    message(FATAL_ERROR "Creating valid audio fixtures failed: ${error}")
+endif()
+file(READ "${TEST_ROOT}/convert/badref.wav" original_pcm HEX)
 
 execute_process(
     COMMAND "${TOOL}" -R -o "${TEST_ROOT}/convert.xfl" "${TEST_ROOT}/convert"
@@ -157,8 +158,13 @@ if(NOT EXISTS "${TEST_ROOT}/convert/image.lim.old" OR
    NOT EXISTS "${TEST_ROOT}/convert/image.wcg" OR
    NOT error MATCHES "same-name reference GSC not found" OR
    NOT error MATCHES "same-name WAV template not found" OR
-   NOT error MATCHES "failed to load image")
+   NOT error MATCHES "failed to load image" OR
+   NOT error MATCHES "not a PCM WAV")
     message(FATAL_ERROR "Recursive conversion or warnings are incorrect: ${error}")
+endif()
+file(READ "${TEST_ROOT}/convert/badref.wav" retained_pcm HEX)
+if(NOT retained_pcm STREQUAL original_pcm)
+    message(FATAL_ERROR "Failed Ogg conversion overwrote the PCM template")
 endif()
 
 execute_process(
@@ -166,6 +172,9 @@ execute_process(
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/convert_unpacked/image.png" OR
    NOT EXISTS "${TEST_ROOT}/convert_unpacked/audio.ogg" OR
+   NOT EXISTS "${TEST_ROOT}/convert_unpacked/pcm.wav" OR
+   EXISTS "${TEST_ROOT}/convert_unpacked/pcm.ogg" OR
+   EXISTS "${TEST_ROOT}/convert_unpacked/badref.wav" OR
    EXISTS "${TEST_ROOT}/convert_unpacked/broken.wcg")
     message(FATAL_ERROR "Recursive resource unpacking failed: ${error}")
 endif()
