@@ -7,7 +7,7 @@
 
 namespace liarsoft {
 
-/// Convert recognized RScript EXE font charset operands and classic line-break
+/// Convert recognized RScript EXE font charset operands and known line-break
 /// punctuation tables.
 /// @param data   Raw EXE bytes.
 /// @param fromByte  Source Win32 font charset value in the EXE.

@@ -1,7 +1,6 @@
 #include "exe_patch.h"
 
 #include <array>
-#include <cassert>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -10,6 +9,10 @@
 #include <vector>
 
 namespace {
+
+void require(bool condition) {
+    if (!condition) throw std::runtime_error("EXE patch regression failed");
+}
 
 const std::vector<uint8_t> kPattern1Prefix = {
     0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x68
@@ -74,6 +77,35 @@ void appendKinsoku(std::vector<uint8_t>& data, const KinsokuTable& table,
         appendCmp(data, table[i], false);
 }
 
+void appendRegisterCmp(std::vector<uint8_t>& data, uint16_t value,
+                       bool nearJump) {
+    const uint8_t load[] = {0xB8, static_cast<uint8_t>(value),
+        static_cast<uint8_t>(value >> 8), 0x00, 0x00, 0x66, 0x3B, 0xF0};
+    data.insert(data.end(), std::begin(load), std::end(load));
+    if (nearJump) {
+        const uint8_t jump[] = {0x0F,0x84,0x11,0x22,0x33,0x44};
+        data.insert(data.end(), std::begin(jump), std::end(jump));
+    } else {
+        const uint8_t jump[] = {0x74,0x55};
+        data.insert(data.end(), std::begin(jump), std::end(jump));
+    }
+}
+
+void appendRegisterKinsoku(std::vector<uint8_t>& data,
+                           const KinsokuTable& table, bool extended) {
+    for (size_t i = 0; i < 38; ++i)
+        appendRegisterCmp(data, table[i], true);
+    if (extended) {
+        appendRegisterCmp(data, 0x213F, true);
+        appendRegisterCmp(data, 0x3F21, true);
+        // The engine has already loaded BX with 0x2121. Keep this comparison.
+        const uint8_t extra[] = {0x66,0x3B,0xF3,0x0F,0x84,0x11,0x22,0x33,0x44};
+        data.insert(data.end(), std::begin(extra), std::end(extra));
+    }
+    for (size_t i = 38; i < table.size(); ++i)
+        appendRegisterCmp(data, table[i], i < (extended ? 40u : 39u));
+}
+
 void appendPattern1(std::vector<uint8_t>& data, uint8_t charset) {
     data.insert(data.end(), kPattern1Prefix.begin(), kPattern1Prefix.end());
     const uint8_t tail[] = {charset,0x00,0x00,0x00,0x6A,0x00,0x6A,0x00};
@@ -83,6 +115,25 @@ void appendPattern1(std::vector<uint8_t>& data, uint8_t charset) {
 void appendPattern2(std::vector<uint8_t>& data, uint8_t charset) {
     const uint8_t pattern[] = {0xDA, 0x68, charset};
     data.insert(data.end(), std::begin(pattern), std::end(pattern));
+}
+
+std::vector<uint8_t> interleavedFont(uint8_t charset) {
+    return {
+        0x6A,0x00,0x6A,0x00,0x8B,0x35,0x24,0x80,0x4C,0x00,
+        0xF7,0xD8,0x6A,0x00,0x6A,0x00,0x68,charset,0x00,0x00,0x00,
+        0x6A,0x00,0x6A,0x00,0x53,0x1B,0xC0,0x25,0xBC,0x02,0x00,0x00,
+        0x50,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x57,0x89,0x45,0xB4,0xFF,0xD6
+    };
+}
+
+std::vector<uint8_t> makeRegisterFixture(const KinsokuTable& table,
+                                        uint8_t charset) {
+    std::vector<uint8_t> data;
+    appendPattern2(data, charset);
+    appendRegisterKinsoku(data, table, false);
+    data.push_back(0x90);
+    appendRegisterKinsoku(data, table, true);
+    return data;
 }
 
 std::vector<uint8_t> makeKinsokuFixture(const KinsokuTable& table,
@@ -125,15 +176,53 @@ int main() {
     appendPattern2(expected, 0xCC);
     expected.push_back(0x90);
     appendPattern1(expected, 0xCC);
-    assert(normalized == expected);
+    require(normalized == expected);
+
+    const auto optimizedFont = interleavedFont(0x80);
+    require(liarsoft::exeConvertEncoding(optimizedFont, 0x80, 0x86) ==
+            interleavedFont(0x86));
+    for (size_t size = 0; size < optimizedFont.size(); ++size) {
+        const std::vector<uint8_t> truncated(optimizedFont.begin(),
+                                              optimizedFont.begin() + size);
+        require(liarsoft::exeConvertEncoding(truncated, 0x80, 0x86) == truncated);
+    }
+    auto notFont = optimizedFont;
+    notFont.back() = 0xD7; // Different call register: not the observed font path.
+    require(liarsoft::exeConvertEncoding(notFont, 0x80, 0x86) == notFont);
 
     const auto cp932 = makeKinsokuFixture(kCp932Kinsoku, 0x80);
     const auto gbk = makeKinsokuFixture(kGbkKinsoku, 0x86);
     const auto cp1251 = makeKinsokuFixture(kCp1251Kinsoku, 0xCC);
-    assert(liarsoft::exeConvertEncoding(cp932, 0x80, 0x86) == gbk);
-    assert(liarsoft::exeConvertEncoding(gbk, 0x86, 0x80) == cp932);
-    assert(liarsoft::exeConvertEncoding(cp932, 0x80, 0xCC) == cp1251);
-    assert(liarsoft::exeConvertEncoding(cp1251, 0xCC, 0x80) == cp932);
+    require(liarsoft::exeConvertEncoding(cp932, 0x80, 0x86) == gbk);
+    require(liarsoft::exeConvertEncoding(gbk, 0x86, 0x80) == cp932);
+    require(liarsoft::exeConvertEncoding(cp932, 0x80, 0xCC) == cp1251);
+    require(liarsoft::exeConvertEncoding(cp1251, 0xCC, 0x80) == cp932);
+
+    const auto register932 = makeRegisterFixture(kCp932Kinsoku, 0x80);
+    const auto registerGbk = makeRegisterFixture(kGbkKinsoku, 0x86);
+    const auto register1251 = makeRegisterFixture(kCp1251Kinsoku, 0xCC);
+    require(liarsoft::exeConvertEncoding(register932, 0x80, 0x86) == registerGbk);
+    require(liarsoft::exeConvertEncoding(registerGbk, 0x86, 0xCC) == register1251);
+    require(liarsoft::exeConvertEncoding(register1251, 0xCC, 0x80) == register932);
+
+    for (bool extended : {false, true}) {
+        std::vector<uint8_t> table;
+        appendRegisterKinsoku(table, kCp932Kinsoku, extended);
+        // Incomplete or altered tables must not be partially patched.
+        for (size_t size = 0; size < table.size(); ++size) {
+            const std::vector<uint8_t> truncated(table.begin(), table.begin() + size);
+            require(liarsoft::exeConvertEncoding(truncated, 0x80, 0x86) == truncated);
+        }
+        auto altered = table;
+        altered[1] ^= 1;
+        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
+        altered = table;
+        altered[3] = 1; // MOV EAX must contain a zero-extended 16-bit constant.
+        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
+        altered = table;
+        altered[9] = 0x85; // JNE instead of JE is not this known classifier.
+        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
+    }
 
     const std::string input = "exe_patch_test_input.bin";
     const std::string output = "exe_patch_test_output.bin";
@@ -144,7 +233,18 @@ int main() {
 
     writeFile(input, mixed);
     liarsoft::exeConvertFile(input, output, "CP1251");
-    assert(readFile(output) == expected);
+    require(readFile(output) == expected);
+
+    writeFile(input, optimizedFont);
+    liarsoft::exeConvertFile(input, output, "CP1251");
+    require(readFile(output) == interleavedFont(0xCC));
+
+    // A patched font charset does not imply that punctuation tables were patched.
+    auto mixedRegister = register932;
+    mixedRegister[2] = 0x86;
+    writeFile(input, mixedRegister);
+    liarsoft::exeConvertFile(input, output, "GBK");
+    require(readFile(output) == registerGbk);
 
     writeFile(unsupported, {0x4D, 0x5A, 0x00});
     bool rejected = false;
@@ -153,7 +253,7 @@ int main() {
     } catch (const std::runtime_error&) {
         rejected = true;
     }
-    assert(rejected);
+    require(rejected);
 
     std::remove(input.c_str());
     std::remove(output.c_str());

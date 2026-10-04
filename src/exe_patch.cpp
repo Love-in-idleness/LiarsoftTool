@@ -71,6 +71,65 @@ void writeU16(std::vector<uint8_t>& data, size_t offset, uint16_t value) {
     data[offset + 1] = static_cast<uint8_t>(value >> 8);
 }
 
+// Optimized RScript builds load the character into EAX before CMP SI, AX.
+// Accept only a zero-extended 16-bit constant followed by JE, not arbitrary
+// MOV/CMP sequences. The complete known table must match before any write.
+bool matchRegisterCmp(const std::vector<uint8_t>& data, size_t& offset,
+                      uint16_t value, bool nearOnly) {
+    if (offset + 10 > data.size() || data[offset] != 0xB8 ||
+        readU16(data, offset + 1) != value || data[offset + 3] != 0 ||
+        data[offset + 4] != 0 || data[offset + 5] != 0x66 ||
+        data[offset + 6] != 0x3B || data[offset + 7] != 0xF0)
+        return false;
+    if (offset + 14 <= data.size() && data[offset + 8] == 0x0F &&
+        data[offset + 9] == 0x84) {
+        offset += 14;
+        return true;
+    }
+    if (!nearOnly && data[offset + 8] == 0x74) {
+        offset += 10;
+        return true;
+    }
+    return false;
+}
+
+void convertRegisterKinsokuTables(std::vector<uint8_t>& data,
+                                  const KinsokuTable& from,
+                                  const KinsokuTable& to) {
+    for (size_t start = 0; start + 10 <= data.size(); ++start) {
+        if (data[start] != 0xB8) continue;
+        std::array<size_t, 50> operands{};
+        size_t offset = start;
+        bool matches = true;
+        for (size_t i = 0; i < 38 && matches; ++i) {
+            operands[i] = offset + 1;
+            matches = matchRegisterCmp(data, offset, from[i], true);
+        }
+        if (!matches) continue;
+
+        if (offset + 3 <= data.size() && data[offset] == 0xB8 &&
+            readU16(data, offset + 1) == kExtendedKinsoku[0]) {
+            if (!matchRegisterCmp(data, offset, kExtendedKinsoku[0], true) ||
+                !matchRegisterCmp(data, offset, kExtendedKinsoku[1], true))
+                continue;
+            // Extended classifier also compares SI with BX (already 0x2121).
+            const uint8_t extra[] = {0x66, 0x3B, 0xF3, 0x0F, 0x84};
+            if (offset + 9 > data.size() ||
+                std::memcmp(data.data() + offset, extra, sizeof(extra)) != 0)
+                continue;
+            offset += 9;
+        }
+        for (size_t i = 38; i < from.size() && matches; ++i) {
+            operands[i] = offset + 1;
+            matches = matchRegisterCmp(data, offset, from[i], false);
+        }
+        if (!matches) continue;
+        for (size_t i = 0; i < to.size(); ++i)
+            writeU16(data, operands[i], to[i]);
+        start = offset - 1;
+    }
+}
+
 void convertKinsokuTables(std::vector<uint8_t>& data, uint8_t fromCharset,
                           uint8_t toCharset) {
     const auto* from = kinsokuTable(fromCharset);
@@ -124,6 +183,23 @@ void convertKinsokuTables(std::vector<uint8_t>& data, uint8_t fromCharset,
             writeU16(data, operands[endBase + i - 38], (*to)[i]);
         start = offset - 1;
     }
+    convertRegisterKinsokuTables(data, *from, *to);
+}
+
+// A newer CreateFontA call interleaves the IAT load and bold-weight calculation
+// with the argument pushes. Match the entire observed call shape, not a lone
+// PUSH charset; only the IAT address is variable.
+bool isInterleavedFont(const std::vector<uint8_t>& data, size_t offset,
+                       uint8_t charset) {
+    const uint8_t prefix[] = {0x6A,0x00,0x6A,0x00,0x8B,0x35};
+    const uint8_t tail[] = {
+        0xF7,0xD8,0x6A,0x00,0x6A,0x00,0x68,charset,0x00,0x00,0x00,
+        0x6A,0x00,0x6A,0x00,0x53,0x1B,0xC0,0x25,0xBC,0x02,0x00,0x00,
+        0x50,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x57,0x89,0x45,0xB4,0xFF,0xD6
+    };
+    return offset + 10 + sizeof(tail) <= data.size() &&
+        std::memcmp(data.data() + offset, prefix, sizeof(prefix)) == 0 &&
+        std::memcmp(data.data() + offset + 10, tail, sizeof(tail)) == 0;
 }
 
 bool hasCharsetPattern(const std::vector<uint8_t>& data, uint8_t value) {
@@ -142,6 +218,8 @@ bool hasCharsetPattern(const std::vector<uint8_t>& data, uint8_t value) {
         if (std::memcmp(&data[i], pattern2, sizeof(pattern2)) == 0)
             return true;
     }
+    for (size_t i = 0; i + 46 <= data.size(); ++i)
+        if (isInterleavedFont(data, i, value)) return true;
     return false;
 }
 
@@ -179,6 +257,12 @@ std::vector<uint8_t> exeConvertEncoding(const std::vector<uint8_t>& data,
         if (std::memcmp(&out[i], p2f, 3) == 0) {
             std::memcpy(&out[i], p2t, 3);
             i += 2;
+        }
+    }
+    for (size_t i = 0; i + 46 <= out.size(); ++i) {
+        if (isInterleavedFont(out, i, fromByte)) {
+            out[i + 17] = toByte;
+            i += 45;
         }
     }
     convertKinsokuTables(out, fromByte, toByte);

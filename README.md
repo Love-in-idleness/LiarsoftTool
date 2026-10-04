@@ -49,7 +49,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | EXE 编码转换 | `liarsofttool -e gbk game.exe` |
 | 批量转换 | `liarsofttool *.png` 或 `liarsofttool * -e gbk` |
 
-> **提示**：日文版用 `cp932`（Windows-31J，默认；`shift_jis` 等旧别名也会映射到 CP932），中文版用 `-e gbk`，西里尔/英文版用 `-e cp1251`。EXE 转换会同步经典 RScript 的禁则标点表；运行时仍需使用与文本匹配的 Windows 系统代码页或 Locale Emulator（CP932/936/1251）。
+> **提示**：日文版用 `cp932`（Windows-31J，默认；`shift_jis` 等旧别名也会映射到 CP932），中文版用 `-e gbk`，西里尔/英文版用 `-e cp1251`。EXE 转换会同步已识别的 RScript 禁则标点表（经典立即数比较及 Evermaiden 的寄存器比较结构）；运行时仍需使用与文本匹配的 Windows 系统代码页或 Locale Emulator（CP932/936/1251）。
 
 ### 编译
 
@@ -128,7 +128,7 @@ make -j$(nproc)
 | TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
 | WCG | `.wcg` | ↔ PNG | 8 位 RGBA 像素无损转换，支持配对通道、独立四通道及透明度遮罩 |
 | LIM | `.lim` | → PNG | 独立颜色/透明度通道或仅透明度；16-bit BGR565 绿色透明键及可选 Alpha |
-| EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换经典 RScript 的日文、中文或俄文禁则标点表 |
+| EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换已识别的日文、中文或俄文禁则标点表 |
 | WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
 
@@ -207,7 +207,7 @@ OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771
 ### 已知限制
 
 - **多级目录**：XFL/LWG 中文件均扁平存放。
-- **EXE 排版规则**：禁则表转换只应用于完整匹配已知经典 RScript 机器码结构的程序；其他引擎版本仍只转换已识别的字体 charset。
+- **EXE 排版规则**：禁则表转换只应用于完整匹配已知 RScript 机器码结构的程序（立即数比较、`MOV EAX / CMP SI, AX` 比较）；只修改字符常量，不改写分支或系统代码页。其他引擎版本仍只转换已识别的字体 charset。
 
 ---
 
@@ -237,7 +237,7 @@ OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771
 | EXE encoding convert | `liarsofttool -e gbk game.exe` |
 | Batch convert | `liarsofttool *.png` or `liarsofttool * -e gbk` |
 
-> **Tip:** Use `cp932` for Japanese (Windows-31J, default; legacy `shift_jis` aliases also map to CP932), `-e gbk` for Chinese, and `-e cp1251` for Cyrillic/English texts. EXE conversion also updates classic RScript line-break punctuation tables. Run the game under the matching Windows system code page or Locale Emulator (CP932/936/1251).
+> **Tip:** Use `cp932` for Japanese (Windows-31J, default; legacy `shift_jis` aliases also map to CP932), `-e gbk` for Chinese, and `-e cp1251` for Cyrillic/English texts. EXE conversion also updates recognized RScript punctuation tables (classic immediate comparisons and Evermaiden's register-comparison layout). Run the game under the matching Windows system code page or Locale Emulator (CP932/936/1251).
 > Output paths default to the input file's directory when omitted.
 
 ### Build
@@ -316,7 +316,7 @@ When exactly two args have different extensions, the second is treated as output
 | TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
 | WCG | `.wcg` | ↔ PNG | Lossless 8-bit RGBA pixels; paired channels, four separate channels, and alpha masks |
 | LIM | `.lim` | → PNG | Separate color/alpha channels or alpha-only; 16-bit BGR565 green key and optional alpha |
-| EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and classic RScript Japanese, Chinese, or Russian line-break punctuation tables |
+| EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and Japanese, Chinese, or Russian line-break punctuation tables |
 | WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
@@ -415,7 +415,7 @@ Recursive unpacking opens nested XFL/LWG archives and processes GSC files (the C
 ### Known Limitations
 
 - **Subdirectories**: all files in XFL/LWG archives are flat (no nesting).
-- **EXE line breaking**: punctuation-table conversion is applied only when a known classic RScript machine-code structure matches in full; other engine versions still receive only recognized font-charset changes.
+- **EXE line breaking**: punctuation-table conversion requires a complete match of a known RScript machine-code structure (immediate comparisons or `MOV EAX / CMP SI, AX` comparisons). Only character constants change; branches and the system code page remain untouched. Other engine versions still receive only recognized font-charset changes.
 
 ---
 
