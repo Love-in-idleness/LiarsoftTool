@@ -376,8 +376,8 @@ std::vector<uint8_t> LwgPacker::pack(
         dataOffset += static_cast<uint32_t>(pe.data.size());
     }
 
-    // Padding u32 (zeros)
-    writeU32(0);
+    // Total payload length, not padding (e.g. CNMI compane.lwg).
+    writeU32(dataOffset);
 
     // Write file data
     for (const auto& pe : packEntries) {

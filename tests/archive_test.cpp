@@ -11,6 +11,10 @@ using Bytes = std::vector<uint8_t>;
 void put32(Bytes& data, size_t offset, uint32_t value) {
     for (int i = 0; i < 4; ++i) data[offset+i] = static_cast<uint8_t>(value>>(i*8));
 }
+uint32_t get32(const Bytes& data, size_t offset) {
+    return uint32_t(data.at(offset)) | uint32_t(data.at(offset+1))<<8 |
+           uint32_t(data.at(offset+2))<<16 | uint32_t(data.at(offset+3))<<24;
+}
 void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
@@ -84,8 +88,12 @@ int main(int argc, char** argv) {
             };
             const auto controlDirectory=directory/"controls";
             LwgDecoder::extractToDirectory(controls,controlDirectory.string(),"CP932");
-            const auto restored=LwgDecoder::decode(
-                LwgPacker::pack(controlDirectory.string(),"CP932"),"CP932");
+            const auto packedControls=LwgPacker::pack(controlDirectory.string(),"CP932");
+            const auto restored=LwgDecoder::decode(packedControls,"CP932");
+            const size_t dataSizeField=24+get32(packedControls,20);
+            require(get32(packedControls,dataSizeField)==2 &&
+                    get32(packedControls,dataSizeField)==packedControls.size()-dataSizeField-4,
+                    "LWG payload length is written as padding instead of its size");
             require(restored.width==controls.width && restored.height==controls.height &&
                     restored.entries.size()==controls.entries.size(),
                     "Metadata-only LWG entries lost during directory round trip");

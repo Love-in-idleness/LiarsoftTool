@@ -28,7 +28,7 @@ namespace liarsoft {
  *     NameLen: u8
  *     Name: NameLen bytes (encoded in specified encoding)
  *
- *   Padding: u32 (zeros, 4 bytes)
+ *   DataSize: u32 (total raw payload length, 4 bytes)
  *   Data section: concatenated raw file bytes
  */
 struct LwgEntry {
