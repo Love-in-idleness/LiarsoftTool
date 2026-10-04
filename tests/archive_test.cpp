@@ -75,6 +75,33 @@ int main(int argc, char** argv) {
         if(argc==2) {
             const std::filesystem::path directory(argv[1]);
             std::filesystem::create_directories(directory);
+            LwgDecoder::Archive controls;
+            controls.width=850; controls.height=26;
+            controls.entries={
+                {"slide", {'W','G'}, 690, 4, 8, 2},
+                {"slide", {}, 7, -1, 8, 0},
+                {"slide_lev_f", {}, -10, 12, 8, 0}
+            };
+            const auto controlDirectory=directory/"controls";
+            LwgDecoder::extractToDirectory(controls,controlDirectory.string(),"CP932");
+            const auto restored=LwgDecoder::decode(
+                LwgPacker::pack(controlDirectory.string(),"CP932"),"CP932");
+            require(restored.width==controls.width && restored.height==controls.height &&
+                    restored.entries.size()==controls.entries.size(),
+                    "Metadata-only LWG entries lost during directory round trip");
+            for(size_t i=0;i<controls.entries.size();++i) {
+                const auto& original=controls.entries[i];
+                const auto& actual=restored.entries[i];
+                require(actual.name==original.name && actual.x==original.x &&
+                        actual.y==original.y && actual.flag==original.flag &&
+                        actual.data==original.data,
+                        "Empty LWG entry changed or reused a same-named image");
+            }
+            controls.entries.erase(controls.entries.begin());
+            const auto emptyDirectory=directory/"empty_controls";
+            LwgDecoder::extractToDirectory(controls,emptyDirectory.string(),"CP932");
+            rejects([&]{LwgPacker::pack(emptyDirectory.string(),"CP932");},
+                    "Archive containing only empty entries must still be rejected");
             std::ofstream(directory/"a.wcg",std::ios::binary)<<"WG";
             std::ofstream(directory/".meta.xml")
                 <<"<Canvas><Width>1</Width><Height>1</Height><Items>"

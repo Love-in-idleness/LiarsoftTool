@@ -56,7 +56,9 @@ public:
     /// Decode LWG archive. `encoding` is the filename encoding.
     static Archive decode(const std::vector<uint8_t>& data, const std::string& encoding);
 
-    /// Extract all entries to a directory. Also writes .meta.xml for repacking.
+    /// Extract non-empty payloads and write .meta.xml for every entry.
+    /// Zero-data entries use empty="1" so repacking preserves them even when
+    /// another image entry has the same name.
     static void extractToDirectory(const Archive& archive, const std::string& dirPath,
                                    const std::string& encoding);
 };

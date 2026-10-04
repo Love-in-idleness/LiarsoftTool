@@ -148,13 +148,13 @@ void LwgDecoder::extractToDirectory(const Archive& archive, const std::string& d
         meta += "  <Height>" + std::to_string(archive.height) + "</Height>\n";
         meta += "  <Items>\n";
         for (const auto& e : archive.entries) {
-            // Write metadata for non-empty entries
-            if (!e.data.empty()) {
-                meta += "    <Item x=\"" + std::to_string(e.x) + "\" y=\""
-                      + std::to_string(e.y) + "\" flag=\""
-                      + std::to_string(static_cast<int>(e.flag)) + "\">"
-                      + e.name + "</Item>\n";
-            }
+            // Empty entries still carry coordinates/flags and may share a
+            // name with an image. Mark them so packing cannot reuse that image.
+            meta += "    <Item x=\"" + std::to_string(e.x) + "\" y=\""
+                  + std::to_string(e.y) + "\" flag=\""
+                  + std::to_string(static_cast<int>(e.flag)) + "\""
+                  + (e.data.empty() ? " empty=\"1\"" : "") + ">"
+                  + e.name + "</Item>\n";
         }
         meta += "  </Items>\n";
         meta += "</Canvas>\n";
@@ -180,6 +180,7 @@ struct MetaEntry {
     std::string name;
     int32_t x = 0, y = 0;
     uint8_t flag = 40; // default LWGFlags.Image2
+    bool empty = false; // Explicit zero-data entry, not a missing image file.
 };
 struct MetaInfo {
     uint32_t width = 0, height = 0;
@@ -244,6 +245,7 @@ static MetaInfo parseMetaXml(const std::string& filePath) {
         me.x    = static_cast<int32_t>(std::stol(getAttr("x")));
         me.y    = static_cast<int32_t>(std::stol(getAttr("y")));
         me.flag = static_cast<uint8_t>(std::stoul(getAttr("flag")));
+        me.empty = getAttr("empty") == "1";
 
         info.entries.push_back(me);
         pos = itemClose + 7;
@@ -294,6 +296,11 @@ std::vector<uint8_t> LwgPacker::pack(
     for (const auto& me : meta.entries) {
         PackEntry pe;
         pe.meta = me;
+
+        if (me.empty) {
+            packEntries.push_back(std::move(pe));
+            continue;
+        }
 
         auto wanted = lower(me.name);
         auto file = std::find_if(files.begin(), files.end(), [&](const fs::path& path) {
