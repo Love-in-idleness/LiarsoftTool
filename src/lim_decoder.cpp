@@ -53,7 +53,10 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
         // 4 channels, each decompressed separately, card=3
         std::vector<uint8_t> raw(n * 4, 0);
         uint8_t mask = 0xFF;
+        // Cannonball.exe 0x43bab6/0x43bac9: version 3 always has alpha,
+        // but RGB blocks exist only when flag 0x10 is set.
         for (int ch = 3; ch >= 0; --ch) {
+            if (ch != 3 && !(flags & 0x10)) continue;
             cg_decompress(raw, static_cast<size_t>(ch), 4, p, 1, 3, m_index, end);
             for (size_t i = static_cast<size_t>(ch); i < raw.size(); i += 4)
                 raw[i] ^= mask;
@@ -102,9 +105,13 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
         img.pixels.resize(n * 4, 0xFF);
         for (size_t i = 0; i < n; ++i) {
             uint16_t px = raw16[i*2] | (raw16[i*2+1] << 8);
-            img.pixels[i*4+0] = ((px >> 11) & 0x1F) * 255 / 31;
-            img.pixels[i*4+1] = ((px >> 5)  & 0x3F) * 255 / 63;
-            img.pixels[i*4+2] = ((px >> 0)  & 0x1F) * 255 / 31;
+            // Match 0x43bd56..0x43bd89: expand by shifting, and use pure
+            // BGR565 green as a transparency key unless a separate alpha
+            // channel overrides it afterwards.
+            img.pixels[i*4+0] = ((px >> 11) & 0x1F) << 3;
+            img.pixels[i*4+1] = ((px >> 5)  & 0x3F) << 2;
+            img.pixels[i*4+2] = (px & 0x1F) << 3;
+            img.pixels[i*4+3] = px == 0x07e0 ? 0 : 0xff;
             if (hasAlpha)
                 img.pixels[i*4+3] = static_cast<uint8_t>(~alpha[i]);
         }

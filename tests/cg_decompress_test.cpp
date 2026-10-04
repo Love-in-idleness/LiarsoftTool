@@ -92,18 +92,36 @@ int main() {
         rejectsWcg(truncatedMask, "Missing WCG mask was accepted");
 
         // All four LIM channels use the same block framing, one byte per index.
-        auto lim = imageHeader('L', 0, 32);
+        auto lim = imageHeader('L', 0x13, 24);
         for (uint8_t channel : {0x00, 0x11, 0x22, 0x33})
             appendBlock(lim, {channel}, {0x20, 0xdd});
         require(liarsoft::limDecode(lim).pixels == Bytes({0x11, 0x22, 0x33, 0xff}),
                 "Padded LIM channels were misaligned");
 
         // Compressed BGR565 followed by compressed alpha also needs full-block advance.
-        auto lim16 = imageHeader('L', 0x330, 16);
+        auto limMask = imageHeader('L', 3, 24);
+        appendBlock(limMask, {0x80}, {0x20});
+        require(liarsoft::limDecode(limMask).pixels == Bytes({0, 0, 0, 0x7f}),
+                "Alpha-only LIM attempted to read nonexistent RGB blocks");
+
+        auto lim16 = imageHeader('L', 0x332, 16);
         appendBlock(lim16, {0x00, 0xf8}, {0x20, 0xab, 0xcd});
         appendBlock(lim16, {0x00}, {0x20, 0xee});
-        require(liarsoft::limDecode(lim16).pixels == Bytes({0xff, 0x00, 0x00, 0xff}),
+        require(liarsoft::limDecode(lim16).pixels == Bytes({0xf8, 0x00, 0x00, 0xff}),
                 "Padded LIM 16bpp/alpha channels were misaligned");
+        auto keyed = imageHeader('L', 0x32, 16);
+        appendBlock(keyed, {0xe0, 0x07}, {0x20});
+        require(liarsoft::limDecode(keyed).pixels == Bytes({0, 0xfc, 0, 0}),
+                "LIM BGR565 green transparency key was lost");
+        auto explicitAlpha = imageHeader('L', 0x332, 16);
+        appendBlock(explicitAlpha, {0xe0, 0x07}, {0x20});
+        appendBlock(explicitAlpha, {0x00}, {0x20});
+        require(liarsoft::limDecode(explicitAlpha).pixels == Bytes({0, 0xfc, 0, 0xff}),
+                "Explicit LIM alpha did not override the color key");
+        auto white16 = imageHeader('L', 0x32, 16);
+        appendBlock(white16, {0xff, 0xff}, {0x20});
+        require(liarsoft::limDecode(white16).pixels == Bytes({0xf8, 0xfc, 0xf8, 0xff}),
+                "LIM BGR565 expansion differs from original engine");
 
         // Verify pointer advancement itself, including a larger palette/4-bit coding.
         Bytes largeBlock;
