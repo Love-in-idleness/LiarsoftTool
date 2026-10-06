@@ -203,7 +203,7 @@ TSC 以 `*vm 0xHHHH ...` 保存完整可编译形式；下表给出高位族的�
 | 行 | 含义 |
 |---|---|
 | `;@gsc-byte-format modern-36` / `legacy-28` | 头部长度与 Section D 的声明规则 |
-| `;@gsc-schema <name>` | 指令布局（`pre-codex`/`early`/`rscript18`/`rscript19`/`modern`） |
+| `;@gsc-schema <name>` | 指令布局（`pre-codex`/`early-short-select`/`early`/`rscript18`/`rscript19`/`modern`） |
 | `;@gsc-trailer <hex>` | Section D 之后的全部尾部字节（两张调试表 + 名字表），原样写回；缺省为标准空的 9 字节 |
 | `;@gsc-trailer-header <u7> <u8>` | 头部第 7、8 个字，即尾部两张调试表与名字表的长度来源；缺省为 `4 1` |
 | `;@gsc-raw-v1 …` | 无法识别布局时的整文件原始回退 |
@@ -216,6 +216,14 @@ TSC 正文是 UTF-8，且不记录字符串编码：读入 `--gsc-to-tsc` 与写
 
 ## 当前验证范围
 
+- Khime jamais vu 的 41 个 CP932 脚本通过结构化往返；其中 7 个含选项的脚本使用
+  `early-short-select`：`*select` 为 `H + 11D`，`*TXT` 仍为 `4E + DDE`。
+  其余参数沿用 `early`；没有选项时无需更换布局。不能直接套用 `pre-codex`，因为后者的
+  `*TXT` 只有 6 个参数。原 `Khime_zero.exe`（SHA-256
+  `56e3b1316c2fd3bdc7826606fedf938a5b7509385e4ba4300010c7892a7af76c`）分派器
+  `0x4173bc` 的 opcode 14 处理器 `0x417469` 读取 1 次 `0x410180`（16 位）和
+  11 次 `0x4101c0`（32 位）；opcode 81 的 `0x417a7b` 读取 5 个表达式和 2 个字符串索引。
+  这是静态指令布局证据，不代表原引擎实际游玩验证。
 - 兼容性资料中的 2043 个 GSC，以及已安装 CannonBall 的 626 个 GSC，均通过完整往返测试。
 - 往返测试比较重新反编译后的指令、标签、字符串和数据块，确保结构与执行语义一致。
 - 字符串按内容去重并重排索引，因此字符串编号不承诺逐字节相同；但尾部调试/名字表及其

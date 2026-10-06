@@ -230,7 +230,7 @@ each high-nibble family.
 | Line | Meaning |
 |---|---|
 | `;@gsc-byte-format modern-36` / `legacy-28` | Header length and the Section D declared-size rule |
-| `;@gsc-schema <name>` | Instruction layout (`pre-codex`/`early`/`rscript18`/`rscript19`/`modern`) |
+| `;@gsc-schema <name>` | Instruction layout (`pre-codex`/`early-short-select`/`early`/`rscript18`/`rscript19`/`modern`) |
 | `;@gsc-trailer <hex>` | Every trailing byte after Section D (the two debug tables plus the names blob), restored verbatim; defaults to the standard empty 9 bytes |
 | `;@gsc-trailer-header <u7> <u8>` | Header words 7 and 8, which size those tables and the names blob; defaults to `4 1` |
 | `;@gsc-raw-v1 …` | Whole-file raw fallback used when the instruction layout cannot be recognized |
@@ -250,6 +250,16 @@ of that data is part of the instruction stream; only the two
 
 ## Current Verification Coverage
 
+- All 41 CP932 scripts of Khime jamais vu pass structured round-trip checks. The
+  seven scripts containing choices use `early-short-select`: `*select` is
+  `H + 11D`, while `*TXT` remains `4E + DDE`; other commands match `early`.
+  Scripts without choices need no schema change. `pre-codex` does not fit,
+  since its `*TXT` has only six operands. In the original `Khime_zero.exe`
+  (SHA-256 `56e3b1316c2fd3bdc7826606fedf938a5b7509385e4ba4300010c7892a7af76c`),
+  dispatcher `0x4173bc` routes opcode 14 to `0x417469`, which reads one word
+  via `0x410180` and eleven dwords via `0x4101c0`. Opcode 81 at `0x417a7b`
+  reads five expressions and two string indices. This is static layout
+  evidence, not an original-engine gameplay test.
 - All 2043 GSC files in the compatibility material, plus the 626 GSC files of
   an installed CannonBall, pass a full round-trip test.
 - The round-trip test compares re-decompiled instructions, labels, strings, and

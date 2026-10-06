@@ -68,7 +68,7 @@ constexpr const char* INSTRUCTION_SCHEMA = ";@gsc-schema ";
 constexpr const char* TRAILER = ";@gsc-trailer";
 constexpr const char* TRAILER_HEADER = ";@gsc-trailer-header";
 
-enum class InstructionSchema { PreCodeX, Early, RScript18, RScript19, Modern };
+enum class InstructionSchema { PreCodeX, Early, EarlyShortSelect, RScript18, RScript19, Modern };
 
 uint64_t fnv1a64(const std::vector<uint8_t>& data) {
     uint64_t value = 14695981039346656037ull;
@@ -230,10 +230,20 @@ const std::unordered_map<uint16_t, std::string>& legacySchemas() {
     return value;
 }
 
-const std::unordered_map<uint16_t, std::string>& preCodeXSchemas() {
+const std::unordered_map<uint16_t, std::string>& earlyShortSelectSchemas() {
     static const auto value = [] {
         auto result = legacySchemas();
+        // Khime_zero.exe: select at 0x417469 reads H + 11D, whereas
+        // TXT retains its seventh operand (unlike pre-CodeX).
         result[14] = "H" + std::string(11, 'D');
+        return result;
+    }();
+    return value;
+}
+
+const std::unordered_map<uint16_t, std::string>& preCodeXSchemas() {
+    static const auto value = [] {
+        auto result = earlyShortSelectSchemas();
         result[81] = std::string(4, 'E') + "DD";
         return result;
     }();
@@ -266,6 +276,7 @@ const std::unordered_map<uint16_t, std::string>& schemasFor(
     InstructionSchema schema) {
     if (schema == InstructionSchema::PreCodeX) return preCodeXSchemas();
     if (schema == InstructionSchema::Early) return legacySchemas();
+    if (schema == InstructionSchema::EarlyShortSelect) return earlyShortSelectSchemas();
     if (schema == InstructionSchema::RScript18) return rscript18Schemas();
     if (schema == InstructionSchema::RScript19) return rscript19Schemas();
     return modernSchemas();
@@ -280,13 +291,15 @@ public:
         if (headerLength == 28) {
             earlyVmEncoding = true;
             parseLegacy(data);
-            selectSchema({InstructionSchema::Early, InstructionSchema::PreCodeX,
+            selectSchema({InstructionSchema::Early, InstructionSchema::EarlyShortSelect,
+                          InstructionSchema::PreCodeX,
                           InstructionSchema::RScript18,
                           InstructionSchema::RScript19, InstructionSchema::Modern});
         } else if (headerLength == 36) {
             parseModern(data);
             selectSchema({InstructionSchema::Modern, InstructionSchema::RScript19,
                           InstructionSchema::RScript18, InstructionSchema::Early,
+                          InstructionSchema::EarlyShortSelect,
                           InstructionSchema::PreCodeX});
         } else {
             fail("unsupported GSC header size " + std::to_string(headerLength));
@@ -714,6 +727,7 @@ uint32_t parseOperand(const std::string& token, char kind, size_t lineNo) {
 std::string schemaName(InstructionSchema schema) {
     if (schema == InstructionSchema::PreCodeX) return "pre-codex";
     if (schema == InstructionSchema::Early) return "early";
+    if (schema == InstructionSchema::EarlyShortSelect) return "early-short-select";
     if (schema == InstructionSchema::RScript18) return "rscript18";
     if (schema == InstructionSchema::RScript19) return "rscript19";
     return "modern";
@@ -722,6 +736,7 @@ std::string schemaName(InstructionSchema schema) {
 InstructionSchema parseSchemaName(const std::string& value) {
     if (value == "pre-codex") return InstructionSchema::PreCodeX;
     if (value == "early") return InstructionSchema::Early;
+    if (value == "early-short-select") return InstructionSchema::EarlyShortSelect;
     if (value == "rscript18") return InstructionSchema::RScript18;
     if (value == "rscript19") return InstructionSchema::RScript19;
     if (value == "modern") return InstructionSchema::Modern;

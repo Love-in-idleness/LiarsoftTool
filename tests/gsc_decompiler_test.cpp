@@ -265,6 +265,42 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // Khime jamais vu: short select (H + 11D), but TXT still has its final E.
+    // Neither pre-codex nor the existing early layout describes this combination.
+    std::vector<uint8_t> shortSelect(28, 0), shortSelectCode;
+    appendU16(shortSelectCode, 14); appendU16(shortSelectCode, 1);
+    for (const uint32_t value : {0u, 48u, 0u, 0u, 0u, 0u, 1u, 0u, 0u, 0u, 0u})
+        appendU32(shortSelectCode, value);
+    appendU16(shortSelectCode, 81);
+    for (const uint32_t value : {0u, 999u, 0u, 0u, 0u, 1u, 1u})
+        appendU32(shortSelectCode, value);
+    appendU16(shortSelectCode, 8);
+    patchU32(shortSelect, 4, 28); patchU32(shortSelect, 8, shortSelectCode.size());
+    patchU32(shortSelect, 12, 8); patchU32(shortSelect, 16, 6);
+    shortSelect.insert(shortSelect.end(), shortSelectCode.begin(), shortSelectCode.end());
+    appendU32(shortSelect, 0); appendU32(shortSelect, 1);
+    const std::string shortSelectStrings("\0Text\0", 6);
+    shortSelect.insert(shortSelect.end(), shortSelectStrings.begin(), shortSelectStrings.end());
+    patchU32(shortSelect, 0, shortSelect.size());
+    save(temp, shortSelect);
+    const auto shortSelectListing = liarsoft::decompileGsc(temp.string());
+    if (!contains(shortSelectListing, ";@gsc-schema early-short-select") ||
+        !contains(shortSelectListing, ":L_000030") ||
+        !contains(shortSelectListing, "*TXT 0 999 0 0 \"\" \"Text\" 1") ||
+        liarsoft::restoreGscFromTsc(shortSelectListing) != shortSelect) {
+        std::cerr << "Short legacy select with seven-operand TXT did not round-trip" << std::endl;
+        return 1;
+    }
+    auto shortSelectEdited = shortSelectListing;
+    shortSelectEdited.replace(shortSelectEdited.rfind("\"Text\""), 6, "\"Changed\"");
+    const auto shortSelectRebuilt = liarsoft::restoreGscFromTsc(shortSelectEdited);
+    save(temp, shortSelectRebuilt);
+    if (shortSelectRebuilt == shortSelect ||
+        normalizeListing(liarsoft::decompileGsc(temp.string())) !=
+            normalizeListing(shortSelectEdited)) {
+        std::cerr << "Short legacy select text edit was not rebuilt" << std::endl; return 1;
+    }
+
     std::vector<uint8_t> earlyModern(36, 0), earlyCode;
     appendU16(earlyCode, 38); appendU32(earlyCode, 1); appendU32(earlyCode, 2); appendU32(earlyCode, 3);
     appendU16(earlyCode, 105); appendU32(earlyCode, 4); appendU16(earlyCode, 8);
