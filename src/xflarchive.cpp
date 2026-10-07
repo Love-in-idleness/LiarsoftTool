@@ -57,7 +57,7 @@ bool matchesOperationMode(const std::string& path, bool packOnly,
     const auto ext = lower(fs::path(path).extension().string());
     const bool packing = directory || ext == ".tsc" || ext == ".txt" || ext == ".ogg" ||
                          ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
-                         ext == ".bmp";
+                         ext == ".bmp" || ext == ".webp";
     const bool unpacking = (directory && recursive) ||
                            (!directory && (ext == ".xfl" || ext == ".lwg" ||
                            ext == ".gsc" || ext == ".wcg" || ext == ".lim" ||
@@ -102,8 +102,8 @@ static fs::path outputFile(const fs::path& source, const std::string& extension)
 }
 
 static std::vector<fs::path> editableFiles(const fs::path& directory) {
-    static constexpr std::array<const char*, 7> extensions = {
-        ".tsc", ".txt", ".ogg", ".png", ".jpg", ".jpeg", ".bmp"
+    static constexpr std::array<const char*, 8> extensions = {
+        ".tsc", ".txt", ".ogg", ".png", ".jpg", ".jpeg", ".bmp", ".webp"
     };
     std::vector<fs::path> files;
     for (const auto& entry : fs::directory_iterator(directory)) {
@@ -121,7 +121,7 @@ static std::vector<fs::path> editableFiles(const fs::path& directory) {
         if (ext == ".png") return 3;
         if (ext == ".jpg") return 4;
         if (ext == ".jpeg") return 5;
-        return 6;
+        return ext == ".bmp" ? 6 : 7;
     };
     std::sort(files.begin(), files.end(), [&](const fs::path& a, const fs::path& b) {
         const auto aStem = lower(a.stem().string()), bStem = lower(b.stem().string());
@@ -141,6 +141,7 @@ static void prepareDirectoryForPacking(const fs::path& directory,
         fs::path target;
         if (ext == ".tsc" || ext == ".txt") target = outputFile(source, ".gsc");
         else if (ext == ".ogg") target = outputFile(source, ".wav");
+        else if (ext == ".webp") target = outputFile(source, ".lim");
         else target = outputFile(source, ".wcg");
 
         const auto targetKey = normalized(target);
@@ -163,6 +164,8 @@ static void prepareDirectoryForPacking(const fs::path& directory,
                     throw std::runtime_error("same-name WAV template not found");
                 WavOggExtractor::embedToFile(source.string(), target.string(),
                                              target.string());
+            } else if (ext == ".webp") {
+                writeFileIfChanged(target.string(), limEncode(webpDecode(readFile(source))));
             } else {
                 int width, height, channels;
                 unsigned char* pixels = stbi_load(source.string().c_str(), &width,
@@ -179,24 +182,7 @@ static void prepareDirectoryForPacking(const fs::path& directory,
                 }
                 stbi_image_free(pixels);
 
-                auto lim = findFile(directory, source.stem().string(), ".lim");
-                fs::path oldLim;
-                if (!lim.empty()) {
-                    oldLim = lim.string() + ".old";
-                    if (fs::exists(oldLim))
-                        throw std::runtime_error("backup already exists: " +
-                                                 oldLim.string());
-                    fs::rename(lim, oldLim);
-                }
-                try {
-                    writeFileIfChanged(target.string(), wcg);
-                } catch (...) {
-                    if (!oldLim.empty()) {
-                        std::error_code ec;
-                        fs::rename(oldLim, lim, ec);
-                    }
-                    throw;
-                }
+                writeFileIfChanged(target.string(), wcg);
             }
             convertedTargets.insert(targetKey);
             excludedPaths.erase(targetKey);
@@ -348,18 +334,13 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
         return a.rank < b.rank;
     });
 
-    std::set<std::string> convertedTargets;
     for (const auto& conversion : conversions) {
         const auto& source = conversion.source;
         const auto ext = lower(source.extension().string());
         auto target = outputFile(source, ext == ".gsc" ?
                                          (gscToTsc ? ".tsc" : ".txt") :
-                                         ext == ".wav" ? ".ogg" : ".png");
-        if (!convertedTargets.insert(normalized(target)).second) {
-            warnings.push_back("Skipped duplicate conversion target: " +
-                               source.string());
-            continue;
-        }
+                                         ext == ".wav" ? ".ogg" :
+                                         ext == ".lim" ? ".webp" : ".png");
         try {
             if (ext == ".gsc") {
                 if (gscToTsc) {
@@ -371,7 +352,7 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
             } else if (ext == ".wcg") {
                 wcgSavePng(wcgDecode(readFile(source)), target.string());
             } else if (ext == ".lim") {
-                limSavePng(limDecode(readFile(source)), target.string());
+                limSaveWebp(limDecode(readFile(source)), target.string());
             } else {
                 WavOggExtractor::extractToFile(source.string(), target.string());
             }

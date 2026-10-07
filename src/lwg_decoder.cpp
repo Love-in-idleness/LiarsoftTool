@@ -85,6 +85,7 @@ static std::string sanitizeFilename(const std::string& name) {
 static std::string guessExt(const std::vector<uint8_t>& data) {
     if (data.size() >= 2) {
         if (data[0] == 0x57 && data[1] == 0x47) return ".wcg"; // "WG"
+        if (data[0] == 0x4C && data[1] == 0x4D) return ".lim"; // "LM"
         if (data[0] == 0x42 && data[1] == 0x4D) return ".msk"; // "BM"
     }
     return "";

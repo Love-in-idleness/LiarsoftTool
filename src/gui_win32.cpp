@@ -251,7 +251,7 @@ static void onAddFiles() {
     char buf[8192] = {};
     OPENFILENAMEA ofn = {sizeof(ofn)};
     ofn.hwndOwner = g_hWnd;
-    ofn.lpstrFilter = "All Supported\0*.gsc;*.tsc;*.txt;*.xfl;*.lwg;*.wcg;*.lim;*.wav;*.ogg;*.exe;*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0";
+    ofn.lpstrFilter = "All Supported\0*.gsc;*.tsc;*.txt;*.xfl;*.lwg;*.wcg;*.lim;*.webp;*.wav;*.ogg;*.exe;*.png;*.jpg;*.jpeg;*.bmp\0All Files\0*.*\0";
     ofn.lpstrFile = buf;
     ofn.nMaxFile = sizeof(buf);
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT | OFN_EXPLORER;

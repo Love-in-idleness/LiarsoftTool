@@ -1,6 +1,12 @@
 #include "gui_common.h"
+#include "xflarchive.h"
+#include "lim_decoder.h"
+#include "fileio.h"
 
 #include <cassert>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 
 int main() {
@@ -17,6 +23,45 @@ int main() {
     assert(guessType("VOICE.OGG", false, "CP932") == "OGG -> WAV");
     assert(isSupported("IMAGE.JPEG"));
     assert(!isSupported("README.md"));
+
+    if (guessOutput("/game/image.LIM", "", false, "CP932") != "/game/image.webp" ||
+        guessOutput("/game/image.WEBP", "/out", false, "CP932") != "/out/image.lim" ||
+        guessType("image.lim", false, "CP932") != "LIM -> WebP" ||
+        guessType("image.webp", false, "CP932") != "WebP -> LIM" ||
+        !isSupported("image.WEBP") ||
+        !liarsoft::matchesOperationMode("image.webp", true, false, false) ||
+        liarsoft::matchesOperationMode("image.webp", false, true, false) ||
+        liarsoft::matchesOperationMode("image.webp", true, true, false)) {
+        std::cerr << "GUI WebP detection, routing or operation modes are incorrect\n";
+        return 1;
+    }
+    namespace fs = std::filesystem;
+    const auto directory = fs::temp_directory_path() / ("liarsoft-webp-gui-" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    fs::create_directories(directory);
+    try {
+        const auto original = directory / "original.lim";
+        const auto webp = directory / "image.webp";
+        const auto rebuilt = directory / "rebuilt.lim";
+        const liarsoft::LimImage image{2, 1, {17, 34, 51, 0, 67, 89, 123, 127}};
+        liarsoft::writeFileIfChanged(original.string(), liarsoft::limEncode(image));
+        const ConversionOptions options;
+        convert(original.string(), webp.string(), options);
+        const auto time = fs::last_write_time(webp);
+        convert(original.string(), webp.string(), options);
+        if (fs::last_write_time(webp) != time)
+            throw std::runtime_error("Identical WebP was rewritten");
+        convert(webp.string(), rebuilt.string(), options);
+        std::ifstream input(rebuilt, std::ios::binary);
+        const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
+        if (liarsoft::limDecode(bytes).pixels != image.pixels)
+            throw std::runtime_error("GUI LIM/WebP round trip changed pixels");
+    } catch (const std::exception& error) {
+        fs::remove_all(directory);
+        std::cerr << error.what() << '\n';
+        return 1;
+    }
+    fs::remove_all(directory);
 
     // Explicit checks also run in Release builds, where assert is disabled.
     std::vector<ConversionDiagnostic> diagnostics;

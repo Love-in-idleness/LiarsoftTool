@@ -4,6 +4,16 @@ project(LiarsoftTool VERSION 2.2.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_path(WEBP_INCLUDE_DIR webp/encode.h)
+find_library(WEBP_LIBRARY NAMES webp)
+if(NOT WEBP_INCLUDE_DIR OR NOT WEBP_LIBRARY)
+    message(FATAL_ERROR "libwebp development files are required")
+endif()
+add_library(WebP::webp UNKNOWN IMPORTED)
+set_target_properties(WebP::webp PROPERTIES
+    IMPORTED_LOCATION "${WEBP_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${WEBP_INCLUDE_DIR}")
+
 # Find iconv (needed on Unix; Windows uses Win32 API via encoding.cpp)
 if(NOT WIN32)
     find_package(Iconv REQUIRED)
@@ -167,7 +177,14 @@ if(BUILD_TESTING)
         COMMAND ${CMAKE_COMMAND}
             -DTOOL=$<TARGET_FILE:liarsofttool>
             -DAUDIO_TEST=$<TARGET_FILE:wav_ogg_test>
+            -DIMAGE_TEST=$<TARGET_FILE:cg_decompress_test>
             -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/directory_packing_test
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/directory_packing_test.cmake)
 endif()
+
+foreach(target liarsofttool liarsofttool-gui gui_common_test archive_test cg_decompress_test)
+    if(TARGET ${target})
+        target_link_libraries(${target} PRIVATE WebP::webp)
+    endif()
+endforeach()

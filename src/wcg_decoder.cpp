@@ -247,7 +247,8 @@ static std::vector<uint8_t> packPass(const uint8_t* bgra, size_t n, int offset, 
     return out;
 }
 
-std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t height) {
+std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t height,
+                             bool separateChannels) {
     // rgba is RGBA8888 — convert to BGRA for the encoder
     const size_t imageSize = checkedRgbaSize(width, height);
     if (!rgba) throw std::runtime_error("Missing RGBA pixel buffer");
@@ -260,7 +261,8 @@ std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t hei
         bgra[i*4+3] = rgba[i*4+3] ^ 0xff; // WCG stores inverted alpha
     }
 
-    auto pass1 = packPass(bgra.data(), n, 2, 2); // R + inverted alpha
+    auto pass1 = separateChannels ? std::vector<uint8_t>{} :
+                                   packPass(bgra.data(), n, 2, 2); // R + inverted alpha
     auto pass2 = pass1.empty() ? std::vector<uint8_t>{} : packPass(bgra.data(), n, 0, 2);
     const bool paired = !pass1.empty() && !pass2.empty();
     
@@ -286,10 +288,11 @@ std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t hei
     return out;
 }
 
-std::vector<uint8_t> wcgEncode(const std::vector<uint8_t>& rgba, uint32_t width, uint32_t height) {
+std::vector<uint8_t> wcgEncode(const std::vector<uint8_t>& rgba, uint32_t width,
+                             uint32_t height, bool separateChannels) {
     if (rgba.size() != checkedRgbaSize(width, height))
         throw std::runtime_error("RGBA pixel buffer does not match image dimensions");
-    return wcgEncode(rgba.data(), width, height);
+    return wcgEncode(rgba.data(), width, height, separateChannels);
 }
 
 } // namespace liarsoft

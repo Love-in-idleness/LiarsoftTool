@@ -1,27 +1,14 @@
 #include "lim_decoder.h"
 #include "cg_decompress.h"
 #include "fileio.h"
-#include "stb_image_write.h"
+#include "wcg_decoder.h"
+#include <webp/decode.h>
+#include <webp/encode.h>
+#include <memory>
 #include <stdexcept>
 #include <cstring>
 
 namespace liarsoft {
-
-namespace {
-
-// stbi_write callback that appends encoded bytes to a memory buffer so the
-// PNG can be compared against the existing file before writing.
-struct PngBuffer {
-    std::vector<uint8_t> bytes;
-};
-
-void appendPngBytes(void* context, void* data, int size) {
-    auto* buf = static_cast<PngBuffer*>(context);
-    auto* bytes = static_cast<const uint8_t*>(data);
-    buf->bytes.insert(buf->bytes.end(), bytes, bytes + size);
-}
-
-} // namespace
 
 LimImage limDecode(const std::vector<uint8_t>& data) {
     if (data.size() < 16 || data[0] != 'L' || data[1] != 'M')
@@ -120,15 +107,66 @@ LimImage limDecode(const std::vector<uint8_t>& data) {
     return img;
 }
 
-void limSavePng(const LimImage& img, const std::string& path) {
+std::vector<uint8_t> limEncode(const LimImage& img) {
+    auto data = wcgEncode(img.pixels, img.width, img.height, true);
+    // Version 3 uses precisely the WCG single-channel block framing, but a
+    // LIM header: RGB present (0x10), depth 24, and no WCG-specific flags.
+    data[0] = 'L'; data[1] = 'M';
+    data[2] = 0x13; data[3] = 0;
+    data[4] = 24; data[5] = 0;
+    data[6] = 0; data[7] = 0;
+    return data;
+}
+
+LimImage webpDecode(const std::vector<uint8_t>& data) {
+    WebPBitstreamFeatures features;
+    if (WebPGetFeatures(data.data(), data.size(), &features) != VP8_STATUS_OK)
+        throw std::runtime_error("Not a valid WebP image");
+    if (features.has_animation)
+        throw std::runtime_error("Animated WebP cannot be converted to LIM");
+    LimImage img;
+    img.width = static_cast<uint32_t>(features.width);
+    img.height = static_cast<uint32_t>(features.height);
+    img.pixels.resize(checkedRgbaSize(img.width, img.height));
+    if (!WebPDecodeRGBAInto(data.data(), data.size(), img.pixels.data(),
+                            img.pixels.size(), features.width * 4))
+        throw std::runtime_error("Failed to decode WebP image");
+    return img;
+}
+
+std::vector<uint8_t> webpEncode(const LimImage& img) {
     if (img.pixels.size() != checkedRgbaSize(img.width, img.height))
         throw std::runtime_error("LIM pixel buffer does not match image dimensions");
-    PngBuffer buf;
-    if (!stbi_write_png_to_func(appendPngBytes, &buf, img.width, img.height, 4,
-                                img.pixels.data(), img.width * 4))
-        throw std::runtime_error("Failed to encode PNG: " + path);
+    if (img.width > WEBP_MAX_DIMENSION || img.height > WEBP_MAX_DIMENSION)
+        throw std::runtime_error("WebP dimensions must not exceed 16383 pixels");
+    WebPConfig config;
+    WebPPicture picture;
+    if (!WebPConfigInit(&config) || !WebPPictureInit(&picture))
+        throw std::runtime_error("Failed to initialize WebP encoder");
+    config.lossless = 1;
+    config.exact = 1; // Preserve invisible RGB; the simple lossless API does not.
+    config.quality = 100;
+    std::unique_ptr<WebPPicture, decltype(&WebPPictureFree)> pixels(
+        &picture, WebPPictureFree);
+    picture.use_argb = 1;
+    picture.width = static_cast<int>(img.width);
+    picture.height = static_cast<int>(img.height);
+    WebPMemoryWriter writer;
+    WebPMemoryWriterInit(&writer);
+    std::unique_ptr<WebPMemoryWriter, decltype(&WebPMemoryWriterClear)> output(
+        &writer, WebPMemoryWriterClear);
+    picture.writer = WebPMemoryWrite;
+    picture.custom_ptr = &writer;
+    if (!WebPValidateConfig(&config) ||
+        !WebPPictureImportRGBA(&picture, img.pixels.data(), picture.width * 4) ||
+        !WebPEncode(&config, &picture))
+        throw std::runtime_error("Failed to encode lossless WebP image");
+    return {writer.mem, writer.mem + writer.size};
+}
+
+void limSaveWebp(const LimImage& img, const std::string& path) {
     // Identical content already on disk is left untouched (mtime preserved).
-    writeFileIfChanged(path, buf.bytes);
+    writeFileIfChanged(path, webpEncode(img));
 }
 
 } // namespace liarsoft

@@ -42,7 +42,8 @@ static void printUsage(const char* prog) {
               << "  .xfl  -> directory    Unpack XFL archive into a folder\n"
               << "  .lwg  -> directory    Unpack LWG archive into a folder\n"
               << "  .wcg  -> .png         Convert WCG image to PNG\n"
-              << "  .lim  -> .png         Convert LIM image to PNG\n"
+              << "  .lim  -> .webp        Convert LIM image to lossless WebP\n"
+              << "  .webp -> .lim         Convert WebP image to LIM\n"
               << "  .wav  -> .ogg         Extract embedded Ogg; retain standard PCM WAV\n"
               << "  .ogg  -> .wav         Embed Ogg Vorbis into WAV (needs -r template.wav)\n"
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
@@ -288,9 +289,16 @@ static bool processOne(const std::string& inputPath,
     } else if (ext == ".lim") {
         std::cout << "Converting LIM: " << inputPath << std::endl;
         auto img = liarsoft::limDecode(readFile(inputPath));
-        if (out.empty()) out = replaceExtension(inputPath, ".png");
-        liarsoft::limSavePng(img, out);
-        std::cout << "Saved " << img.width << "x" << img.height << " PNG to: " << out << std::endl;
+        if (out.empty()) out = replaceExtension(inputPath, ".webp");
+        liarsoft::limSaveWebp(img, out);
+        std::cout << "Saved " << img.width << "x" << img.height << " WebP to: " << out << std::endl;
+
+    } else if (ext == ".webp") {
+        std::cout << "Converting WebP: " << inputPath << std::endl;
+        auto img = liarsoft::webpDecode(readFile(inputPath));
+        if (out.empty()) out = replaceExtension(inputPath, ".lim");
+        liarsoft::writeFileIfChanged(out, liarsoft::limEncode(img));
+        std::cout << "Saved " << img.width << "x" << img.height << " LIM to: " << out << std::endl;
 
     } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
         std::cout << "Converting to WCG: " << inputPath << std::endl;

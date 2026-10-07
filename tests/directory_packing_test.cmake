@@ -131,15 +131,22 @@ if(NOT result)
     message(FATAL_ERROR "Empty LWG directory unexpectedly succeeded")
 endif()
 
-# Recursive conversions: PNG -> WCG with LIM backup, OGG -> WAV, warnings for
+# Recursive conversions: same-name PNG -> WCG and WebP -> LIM, OGG -> WAV, warnings for
 # missing references, followed by recursive unpacking back to editable files.
 file(MAKE_DIRECTORY "${TEST_ROOT}/convert")
-configure_file("${SOURCE_DIR}/image.png" "${TEST_ROOT}/convert/image.png" COPYONLY)
-file(WRITE "${TEST_ROOT}/convert/image.lim" "old-lim")
+execute_process(COMMAND "${IMAGE_TEST}" "${TEST_ROOT}/convert"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result)
+    message(FATAL_ERROR "Creating valid image fixtures failed: ${error}")
+endif()
+file(RENAME "${TEST_ROOT}/convert/image.webp" "${TEST_ROOT}/convert/image.WEBP")
+file(WRITE "${TEST_ROOT}/convert/image.lim.old" "existing-backup")
 file(WRITE "${TEST_ROOT}/convert/orphan.txt" "#original\n>translation\n")
 file(WRITE "${TEST_ROOT}/convert/orphan.ogg" "missing-template")
 file(WRITE "${TEST_ROOT}/convert/broken.png" "not-an-image")
 file(WRITE "${TEST_ROOT}/convert/broken.wcg" "stale-conversion")
+file(WRITE "${TEST_ROOT}/convert/broken.webp" "not-an-image")
+file(WRITE "${TEST_ROOT}/convert/broken.lim" "stale-conversion")
 execute_process(COMMAND "${AUDIO_TEST}" "${TEST_ROOT}/convert"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
@@ -153,14 +160,18 @@ execute_process(
 if(result)
     message(FATAL_ERROR "Recursive conversion packing failed: ${error}")
 endif()
-if(NOT EXISTS "${TEST_ROOT}/convert/image.lim.old" OR
-   EXISTS "${TEST_ROOT}/convert/image.lim" OR
+if(NOT EXISTS "${TEST_ROOT}/convert/image.lim" OR
    NOT EXISTS "${TEST_ROOT}/convert/image.wcg" OR
    NOT error MATCHES "same-name reference GSC not found" OR
    NOT error MATCHES "same-name WAV template not found" OR
    NOT error MATCHES "failed to load image" OR
+   NOT error MATCHES "Not a valid WebP" OR
    NOT error MATCHES "not a PCM WAV")
     message(FATAL_ERROR "Recursive conversion or warnings are incorrect: ${error}")
+endif()
+file(READ "${TEST_ROOT}/convert/image.lim.old" retained_backup)
+if(NOT retained_backup STREQUAL "existing-backup")
+    message(FATAL_ERROR "Unrelated LIM backup was changed")
 endif()
 file(READ "${TEST_ROOT}/convert/badref.wav" retained_pcm HEX)
 if(NOT retained_pcm STREQUAL original_pcm)
@@ -171,11 +182,14 @@ execute_process(
     COMMAND "${TOOL}" -R -o "${TEST_ROOT}/convert_unpacked" "${TEST_ROOT}/convert.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/convert_unpacked/image.png" OR
+   NOT EXISTS "${TEST_ROOT}/convert_unpacked/image.webp" OR
    NOT EXISTS "${TEST_ROOT}/convert_unpacked/audio.ogg" OR
    NOT EXISTS "${TEST_ROOT}/convert_unpacked/pcm.wav" OR
    EXISTS "${TEST_ROOT}/convert_unpacked/pcm.ogg" OR
    EXISTS "${TEST_ROOT}/convert_unpacked/badref.wav" OR
-   EXISTS "${TEST_ROOT}/convert_unpacked/broken.wcg")
+   EXISTS "${TEST_ROOT}/convert_unpacked/broken.wcg" OR
+   EXISTS "${TEST_ROOT}/convert_unpacked/broken.lim" OR
+   EXISTS "${TEST_ROOT}/convert_unpacked/image.lim.old")
     message(FATAL_ERROR "Recursive resource unpacking failed: ${error}")
 endif()
 
@@ -205,32 +219,53 @@ if(result OR NOT restored STREQUAL "616263" OR
     message(FATAL_ERROR "Restored TSC was not packed as exact GSC: ${error}")
 endif()
 
-# Existing .lim.old protects the backup and skips image conversion. Any stale
-# WCG target must not leak into the newly packed archive.
-file(MAKE_DIRECTORY "${TEST_ROOT}/backup_collision")
-configure_file("${SOURCE_DIR}/image.png"
-               "${TEST_ROOT}/backup_collision/item.png" COPYONLY)
-file(WRITE "${TEST_ROOT}/backup_collision/item.lim" "original-lim")
-file(WRITE "${TEST_ROOT}/backup_collision/item.lim.old" "protected-backup")
-file(WRITE "${TEST_ROOT}/backup_collision/item.wcg" "stale-conversion")
-file(WRITE "${TEST_ROOT}/backup_collision/layout.xml" "resource")
+# CLI defaults and direction switches must use WebP/LIM without touching WCG/PNG.
+file(MAKE_DIRECTORY "${TEST_ROOT}/webp_cli")
+configure_file("${TEST_ROOT}/convert/image.lim"
+               "${TEST_ROOT}/webp_cli/item.LIM" COPYONLY)
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/backup_collision.xfl"
-            "${TEST_ROOT}/backup_collision"
+    COMMAND "${TOOL}" --unpack-only "${TEST_ROOT}/webp_cli/item.LIM"
     RESULT_VARIABLE result ERROR_VARIABLE error)
-if(result OR NOT error MATCHES "backup already exists" OR
-   NOT EXISTS "${TEST_ROOT}/backup_collision/item.lim" OR
-   NOT EXISTS "${TEST_ROOT}/backup_collision/item.lim.old")
-    message(FATAL_ERROR "Existing LIM backup was not protected: ${error}")
+if(result OR NOT EXISTS "${TEST_ROOT}/webp_cli/item.webp" OR
+   EXISTS "${TEST_ROOT}/webp_cli/item.png")
+    message(FATAL_ERROR "CLI LIM output is not WebP: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/backup_collision_unpacked"
-            "${TEST_ROOT}/backup_collision.xfl"
+    COMMAND "${TOOL}" --pack-only "${TEST_ROOT}/webp_cli/item.webp"
     RESULT_VARIABLE result ERROR_VARIABLE error)
-if(result OR NOT EXISTS "${TEST_ROOT}/backup_collision_unpacked/item.lim" OR
-   NOT EXISTS "${TEST_ROOT}/backup_collision_unpacked/layout.xml" OR
-   EXISTS "${TEST_ROOT}/backup_collision_unpacked/item.wcg")
-    message(FATAL_ERROR "LIM backup collision filtering failed: ${error}")
+if(result OR NOT EXISTS "${TEST_ROOT}/webp_cli/item.lim" OR
+   EXISTS "${TEST_ROOT}/webp_cli/item.wcg")
+    message(FATAL_ERROR "CLI WebP output is not LIM: ${error}")
+endif()
+file(READ "${TEST_ROOT}/webp_cli/item.LIM" expected_lim HEX)
+file(READ "${TEST_ROOT}/webp_cli/item.lim" rebuilt_lim HEX)
+if(NOT rebuilt_lim STREQUAL expected_lim)
+    message(FATAL_ERROR "CLI LIM/WebP/LIM round trip changed the canonical image")
+endif()
+
+# LWG metadata references LIM after recursive WebP conversion, not PNG/WCG.
+file(MAKE_DIRECTORY "${TEST_ROOT}/webp_lwg")
+configure_file("${TEST_ROOT}/convert/image.WEBP"
+               "${TEST_ROOT}/webp_lwg/background.webp" COPYONLY)
+file(WRITE "${TEST_ROOT}/webp_lwg/.meta.xml"
+    "${meta}<Item x=\"0\" y=\"0\" flag=\"40\">background</Item></Items></Canvas>")
+execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/webp.lwg" "${TEST_ROOT}/webp_lwg"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/webp_lwg/background.lim" OR
+   EXISTS "${TEST_ROOT}/webp_lwg/background.wcg")
+    message(FATAL_ERROR "Recursive WebP packing into LWG failed: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/webp_lwg_unpacked" "${TEST_ROOT}/webp.lwg"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/webp_lwg_unpacked/background.webp" OR
+   EXISTS "${TEST_ROOT}/webp_lwg_unpacked/background.png")
+    message(FATAL_ERROR "Recursive LIM extraction from LWG failed: ${error}")
+endif()
+file(READ "${TEST_ROOT}/webp_lwg_unpacked/background.lim" extracted_lim HEX)
+if(NOT extracted_lim STREQUAL expected_lim)
+    message(FATAL_ERROR "LWG WebP conversion changed the LIM payload")
 endif()
 
 # Without -R, editable files and child directories are left alone.

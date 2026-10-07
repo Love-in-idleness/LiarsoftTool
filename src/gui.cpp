@@ -201,6 +201,7 @@ static void onAddFiles(Gtk::Window* parent) {
     filterAll->add_pattern("*.txt");
     filterAll->add_pattern("*.xfl"); filterAll->add_pattern("*.lwg");
     filterAll->add_pattern("*.wcg"); filterAll->add_pattern("*.lim");
+    filterAll->add_pattern("*.webp");
     filterAll->add_pattern("*.wav"); filterAll->add_pattern("*.ogg");
     filterAll->add_pattern("*.exe");
     filterAll->add_pattern("*.png"); filterAll->add_pattern("*.jpg");

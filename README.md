@@ -36,7 +36,8 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | 解包资源封包 | `liarsofttool -e cp932 archive.xfl` |
 | 解包场景封包 | `liarsofttool cgview.lwg` |
 | WCG 转 PNG | `liarsofttool image.wcg` |
-| LIM 转 PNG | `liarsofttool image.lim` |
+| LIM 转无损 WebP | `liarsofttool image.lim` |
+| WebP 转 LIM | `liarsofttool image.webp` |
 | PNG 转 WCG | `liarsofttool image.png` |
 | WAV 提取 OGG（标准 PCM 保留） | `liarsofttool audio.wav` |
 | OGG 嵌入 WAV | `liarsofttool -r template.wav audio.ogg` |
@@ -53,7 +54,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 
 ### 编译
 
-**依赖：** CMake ≥ 3.10, GCC ≥ 9（C++17 + `<filesystem>`）, libiconv
+**依赖：** CMake ≥ 3.10, GCC ≥ 9（C++17 + `<filesystem>`）, libiconv、libwebp 开发库（Debian/Ubuntu：`libwebp-dev`）
 
 ```bash
 cd LiarsoftTool
@@ -62,7 +63,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 # CLI 版本
 sudo cp liarsofttool /usr/local/bin/
-# GUI 版本（Linux 需 GTKmm 3，Windows 原生 Win32 无额外依赖）
+# GUI 版本（Linux 需 GTKmm 3，Windows 使用原生 Win32，无需 GTK）
 # 直接运行 build/liarsofttool-gui 或双击 EXE
 ```
 
@@ -70,7 +71,7 @@ sudo cp liarsofttool /usr/local/bin/
 
 ```bash
 # 在 MSYS2 UCRT64 终端中
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp}
 cd LiarsoftTool
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
@@ -79,6 +80,10 @@ make -j$(nproc)
 ```
 
 #### 从 Linux 交叉编译 Windows 版
+
+需先为 MinGW 准备 Windows 目标的 libwebp 头文件和库，并通过 CMake 的
+`WEBP_INCLUDE_DIR` / `WEBP_LIBRARY` 指定；不能链接本机 Linux 的 libwebp。
+若链接动态库，运行时须随程序提供对应的 WebP DLL；静态链接则无需该 DLL。
 
 ```bash
 sudo apt install g++-mingw-w64-x86-64
@@ -99,7 +104,7 @@ make -j$(nproc)
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
 - 警告与错误提示提供“Copy details”一键复制，包含完整诊断信息及输入/输出路径，方便反馈问题
-- Linux 使用 GTK3，Windows 使用原生 Win32 API（零额外 DLL 依赖）
+- Linux 使用 GTK3，Windows 使用原生 Win32 API；libwebp 动态构建需附带对应 DLL
 
 ### 命令行参数
 
@@ -127,12 +132,14 @@ make -j$(nproc)
 | GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容现代头（36B）及早期头（28B），自动按 HeaderLength 适配 |
 | TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
 | WCG | `.wcg` | ↔ PNG | 8 位 RGBA 像素无损转换，支持配对通道、独立四通道及透明度遮罩 |
-| LIM | `.lim` | → PNG | 独立颜色/透明度通道或仅透明度；16-bit BGR565 绿色透明键及可选 Alpha |
+| LIM | `.lim` | ↔ WebP | 无损 RGBA；读取 16-bit BGR565/遮罩，回写为版本 3 的独立 A/R/G/B 通道 |
 | EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换已识别的日文、中文或俄文禁则标点表 |
 | WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
 | OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
 
 WCG 编码默认使用两个 16 位颜色对；任一颜色对达到 65536 种时，自动改用独立 A/R/G/B 通道，避免调色板计数溢出并保持像素无损。仅透明度的 WCG 导出为 RGB 全零、透明度保留的 PNG，不补造颜色。四通道路径已根据 Cannonball 原程序验证静态逻辑，其他引擎的游戏内兼容性仍需测试；PNG 的 ICC/gamma 等元数据不会写入 WCG。
+
+LIM 导出为无损 `.webp`，包括完全透明像素下的 RGB；同名 WCG 仍导出 `.png`，两者不互相覆盖。WebP 回写为版本 3 的 LIM，保持解码后的 RGBA 像素，但不保证原 LIM 的位深、压缩方式或字节排列不变。不支持动画 WebP；WebP 单边尺寸上限为 16383 像素。WebP 的 ICC/EXIF 等元数据不会写入 LIM。旧的 LIM 导出 PNG 请从原 LIM 重新生成 WebP，不能直接改后缀。
 
 LWG 的零数据条目仍会写入 `.meta.xml`，以 `empty="1"` 保留名字、坐标、Flag 和顺序；回编不会误用同名图片填充它们。旧版解包已经丢失的条目需从原 LWG 重新提取。仅有空条目、没有有效资源的封包仍会报错。
 图层名中的 XML 特殊字符会转义，回编时还原原名；实际文件名沿用解包时的文件系统字符替换规则。旧工具生成的非法 XML（例如包含 `</Layer set>` 原文）请从原 LWG 重新提取。
@@ -201,11 +208,11 @@ OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771
 
 目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写），PNG 等工程文件不会直接进入封包。默认只处理指定目录或封包的当前层。
 
-启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、OGG→WAV（需同名 WAV 作为模板）。图像转换遇到同名 LIM 时，会先将它改名为 `.lim.old`；如果备份已存在，则警告并跳过该图像。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
+启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、WebP→LIM、OGG→WAV（需同名 WAV 作为模板）。PNG 与 WebP 可同名共存，不再改名或生成 `.lim.old`。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
 
-递归解包会继续解开内嵌 XFL/LWG，并自动处理 GSC（命令行默认生成 TXT，GUI 默认生成 TSC、勾选“GSC→TXT”后生成 TXT）、WCG/LIM→PNG、嵌入式 WAV→OGG；已经是标准 PCM 的 WAV 会原样保留并视为成功。单个文件失败只会产生警告，不会中断其余处理。
+递归解包会继续解开内嵌 XFL/LWG，并自动处理 GSC（命令行默认生成 TXT，GUI 默认生成 TSC、勾选“GSC→TXT”后生成 TXT）、WCG→PNG、LIM→WebP、嵌入式 WAV→OGG；已经是标准 PCM 的 WAV 会原样保留并视为成功。单个文件失败只会产生警告，不会中断其余处理。
 
-“仅封包”包括目录→XFL/LWG、TSC/TXT→GSC、图片→WCG、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG/LIM→PNG、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
+“仅封包”包括目录→XFL/LWG、TSC/TXT→GSC、PNG 等图片→WCG、WebP→LIM、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG→PNG、LIM→WebP、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
 
 ### 已知限制
 
@@ -227,7 +234,8 @@ OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771
 | Unpack resource archive | `liarsofttool -e cp932 archive.xfl` |
 | Unpack scene archive | `liarsofttool cgview.lwg` |
 | WCG to PNG | `liarsofttool image.wcg` |
-| LIM to PNG | `liarsofttool image.lim` |
+| LIM to lossless WebP | `liarsofttool image.lim` |
+| WebP to LIM | `liarsofttool image.webp` |
 | PNG to WCG | `liarsofttool image.png` |
 | WAV extract OGG (retain PCM) | `liarsofttool audio.wav` |
 | OGG embed to WAV | `liarsofttool -r template.wav audio.ogg` |
@@ -245,7 +253,7 @@ OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771
 
 ### Build
 
-**Requirements:** CMake ≥ 3.10, GCC ≥ 9 (C++17 + `<filesystem>`), libiconv
+**Requirements:** CMake ≥ 3.10, GCC ≥ 9 (C++17 + `<filesystem>`), libiconv, libwebp development files (`libwebp-dev` on Debian/Ubuntu)
 
 ```bash
 cd LiarsoftTool
@@ -254,7 +262,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 # CLI version
 sudo cp liarsofttool /usr/local/bin/
-# GUI version (Linux: GTKmm 3 required; Windows: native Win32, no extra deps)
+# GUI version (Linux: GTKmm 3 required; Windows: native Win32, no GTK needed)
 # Run build/liarsofttool-gui directly or double-click the EXE
 ```
 
@@ -262,7 +270,7 @@ sudo cp liarsofttool /usr/local/bin/
 
 ```bash
 # In MSYS2 UCRT64 terminal
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp}
 cd LiarsoftTool
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
@@ -271,6 +279,10 @@ make -j$(nproc)
 ```
 
 #### Cross-compile Windows from Linux
+
+Provide MinGW-targeted libwebp headers and libraries using CMake's
+`WEBP_INCLUDE_DIR` / `WEBP_LIBRARY`; do not link the host Linux library.
+Dynamic builds must ship the corresponding WebP DLL; static builds need no WebP DLL.
 
 ```bash
 sudo apt install g++-mingw-w64-x86-64
@@ -291,7 +303,7 @@ Run `liarsofttool-gui` or double-click the executable:
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Warning/error dialogs offer **Copy details**, copying the complete diagnostics and input/output paths for bug reports
-- Linux: GTK3 backend. Windows: native Win32 API (zero extra DLL dependencies)
+- Linux: GTK3 backend. Windows: native Win32 API; dynamic libwebp builds need its DLL
 
 ### CLI Options
 
@@ -318,12 +330,20 @@ When exactly two args have different extensions, the second is treated as output
 | GSC | `.gsc` | extract/inject | Game script. Compatible with modern 36B and early 28B headers; auto-adapts to HeaderLength |
 | TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
 | WCG | `.wcg` | ↔ PNG | Lossless 8-bit RGBA pixels; paired channels, four separate channels, and alpha masks |
-| LIM | `.lim` | → PNG | Separate color/alpha channels or alpha-only; 16-bit BGR565 green key and optional alpha |
+| LIM | `.lim` | ↔ WebP | Lossless RGBA; reads BGR565/masks and writes version-3 separate A/R/G/B channels |
 | EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and Japanese, Chinese, or Russian line-break punctuation tables |
 | WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
 | OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
 
 WCG encoding normally uses two 16-bit color pairs. If either pair has all 65536 values, it switches to separate A/R/G/B streams without losing pixels or overflowing the palette count. Alpha-only WCG files export as PNG with zero RGB and preserved alpha, without inventing colors. The four-channel path follows Cannonball's statically verified decoder; in-game compatibility with other engines still needs testing. PNG ICC/gamma metadata is not stored in WCG.
+
+LIM exports lossless `.webp`, preserving RGB even under fully transparent pixels.
+Same-name WCG files still export `.png`, so neither image overwrites the other.
+WebP imports produce version-3 LIM with equivalent decoded RGBA, not identical
+original bit depth, compression or bytes. Animated WebP is unsupported; WebP
+dimensions cannot exceed 16383 pixels per side. ICC/EXIF metadata is not stored
+in LIM. Re-export old LIM-derived PNG files from the original LIM; renaming a
+PNG extension does not convert it to WebP.
 
 LWG layer names are XML-escaped in `.meta.xml` and restored when packing; file lookup uses the same filesystem-safe names as extraction. Re-extract original LWG files if an older tool produced invalid XML containing literal names such as `</Layer set>`.
 
@@ -413,11 +433,11 @@ format, not Ogg bytes wrapped in a PCM header.
 
 Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive); project files such as PNG are never stored directly. By default, only the current level of the selected directory or archive is processed.
 
-With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, and OGG→WAV (requiring a same-name WAV template). Before converting an image, a same-name LIM is renamed to `.lim.old`; if that backup already exists, the image is skipped with a warning. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
+With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, WebP→LIM, and OGG→WAV (requiring a same-name WAV template). Same-name PNG and WebP coexist without renaming LIM or creating `.lim.old` backups. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
 
-Recursive unpacking opens nested XFL/LWG archives and processes GSC files (the CLI defaults to TXT; the GUI defaults to TSC and uses the **GSC→TXT** toggle for legacy TXT output), WCG/LIM→PNG, and embedded WAV→OGG. Standard PCM WAV files are retained unchanged and count as successful. Failure of one file produces a warning without stopping the remaining work.
+Recursive unpacking opens nested XFL/LWG archives and processes GSC files (the CLI defaults to TXT; the GUI defaults to TSC and uses the **GSC→TXT** toggle for legacy TXT output), WCG→PNG, LIM→WebP, and embedded WAV→OGG. Standard PCM WAV files are retained unchanged and count as successful. Failure of one file produces a warning without stopping the remaining work.
 
-**Pack only** covers directory→XFL/LWG, TSC/TXT→GSC, images→WCG, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG/LIM→PNG, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
+**Pack only** covers directory→XFL/LWG, TSC/TXT→GSC, PNG and other images→WCG, WebP→LIM, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG→PNG, LIM→WebP, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
 
 ### Known Limitations
 
@@ -432,4 +452,5 @@ GNU General Public License v3.0 (inherited from arc_unpacker's CG decompression 
 
 Third-party code:
 - [stb_image](https://github.com/nothings/stb) (public domain) — PNG read/write
+- [libwebp](https://chromium.googlesource.com/webm/libwebp/) (BSD) — lossless WebP read/write
 - CG decompression algorithm from [arc_unpacker](https://github.com/vn-tools/arc_unpacker) (GPLv3)

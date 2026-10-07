@@ -16,8 +16,16 @@ struct LimImage {
 /// Decode LIM → RGBA pixels.
 LimImage limDecode(const std::vector<uint8_t>& data);
 
-/// Save as PNG.
-void limSavePng(const LimImage& img, const std::string& path);
+/// Encode RGBA as version-3 LIM (separate A/R/G/B channels).
+std::vector<uint8_t> limEncode(const LimImage& img);
+
+/// Decode a still WebP image to RGBA. Animated WebP is rejected.
+LimImage webpDecode(const std::vector<uint8_t>& data);
+
+/// Encode lossless WebP, including RGB values under fully transparent pixels.
+std::vector<uint8_t> webpEncode(const LimImage& img);
+
+void limSaveWebp(const LimImage& img, const std::string& path);
 
 } // namespace liarsoft
 

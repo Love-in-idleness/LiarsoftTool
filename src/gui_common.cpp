@@ -70,7 +70,9 @@ std::string guessOutput(const std::string& inputPath,
     if (ext == ".gsc") return (base / (stem + (gscToTsc ? ".tsc" : ".txt"))).string();
     if (ext == ".tsc" || ext == ".txt") return (base / (stem + ".gsc")).string();
     if (ext == ".xfl" || ext == ".lwg") return (base / stem).string();
-    if (ext == ".wcg" || ext == ".lim") return (base / (stem + ".png")).string();
+    if (ext == ".wcg") return (base / (stem + ".png")).string();
+    if (ext == ".lim") return (base / (stem + ".webp")).string();
+    if (ext == ".webp") return (base / (stem + ".lim")).string();
     if (ext == ".wav") return (base / (stem + ".ogg")).string();
     if (ext == ".ogg") return (base / (stem + ".wav")).string();
     if (ext == ".exe") {
@@ -93,7 +95,8 @@ std::string guessType(const std::string& path,
     if (ext == ".xfl") return "XFL -> DIR";
     if (ext == ".lwg") return "LWG -> DIR";
     if (ext == ".wcg") return "WCG -> PNG";
-    if (ext == ".lim") return "LIM -> PNG";
+    if (ext == ".lim") return "LIM -> WebP";
+    if (ext == ".webp") return "WebP -> LIM";
     if (ext == ".wav") return "WAV -> OGG";
     if (ext == ".ogg") return "OGG -> WAV";
     if (ext == ".exe") return "EXE -> " + encoding;
@@ -109,7 +112,7 @@ bool isSupported(const std::string& path) {
            ext == ".xfl" || ext == ".lwg" || ext == ".wcg" ||
            ext == ".lim" || ext == ".wav" || ext == ".ogg" ||
            ext == ".exe" || ext == ".png" || ext == ".jpg" ||
-           ext == ".jpeg" || ext == ".bmp" || fs::is_directory(path);
+           ext == ".jpeg" || ext == ".bmp" || ext == ".webp" || fs::is_directory(path);
 }
 
 static std::vector<uint8_t> readBinary(const std::string& path) {
@@ -168,7 +171,10 @@ std::vector<std::string> convert(const std::string& inputPath,
     } else if (ext == ".wcg") {
         liarsoft::wcgSavePng(liarsoft::wcgDecode(readBinary(inputPath)), outputPath);
     } else if (ext == ".lim") {
-        liarsoft::limSavePng(liarsoft::limDecode(readBinary(inputPath)), outputPath);
+        liarsoft::limSaveWebp(liarsoft::limDecode(readBinary(inputPath)), outputPath);
+    } else if (ext == ".webp") {
+        liarsoft::writeFileIfChanged(outputPath,
+            liarsoft::limEncode(liarsoft::webpDecode(readBinary(inputPath))));
     } else if (ext == ".wav") {
         liarsoft::WavOggExtractor::extractToFile(inputPath, outputPath);
     } else if (ext == ".ogg") {

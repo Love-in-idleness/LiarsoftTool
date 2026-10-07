@@ -1,7 +1,9 @@
 #include "cg_decompress.h"
 #include "lim_decoder.h"
 #include "wcg_decoder.h"
+#include "fileio.h"
 
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -55,7 +57,7 @@ void rejectsWcg(const Bytes& data, const char* message) {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     try {
         // 0010 = length 1, palette index 0. Later bytes are unused padding,
         // just like Khime's first WCG channel; they must not become headers.
@@ -122,6 +124,54 @@ int main() {
         appendBlock(white16, {0xff, 0xff}, {0x20});
         require(liarsoft::limDecode(white16).pixels == Bytes({0xf8, 0xfc, 0xf8, 0xff}),
                 "LIM BGR565 expansion differs from original engine");
+
+        // Exercise every channel value, including invisible RGB and partial alpha.
+        liarsoft::LimImage sourceImage{256, 4, {}};
+        for (int alpha : {0, 1, 127, 255}) {
+            for (int i = 0; i < 256; ++i)
+                sourceImage.pixels.insert(sourceImage.pixels.end(), {
+                    static_cast<uint8_t>(i), static_cast<uint8_t>(255 - i),
+                    static_cast<uint8_t>((i * 37) & 255), static_cast<uint8_t>(alpha)});
+        }
+        const auto encodedLim = liarsoft::limEncode(sourceImage);
+        require(encodedLim[0] == 'L' && encodedLim[1] == 'M' &&
+                encodedLim[2] == 0x13 && encodedLim[3] == 0 && encodedLim[4] == 24,
+                "LIM encoder did not produce a version-3 LIM header");
+        require(liarsoft::limDecode(encodedLim).pixels == sourceImage.pixels,
+                "Separate-channel LIM encoding lost RGBA pixels");
+        const auto webp = liarsoft::webpEncode(sourceImage);
+        const auto decodedWebp = liarsoft::webpDecode(webp);
+        require(decodedWebp.width == sourceImage.width && decodedWebp.height == sourceImage.height &&
+                decodedWebp.pixels == sourceImage.pixels,
+                "Lossless WebP changed pixels, dimensions or invisible RGB");
+        require(liarsoft::limDecode(liarsoft::limEncode(decodedWebp)).pixels == sourceImage.pixels,
+                "LIM/WebP/LIM round trip lost pixels");
+        for (const auto& legacy : {limMask, lim16, keyed, explicitAlpha, white16}) {
+            const auto original = liarsoft::limDecode(legacy);
+            const auto rebuilt = liarsoft::limEncode(
+                liarsoft::webpDecode(liarsoft::webpEncode(original)));
+            require(liarsoft::limDecode(rebuilt).pixels == original.pixels,
+                    "Legacy LIM mask or BGR565 pixels were lost during WebP round trip");
+        }
+        rejects([&] { liarsoft::webpDecode({}); }, "Empty WebP was accepted");
+        rejects([&] { liarsoft::webpDecode(Bytes{'n', 'o'}); }, "Invalid WebP was accepted");
+        auto truncatedWebp = webp;
+        truncatedWebp.resize(webp.size() / 2);
+        rejects([&] { liarsoft::webpDecode(truncatedWebp); }, "Truncated WebP was accepted");
+        auto animatedWebp = Bytes{'R', 'I', 'F', 'F', 22, 0, 0, 0,
+                                 'W', 'E', 'B', 'P', 'V', 'P', '8', 'X',
+                                 10, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        rejects([&] { liarsoft::webpDecode(animatedWebp); }, "Animated WebP was accepted");
+
+        // The directory/CLI regression reuses these generated fixtures, not game assets.
+        if (argc == 2) {
+            const std::filesystem::path directory(argv[1]);
+            std::filesystem::create_directories(directory);
+            liarsoft::writeFileIfChanged((directory / "image.lim").string(), encodedLim);
+            liarsoft::limSaveWebp(sourceImage, (directory / "image.webp").string());
+            const auto decoded = liarsoft::wcgDecode(liarsoft::wcgEncode(rgba, 1, 1));
+            liarsoft::wcgSavePng(decoded, (directory / "image.png").string());
+        }
 
         // Verify pointer advancement itself, including a larger palette/4-bit coding.
         Bytes largeBlock;
@@ -266,8 +316,12 @@ int main() {
         rejects([&] { liarsoft::wcgEncode(nullptr, 1, 1); }, "Null RGBA buffer was accepted");
         rejects([&] { liarsoft::wcgSavePng({1, 1, Bytes(3)}, "unused-invalid.png"); },
                 "Short BGRA PNG buffer was accepted");
-        rejects([&] { liarsoft::limSavePng({1, 1, Bytes(3)}, "unused-invalid.png"); },
-                "Short LIM PNG buffer was accepted");
+        rejects([&] { liarsoft::limSaveWebp({1, 1, Bytes(3)}, "unused-invalid.webp"); },
+                "Short LIM WebP buffer was accepted");
+        rejects([&] { liarsoft::limEncode({1, 1, Bytes(3)}); },
+                "Short LIM encoder buffer was accepted");
+        rejects([&] { liarsoft::webpEncode({16384, 1, Bytes(16384 * 4)}); },
+                "Unsupported WebP dimensions were accepted");
 
         std::cout << "CG block padding, WCG/LIM pixels and malformed-input checks passed\n";
         return 0;

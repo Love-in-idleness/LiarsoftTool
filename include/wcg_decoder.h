@@ -21,10 +21,13 @@ void wcgSavePng(const WcgImage& img, const std::string& path);
 
 /// Encode RGBA pixels → WCG binary (PNG→WCG).
 /// `pixels` is RGBA8888, width × height × 4.
-std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t height);
+// LIM shares the separate-channel compression; it must not use paired channels.
+std::vector<uint8_t> wcgEncode(const uint8_t* rgba, uint32_t width, uint32_t height,
+                             bool separateChannels = false);
 
 /// Encode from a raw RGBA file buffer.
-std::vector<uint8_t> wcgEncode(const std::vector<uint8_t>& rgba, uint32_t width, uint32_t height);
+std::vector<uint8_t> wcgEncode(const std::vector<uint8_t>& rgba, uint32_t width,
+                             uint32_t height, bool separateChannels = false);
 
 } // namespace liarsoft
 
