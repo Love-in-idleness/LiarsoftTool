@@ -7,6 +7,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -65,9 +66,12 @@ int main(int argc, char** argv) {
     appendU32(code, 0); appendU32(code, 0); appendU32(code, 3);
     appendU16(code, 13); appendU32(code, 7);
     appendU16(code, 202); appendU32(code, 1); appendU32(code, 2); appendU32(code, 3);
-    appendU16(code, 210); appendU32(code, 1000); appendU32(code, 4);
-    appendU16(code, 211); appendU32(code, 1001); appendU32(code, 5); appendU32(code, 6); appendU32(code, 7);
-    appendU16(code, 212); appendU32(code, 1002);
+    const auto dynselOffset = code.size();
+    appendU16(code, 210); appendU32(code, 2); appendU32(code, 4);
+    const auto dynansOffset = code.size();
+    appendU16(code, 211); appendU32(code, 3); appendU32(code, 5); appendU32(code, 6); appendU32(code, 7);
+    const auto dynnextOffset = code.size();
+    appendU16(code, 212); appendU32(code, 4);
     appendU16(code, 213); appendU32(code, 8); appendU32(code, 9); appendU32(code, 10);
     appendU16(code, 136); appendU32(code, 11); appendU32(code, 12); appendU32(code, 13);
     appendU16(code, 113); appendU32(code, 14); appendU32(code, 15);
@@ -107,7 +111,10 @@ int main(int argc, char** argv) {
         !contains(listing, "*TXT 0 123 0 0 \"Name\" \"Text\" 0") ||
         !contains(listing, "*font 40 400 250 0 0 \"Font Text\"") ||
         !contains(listing, "*gosub 99 \"select\" 8031 8032 0 0 0 0 0 0 0 0") ||
-        !contains(listing, "*flagset 1 2 3") || !contains(listing, "*dynsel 1000 4") ||
+        !contains(listing, "*flagset 1 2 3") ||
+        !contains(listing, "*dynsel \"Text\" 4") ||
+        !contains(listing, "*dynans \"Font Text\" 5 6 7") ||
+        !contains(listing, "*dynnext \"select\"") ||
         !contains(listing, "*map 22 23 24") || !contains(listing, "*end") ||
         listing.find(";@gsc-trailer") != std::string::npos ||
         listing.find(";@gsc-text-encoding") != std::string::npos) return 1;
@@ -120,12 +127,32 @@ int main(int argc, char** argv) {
     const std::string changedTxt = "*TXT 0 456 0 0 \"Edited\" \"Changed\" 0";
     edited.replace(edited.find(originalTxt), originalTxt.size(), changedTxt);
     edited.replace(edited.find("\"Font Text\""), 11, "\"Edited Font\"");
+    for (const auto& change : std::vector<std::pair<std::string, std::string>>{
+             {"*dynsel \"Text\"", "*dynsel \"Changed Prompt\""},
+             {"*dynans \"Font Text\"", "*dynans \"Changed Choice\""},
+             {"*dynnext \"select\"", "*dynnext \"Changed Next\""}})
+        edited.replace(edited.find(change.first), change.first.size(), change.second);
     const auto editedGsc = liarsoft::restoreGscFromTsc(edited);
     save(temp, editedGsc);
     const auto editedListing = liarsoft::decompileGsc(temp.string());
     if (!contains(editedListing, changedTxt) || !contains(editedListing, "\"Edited Font\"") ||
+        !contains(editedListing, "*dynsel \"Changed Prompt\" 4") ||
+        !contains(editedListing, "*dynans \"Changed Choice\" 5 6 7") ||
+        !contains(editedListing, "*dynnext \"Changed Next\"") ||
         editedGsc == modern) {
         std::cerr << "TSC body edits were not compiled into GSC" << std::endl; return 1;
+    }
+
+    for (const auto offset : {dynselOffset, dynansOffset, dynnextOffset}) {
+        auto invalidChoice = modern;
+        patchU32(invalidChoice, 36 + offset + 2, 0xffffffffu);
+        save(temp, invalidChoice);
+        const auto invalidListing = liarsoft::decompileGsc(temp.string());
+        if (invalidListing.find(";@gsc-raw-v1") == std::string::npos ||
+            liarsoft::restoreGscFromTsc(invalidListing) != invalidChoice) {
+            std::cerr << "Invalid dynamic choice string index was not rejected" << std::endl;
+            return 1;
+        }
     }
 
     // The output encoding is chosen by the caller. A stale
@@ -134,12 +161,19 @@ int main(int argc, char** argv) {
     // than being written as '?'.
     const std::string staleEncoding =
         ";@gsc-byte-format modern-36\n;@gsc-text-encoding GBK\n;@gsc-schema modern\n"
-        "*TXT 0 0 0 0 \"\" \"\xe8\xb6\x8a\xe8\xbf\x87\xe5\x89\x8d\xe6\x96\xb9\" 1\n*end\n";
+        "*TXT 0 0 0 0 \"\" \"\xe8\xb6\x8a\xe8\xbf\x87\xe5\x89\x8d\xe6\x96\xb9\" 1\n"
+        "*dynsel \"调查何处？\" 0\n*dynans \"调查少女像\" 1 5024 0\n"
+        "*dynans \"调查少女像\" 2 @5025 0\n*dynnext \"继续\"\n*dyndo 2 0 1\n*end\n";
     const auto gbkGsc = liarsoft::restoreGscFromTsc(staleEncoding, "GBK");
     save(temp, gbkGsc);
     const auto gbkListing = liarsoft::decompileGsc(temp.string(), "GBK");
     if (gbkListing.find(";@gsc-text-encoding") != std::string::npos ||
-        !contains(gbkListing, "\"\xe8\xb6\x8a\xe8\xbf\x87\xe5\x89\x8d\xe6\x96\xb9\"")) {
+        !contains(gbkListing, "\"\xe8\xb6\x8a\xe8\xbf\x87\xe5\x89\x8d\xe6\x96\xb9\"") ||
+        !contains(gbkListing, "*dynsel \"调查何处？\" 0") ||
+        !contains(gbkListing, "*dynans \"调查少女像\" 1 5024 0") ||
+        !contains(gbkListing, "*dynans \"调查少女像\" 2 @5025 0") ||
+        !contains(gbkListing, "*dynnext \"继续\"") ||
+        liarsoft::restoreGscFromTsc(gbkListing, "GBK") != gbkGsc) {
         std::cerr << "Encoding metadata was emitted or the text was not preserved"
                   << std::endl; return 1;
     }

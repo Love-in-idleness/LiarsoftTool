@@ -39,12 +39,21 @@ stale index, so the game reads an out-of-range or wrong string at runtime:
 | 81 `*TXT` | 5th (speaker name), 6th (body) |
 | 82 `*TXA` | 5th (body) |
 | 121 `*folder`, 150 `*strset`, 151 `*stradd` | 2nd |
+| 210 `*dynsel`, 211 `*dynans`, 212 `*dynnext` | 1st (prompt, answer, or next-page text) |
 
 The names of `pow`, `gmenuon`, `gmenuset`, `gmenuget`, and `map` come from the
 2012 `RsComp.dll` shipped with UBAI (SHA-256
 `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9`): its
 compiler dispatch code matches command names with `lstrcmpiA` and writes the
 corresponding opcode directly.
+
+The same DLL pools the first text operand of `dynsel` (`0x10004892`),
+`dynans` (`0x100048f8`), and `dynnext` (`0x100048cf`) via `0x100010e0`
+before writing its index. In Evermaiden's original `4330.gsc` (SHA-256
+`46d5c3c4dcdb8756b60d30117d64bf4a090cddb97188415770ecadb067a1d8b8`),
+indices 3–6 hold the prompt and three answers. TSC exports them as quoted text
+and recompilation rebuilds their indices; the remaining expression operands
+are unchanged.
 
 ## Ordinary Opcodes
 

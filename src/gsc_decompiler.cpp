@@ -467,6 +467,8 @@ private:
             } else if (instruction.opcode == 121 || instruction.opcode == 150 ||
                        instruction.opcode == 151) {
                 stringBytes(static_cast<size_t>(instruction.operands[1]));
+            } else if (instruction.opcode >= 210 && instruction.opcode <= 212) {
+                stringBytes(static_cast<size_t>(instruction.operands[0]));
             }
         }
     }
@@ -755,6 +757,8 @@ bool isStringOperand(uint16_t opcode, size_t index) {
     if (opcode == 32) return index == 5;
     if (opcode == 81) return index == 4 || index == 5;
     if (opcode == 82) return index == 4;
+    // RsComp.dll pools the prompt/answer/page text before writing its index.
+    if (opcode >= 210 && opcode <= 212) return index == 0;
     return (opcode == 121 || opcode == 150 || opcode == 151) && index == 1;
 }
 

@@ -21,8 +21,16 @@
 | 81 `*TXT` | 第 5 个（人名）、第 6 个（正文） |
 | 82 `*TXA` | 第 5 个（正文） |
 | 121 `*folder`、150 `*strset`、151 `*stradd` | 第 2 个 |
+| 210 `*dynsel`、211 `*dynans`、212 `*dynnext` | 第 1 个（提示、选项或下一页文字） |
 
 `pow`、`gmenuon`、`gmenuset`、`gmenuget` 和 `map` 的命名依据为 UBAI 所附 2012 年版 `RsComp.dll`（SHA-256 `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9`）：其编译器分派代码使用 `lstrcmpiA` 匹配命令名后直接写入对应 opcode。
+
+同一 DLL 的 `*dynsel`（`0x10004892`）、`*dynans`（`0x100048f8`）和
+`*dynnext`（`0x100048cf`）都会将首个文本参数送入 `0x100010e0` 登记字符串，
+再写出返回的索引。Evermaiden 的原 `4330.gsc`（SHA-256
+`46d5c3c4dcdb8756b60d30117d64bf4a090cddb97188415770ecadb067a1d8b8`）
+中索引 3–6 分别是提示和三个选项，不能作为普通数字保留；TSC 必须输出带引号的正文，
+回编时重建索引。其余参数仍是原签名中的表达式，不作字符串转换。
 
 ## 普通 opcode
 
