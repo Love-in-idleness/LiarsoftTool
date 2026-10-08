@@ -98,7 +98,7 @@ std::string guessType(const std::string& path,
     if (ext == ".lim") return "LIM -> WebP";
     if (ext == ".webp") return "WebP -> LIM";
     if (ext == ".wav") return "WAV -> OGG";
-    if (ext == ".ogg") return "OGG -> WAV (experimental)";
+    if (ext == ".ogg") return "OGG -> WAV";
     if (ext == ".exe") return "EXE -> " + encoding;
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return "IMG -> WCG";
@@ -141,7 +141,7 @@ std::vector<std::string> convert(const std::string& inputPath,
         else
             warnings = liarsoft::packDirectoryToFile(
                 inputPath, outputPath, options.encoding, options.recursive,
-                options.experimentalOggToWav);
+                options.vorbisInWav);
     } else if (ext == ".gsc") {
         if (options.gscToTsc)
             liarsoft::decompileGscToFile(inputPath, outputPath, options.encoding);
@@ -179,11 +179,7 @@ std::vector<std::string> convert(const std::string& inputPath,
     } else if (ext == ".wav") {
         liarsoft::WavOggExtractor::extractToFile(inputPath, outputPath);
     } else if (ext == ".ogg") {
-        if (!options.experimentalOggToWav)
-            return {liarsoft::WavOggExtractor::EXPERIMENTAL_DISABLED};
-        const std::string reference = options.referencePath.empty()
-            ? replaceExtension(inputPath, ".wav") : options.referencePath;
-        liarsoft::WavOggExtractor::embedToFile(inputPath, reference, outputPath);
+        liarsoft::WavOggExtractor::convertToFile(inputPath, outputPath, options.vorbisInWav);
     } else if (ext == ".png" || ext == ".jpg" ||
                ext == ".jpeg" || ext == ".bmp") {
         int width, height, channels;

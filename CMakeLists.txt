@@ -4,6 +4,22 @@ project(LiarsoftTool VERSION 2.2.2 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# libvorbisfile provides the same PCM decoder on Linux and Windows.
+find_path(VORBIS_INCLUDE_DIR vorbis/vorbisfile.h)
+find_path(OGG_INCLUDE_DIR ogg/ogg.h)
+find_library(VORBISFILE_LIBRARY NAMES vorbisfile)
+find_library(VORBIS_LIBRARY NAMES vorbis)
+find_library(OGG_LIBRARY NAMES ogg)
+if(NOT VORBIS_INCLUDE_DIR OR NOT OGG_INCLUDE_DIR OR NOT VORBISFILE_LIBRARY
+   OR NOT VORBIS_LIBRARY OR NOT OGG_LIBRARY)
+    message(FATAL_ERROR "libvorbisfile/libvorbis/libogg development files are required")
+endif()
+add_library(Vorbis::file UNKNOWN IMPORTED)
+set_target_properties(Vorbis::file PROPERTIES
+    IMPORTED_LOCATION "${VORBISFILE_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${VORBIS_INCLUDE_DIR};${OGG_INCLUDE_DIR}"
+    INTERFACE_LINK_LIBRARIES "${VORBIS_LIBRARY};${OGG_LIBRARY}")
+
 find_path(WEBP_INCLUDE_DIR webp/encode.h)
 find_library(WEBP_LIBRARY NAMES webp)
 if(NOT WEBP_INCLUDE_DIR OR NOT WEBP_LIBRARY)
@@ -117,12 +133,17 @@ endif()
 
 # Install
 install(TARGETS liarsofttool DESTINATION bin)
+install(FILES docs/THIRD_PARTY_AUDIO_LICENSES.md DESTINATION share/doc/LiarsoftTool)
 if(WIN32 OR GTKMM_FOUND)
     install(TARGETS liarsofttool-gui DESTINATION bin)
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    find_library(VORBISENC_LIBRARY NAMES vorbisenc)
+    if(NOT VORBISENC_LIBRARY)
+        message(FATAL_ERROR "libvorbisenc is required to generate audio test inputs")
+    endif()
     add_executable(encoding_test tests/encoding_test.cpp src/encoding.cpp)
     if(NOT WIN32)
         target_link_libraries(encoding_test PRIVATE Iconv::Iconv)
@@ -195,3 +216,13 @@ foreach(target liarsofttool liarsofttool-gui gui_common_test archive_test cg_dec
         target_link_libraries(${target} PRIVATE WebP::webp)
     endif()
 endforeach()
+
+foreach(target liarsofttool liarsofttool-gui wav_ogg_test gui_common_test archive_test)
+    if(TARGET ${target})
+        target_link_libraries(${target} PRIVATE Vorbis::file)
+    endif()
+endforeach()
+if(BUILD_TESTING)
+    target_link_libraries(wav_ogg_test PRIVATE "${VORBISENC_LIBRARY}")
+    target_link_libraries(gui_common_test PRIVATE "${VORBISENC_LIBRARY}")
+endif()

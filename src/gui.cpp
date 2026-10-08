@@ -26,7 +26,7 @@ static Gtk::CheckButton* g_recursiveCheck = nullptr;
 static Gtk::CheckButton* g_packOnlyCheck = nullptr;
 static Gtk::CheckButton* g_unpackOnlyCheck = nullptr;
 static Gtk::CheckButton* g_gscToTxtCheck = nullptr;
-static Gtk::CheckButton* g_oggToWavCheck = nullptr;
+static Gtk::CheckButton* g_vorbisInWavCheck = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
@@ -82,14 +82,14 @@ static void addFiles(const std::vector<std::string>& paths, const std::string& o
 static void convertAll(std::vector<ConversionJob> jobs,
                        const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
-                       bool gscToTsc, bool experimentalOggToWav) {
+                       bool gscToTsc, bool vorbisInWav) {
     int total = jobs.size();
     int done = 0;
     int totalWarnings = 0;
     bool hasErrors = false;
     std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
     const liarsoft::gui::ConversionOptions options{
-        encoding, refPath, recursive, gscToTsc, unpackOnly, experimentalOggToWav};
+        encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav};
 
     for (const auto& job : jobs) {
         const std::string& in = job.inputPath;
@@ -230,17 +230,16 @@ static void onChooseOutDir(Gtk::Window* parent) {
     }
 }
 
-// ---- Choose reference GSC or WAV----
+// ---- Choose reference GSC ----
 static void onChooseRef(Gtk::Window* parent) {
-    auto dialog = Gtk::FileChooserDialog("Select Reference GSC or WAV",
+    auto dialog = Gtk::FileChooserDialog("Select Reference GSC",
         Gtk::FILE_CHOOSER_ACTION_OPEN);
     dialog.set_transient_for(*parent);
     dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
     dialog.add_button("Open", Gtk::RESPONSE_OK);
     auto filter = Gtk::FileFilter::create();
-    filter->set_name("GSC or WAV Files");
+    filter->set_name("GSC Files");
     filter->add_pattern("*.gsc");
-    filter->add_pattern("*.wav");
     dialog.add_filter(filter);
 
     if (dialog.run() == Gtk::RESPONSE_OK)
@@ -300,7 +299,7 @@ int runGui(int argc, char* argv[]) {
 
     auto refLabel = Gtk::manage(new Gtk::Label("Reference:"));
     g_refEntry = Gtk::manage(new Gtk::Entry());
-    g_refEntry->set_placeholder_text("Reference GSC or WAV file");
+    g_refEntry->set_placeholder_text("Reference GSC file for TXT injection");
     g_refEntry->set_width_chars(20);
     auto refBtn = Gtk::manage(new Gtk::Button("..."));
     refBtn->signal_clicked().connect([&]() { onChooseRef(&window); });
@@ -327,11 +326,11 @@ int runGui(int argc, char* argv[]) {
     optionsBar->pack_start(*g_packOnlyCheck, false, false);
     optionsBar->pack_start(*g_unpackOnlyCheck, false, false);
     optionsBar->pack_start(*g_gscToTxtCheck, false, false);
-    g_oggToWavCheck = Gtk::manage(new Gtk::CheckButton("OGG → WAV (experimental)"));
-    g_oggToWavCheck->set_tooltip_text(
-        "Opt in to Ogg-in-WAV wrapping, including recursive packing. Requires a matching WAV template; "
-        "does not restore the original WAV bytes. Disabled: keep existing WAV files unchanged.");
-    optionsBar->pack_start(*g_oggToWavCheck, false, false);
+    g_vorbisInWavCheck = Gtk::manage(new Gtk::CheckButton("Vorbis-in-WAV"));
+    g_vorbisInWavCheck->set_tooltip_text(
+        "Keep compressed Vorbis in WAV instead of decoding to 16-bit PCM, including recursive packing. "
+        "Neither mode requires an original WAV file.");
+    optionsBar->pack_start(*g_vorbisInWavCheck, false, false);
     mainBox->pack_start(*optionsBar, false, false);
 
     // --- File list ---
@@ -389,7 +388,7 @@ int runGui(int argc, char* argv[]) {
         bool packOnly = g_packOnlyCheck->get_active();
         bool unpackOnly = g_unpackOnlyCheck->get_active();
         bool gscToTsc = !g_gscToTxtCheck->get_active();
-        bool experimentalOggToWav = g_oggToWavCheck->get_active();
+        bool vorbisInWav = g_vorbisInWavCheck->get_active();
         std::vector<ConversionJob> jobs;
         for (const auto& child : g_store->children()) {
             jobs.push_back({
@@ -399,7 +398,7 @@ int runGui(int argc, char* argv[]) {
         }
         g_convertBtn->set_sensitive(false);
         std::thread t(convertAll, std::move(jobs), enc, ref, recursive,
-                      packOnly, unpackOnly, gscToTsc, experimentalOggToWav);
+                      packOnly, unpackOnly, gscToTsc, vorbisInWav);
         t.detach();
     });
 

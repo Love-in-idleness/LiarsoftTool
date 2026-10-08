@@ -1,195 +1,156 @@
 #include "wav_ogg.h"
+#include "vorbis_fixture.h"
 
 #include <algorithm>
-#include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <stdexcept>
-#include <vector>
 
 namespace {
-
 void writeU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
     for (int i = 0; i < 4; ++i) data[offset + i] = static_cast<uint8_t>(value >> (i * 8));
 }
-
 uint32_t readU32(const std::vector<uint8_t>& data, size_t offset) {
     uint32_t value = 0;
     for (int i = 0; i < 4; ++i) value |= static_cast<uint32_t>(data[offset + i]) << (i * 8);
     return value;
 }
-
-void appendPage(std::vector<uint8_t>& out, uint32_t serial, uint32_t sequence,
-                const std::vector<uint8_t>& payload, uint8_t flags = 0,
-                uint32_t samples = 0) {
-    const size_t start = out.size();
-    out.resize(start + 28, 0);
-    std::copy_n(reinterpret_cast<const uint8_t*>("OggS"), 4, out.begin() + start);
-    out[start + 5] = flags;
-    writeU32(out, start + 6, samples);
-    writeU32(out, start + 14, serial);
-    writeU32(out, start + 18, sequence);
-    out[start + 26] = 1;
-    out[start + 27] = static_cast<uint8_t>(payload.size());
-    out.insert(out.end(), payload.begin(), payload.end());
-    uint32_t crc = 0;
-    for (size_t i = start; i < out.size(); ++i) {
-        crc ^= static_cast<uint32_t>(out[i]) << 24;
-        for (int bit = 0; bit < 8; ++bit)
-            crc = (crc << 1) ^ ((crc & 0x80000000u) ? 0x04c11db7u : 0);
-    }
-    writeU32(out, start + 22, crc);
-}
-
-std::vector<uint8_t> identification() {
-    std::vector<uint8_t> packet(30, 0);
-    std::copy_n(reinterpret_cast<const uint8_t*>("\x01vorbis"), 7, packet.begin());
-    packet[11] = 1;
-    writeU32(packet, 12, 44100);
-    packet[28] = 0xb8;
-    packet[29] = 1;
-    return packet;
-}
-
-std::vector<uint8_t> reference() {
-    std::vector<uint8_t> wav(66, 0);
-    std::copy_n(reinterpret_cast<const uint8_t*>("RIFF"), 4, wav.begin());
-    std::copy_n(reinterpret_cast<const uint8_t*>("WAVEfmt "), 8, wav.begin() + 8);
-    writeU32(wav, 16, 26);
-    wav[20] = 0x71; wav[21] = 0x67; wav[22] = 1;
-    writeU32(wav, 24, 44100); writeU32(wav, 28, 16000);
-    wav[32] = 1; wav[34] = 16; wav[36] = 8;
-    const std::vector<uint8_t> codecExtra{1, 2, 2, 0x20, 0x31, 0x12, 1, 0x20};
-    std::copy(codecExtra.begin(), codecExtra.end(), wav.begin() + 38);
-    std::copy_n(reinterpret_cast<const uint8_t*>("fact"), 4, wav.begin() + 46);
-    writeU32(wav, 50, 4); writeU32(wav, 54, 99999); // Deliberately stale duration.
-    std::copy_n(reinterpret_cast<const uint8_t*>("data"), 4, wav.begin() + 58);
-    return wav;
-}
-
 void require(bool result, const char* message) {
     if (!result) throw std::runtime_error(message);
 }
-
-template<typename Fn>
-void rejects(Fn fn, const char* message) {
+template<typename Fn> void rejects(Fn fn, const char* message) {
     try { fn(); } catch (const std::runtime_error&) { return; }
     throw std::runtime_error(message);
 }
-
+void fixRiffSize(std::vector<uint8_t>& wav) { writeU32(wav, 4, wav.size() - 8); }
+void checksum(std::vector<uint8_t>& page) {
+    writeU32(page, 22, 0);
+    uint32_t crc = 0;
+    for (uint8_t b : page) {
+        crc ^= uint32_t(b) << 24;
+        for (int bit = 0; bit < 8; ++bit)
+            crc = (crc << 1) ^ ((crc & 0x80000000u) ? 0x04c11db7u : 0);
+    }
+    writeU32(page, 22, crc);
+}
 } // namespace
 
 int main(int argc, char** argv) {
     try {
         using Audio = liarsoft::WavOggExtractor;
-        std::vector<uint8_t> pcm(70, 0);
-        std::copy_n(reinterpret_cast<const uint8_t*>("RIFF"), 4, pcm.begin());
-        writeU32(pcm, 4, pcm.size() - 8);
-        std::copy_n(reinterpret_cast<const uint8_t*>("WAVEfmt "), 8, pcm.begin() + 8);
-        pcm[16] = 16; pcm[20] = 1; pcm[22] = 1;
-        writeU32(pcm, 24, 44100); writeU32(pcm, 28, 88200);
-        pcm[32] = 2; pcm[34] = 16;
-        std::copy_n(reinterpret_cast<const uint8_t*>("data"), 4, pcm.begin() + 36);
-        pcm[40] = 26;
-        // PCM samples can coincidentally contain the embedded Ogg signature.
-        std::copy_n(reinterpret_cast<const uint8_t*>("OggS"), 4, pcm.begin() + 66);
+        const auto clean = testVorbis();
+        const auto wav = Audio::embed(clean);
+        require(Audio::hasEmbeddedOgg(wav) && Audio::extract(wav) == clean,
+                "Template-free Vorbis WAV round trip failed");
+        require(wav[20] == 0x4f && wav[21] == 0x67 && readU32(wav, 54) == 1257 &&
+                readU32(wav, 62) == clean.size() && readU32(wav, 4) == wav.size() - 8 &&
+                wav.size() % 2 == 0, "Mode 1 WAV format, fact, length or padding is incorrect");
+
+        const auto pcm = Audio::decodeToPcm(clean);
         require(Audio::isStandardPcmWav(pcm) && !Audio::hasEmbeddedOgg(pcm) &&
-                Audio::extract(pcm).empty(), "PCM WAV misidentified as embedded Ogg");
+                Audio::extract(pcm).empty(), "PCM WAV misidentified as compressed audio");
+        require(pcm.size() == 44 + 1257 * 2 && readU32(pcm, 24) == 44100 &&
+                pcm[22] == 1 && pcm[32] == 2 && pcm[34] == 16 &&
+                readU32(pcm, 28) == 88200 && readU32(pcm, 40) == 2514 &&
+                readU32(pcm, 4) == pcm.size() - 8, "Decoded PCM size/format is incorrect");
+        require(std::any_of(pcm.begin() + 44, pcm.end(), [](uint8_t b) { return b != 0; }),
+                "Decoded PCM is silent instead of the test tone");
+        const auto stereo = testVorbis(2, 48000, 4800);
+        const auto stereoPcm = Audio::decodeToPcm(stereo);
+        const auto stereoWav = Audio::embed(stereo);
+        require(stereoPcm.size() == 44 + 4800 * 4 && stereoPcm[22] == 2 &&
+                readU32(stereoPcm, 24) == 48000 && readU32(stereoPcm, 28) == 192000 &&
+                readU32(stereoWav, 54) == 4800 && Audio::extract(stereoWav) == stereo,
+                "Stereo/48 kHz audio parameters or decoded length changed");
+        rejects([&] { Audio::decodeToPcm(testVorbis(3)); },
+                "Multichannel audio was silently mixed or incorrectly mapped");
 
-        std::vector<uint8_t> clean;
-        appendPage(clean, 7, 0, identification(), 2);
-        appendPage(clean, 7, 1, {'a', 'b', 'c'}, 4, 1257);
-        const auto ref = reference();
-        rejects([&] { Audio::embed(clean, pcm); }, "PCM template was accepted");
-        rejects([&] { Audio::embed(clean, std::vector<uint8_t>(66)); }, "Non-WAV template accepted");
+        for (uint8_t tag : {0x4f, 0x6f, 0x51, 0x71}) {
+            auto legacy = wav; legacy[20] = tag;
+            require(Audio::hasEmbeddedOgg(legacy) && Audio::extract(legacy) == clean,
+                    "Vorbis mode 1/1+/3/3+ recognition failed");
+        }
+        auto mode3 = wav; mode3[20] = 0x51;
+        auto unknown = wav; unknown[20] = 0x50;
+        require(!Audio::hasEmbeddedOgg(unknown) && Audio::extract(unknown).empty(),
+                "Mode 2 with separate codec headers was misidentified as a full Ogg stream");
+        auto coincidental = pcm;
+        std::copy_n(reinterpret_cast<const uint8_t*>("OggS"), 4, coincidental.begin() + 66);
+        require(!Audio::hasEmbeddedOgg(coincidental), "PCM sample bytes mistaken for Ogg");
 
-        std::vector<uint8_t> wrappedPages;
-        appendPage(wrappedPages, 7, 0, identification(), 2);
-        appendPage(wrappedPages, 0xffffffffu, 0, {}, 2);
-        appendPage(wrappedPages, 7, 1, {'a', 'b', 'c'}, 4, 1257);
-        const auto wav = Audio::embed(wrappedPages, ref);
-        require(Audio::extract(wav) == clean, "Wrapper padding page was not removed");
-        require(readU32(wav, 62) == wrappedPages.size() &&
-                readU32(wav, 4) == wav.size() - 8 && wav.size() % 2 == 0 &&
-                readU32(wav, 54) == 1257, "WAV sizes, fact or alignment are invalid");
-        require(std::equal(ref.begin() + 20, ref.begin() + 46, wav.begin() + 20),
-                "Opaque codec parameters were changed");
-        // Evermaiden wav.xfl/2559.wav uses Vorbis mode 3, not mode 3+.
-        auto mode3Ref = ref; mode3Ref[20] = 0x51;
-        const auto mode3Wav = Audio::embed(clean, mode3Ref);
-        require(Audio::hasEmbeddedOgg(mode3Wav) && Audio::extract(mode3Wav) == clean,
-                "Vorbis format 0x6751 was not recognized");
-        require(mode3Wav[20] == 0x51 && mode3Wav[21] == 0x67 &&
-                std::equal(mode3Ref.begin() + 20, mode3Ref.begin() + 46, mode3Wav.begin() + 20),
-                "Vorbis mode or codec parameters changed");
-        auto unsupportedRef = ref; unsupportedRef[20] = 0x50;
-        rejects([&] { Audio::embed(clean, unsupportedRef); },
-                "Unverified Vorbis format was accepted");
-        auto withTags = wav;
-        withTags.insert(withTags.end(), {'L','I','S','T',0,0,0,0});
-        require(Audio::extract(withTags) == clean, "Trailing RIFF metadata became audio");
+        // Variable chunk offsets, odd metadata, reordered chunks and longer fmt.
+        auto moved = wav;
+        moved.insert(moved.begin() + 12, {'J','U','N','K',3,0,0,0,1,2,3,0});
+        moved.insert(moved.end(), {'L','I','S','T',0,0,0,0});
+        fixRiffSize(moved);
+        require(Audio::extract(moved) == clean, "Metadata at variable offsets became audio");
+        auto shortRiff = moved;
+        writeU32(shortRiff, 4, shortRiff.size() - 9);
+        require(Audio::extract(shortRiff) == clean,
+                "Sound Forge RIFF length missing one alignment byte was rejected");
+        auto noFact = wav;
+        noFact.erase(noFact.begin() + 46, noFact.begin() + 58);
+        fixRiffSize(noFact);
+        require(Audio::extract(noFact) == clean, "Optional fact chunk was required");
+        auto extended = wav;
+        extended.insert(extended.begin() + 46, {1,2,3,4});
+        writeU32(extended, 16, 30); extended[36] = 12;
+        fixRiffSize(extended);
+        require(Audio::extract(extended) == clean, "Variable-length fmt extension failed");
+        std::vector<uint8_t> reordered(wav.begin(), wav.begin() + 12);
+        reordered.insert(reordered.end(), wav.begin() + 58, wav.end());
+        reordered.insert(reordered.end(), wav.begin() + 12, wav.begin() + 58);
+        fixRiffSize(reordered);
+        require(Audio::extract(reordered) == clean, "data before fmt was not located");
+        auto decodedSize = moved;
+        writeU32(decodedSize, 74, 0x7fffffffu);
+        require(Audio::extract(decodedSize) == clean, "Legacy decoded-size chunk with metadata failed");
 
-        auto legacyWav = wav;
-        writeU32(legacyWav, 62, 0x7fffffffu);
-        require(Audio::extract(legacyWav) == clean, "Legacy decoded-size data chunk rejected");
-        auto truncated = wav; truncated.resize(truncated.size() - 2);
-        rejects([&] { Audio::extract(truncated); }, "Truncated audio accepted");
-        writeU32(truncated, 62, 0);
-        rejects([&] { Audio::extract(truncated); }, "Empty data chunk accepted");
+        std::vector<uint8_t> padding(28, 0);
+        std::copy_n(reinterpret_cast<const uint8_t*>("OggS"), 4, padding.begin());
+        padding[5] = 2; padding[26] = 1; writeU32(padding, 14, 0xffffffffu);
+        checksum(padding);
+        auto padded = clean;
+        padded.insert(padded.begin() + 58, padding.begin(), padding.end());
+        require(Audio::extract(Audio::embed(padded)) == clean,
+                "Independent empty ACM padding stream was not removed");
+        const auto special = testVorbis(1, 44100, 1257, -1);
+        require(Audio::extract(Audio::embed(special)) == special,
+                "Legal audio stream serial 0xffffffff was removed");
 
+        for (auto invalid : {std::vector<uint8_t>{}, std::vector<uint8_t>{'b','a','d'}}) {
+            rejects([&] { Audio::embed(invalid); }, "Invalid input was wrapped");
+            rejects([&] { Audio::decodeToPcm(invalid); }, "Invalid input was decoded");
+        }
         auto bad = clean; bad.back() ^= 1;
-        rejects([&] { Audio::embed(bad, ref); }, "Corrupt Ogg checksum accepted");
-        rejects([&] { Audio::embed({}, ref); }, "Empty Ogg accepted");
-        rejects([&] { Audio::embed({'n','o','t','o','g','g'}, ref); }, "Non-Ogg data accepted");
-        bad = clean; bad.pop_back();
-        rejects([&] { Audio::embed(bad, ref); }, "Truncated Ogg accepted");
-        bad = clean; bad.resize(58);
-        rejects([&] { Audio::embed(bad, ref); }, "Missing EOS accepted");
-        auto otherRef = ref; otherRef[22] = 2;
-        rejects([&] { Audio::embed(clean, otherRef); }, "Different channel count accepted");
-        otherRef = ref; writeU32(otherRef, 24, 48000);
-        rejects([&] { Audio::embed(clean, otherRef); }, "Different sample rate accepted");
+        rejects([&] { Audio::embed(bad); }, "Corrupt Ogg checksum accepted for wrapping");
+        rejects([&] { Audio::decodeToPcm(bad); }, "Corrupt Ogg checksum accepted for PCM");
+        auto truncated = clean; truncated.pop_back();
+        rejects([&] { Audio::embed(truncated); }, "Truncated Ogg accepted");
+        auto chained = clean; chained.insert(chained.end(), clean.begin(), clean.end());
+        rejects([&] { Audio::decodeToPcm(chained); }, "Chained audio silently truncated");
+        rejects([&] { Audio::embed(chained); }, "Chained Ogg wrapped");
+        auto brokenRiff = wav; brokenRiff.resize(40);
+        rejects([&] { Audio::extract(brokenRiff); }, "Truncated RIFF accepted");
+        auto mismatch = wav; mismatch[22] = 2;
+        rejects([&] { Audio::extract(mismatch); }, "WAV/Vorbis channel mismatch accepted");
+        auto empty = wav; writeU32(empty, 62, 0);
+        rejects([&] { Audio::extract(empty); }, "Empty compressed data chunk accepted");
+        auto huge = wav; writeU32(huge, 16, 0xffffffffu);
+        rejects([&] { Audio::extract(huge); }, "Overflowing fmt chunk accepted");
 
-        std::vector<uint8_t> chained = clean;
-        appendPage(chained, 8, 0, identification(), 2);
-        rejects([&] { Audio::embed(chained, ref); }, "Chained Ogg accepted");
-        std::vector<uint8_t> discontinuous;
-        appendPage(discontinuous, 7, 0, identification(), 2);
-        appendPage(discontinuous, 7, 2, {'a'}, 4, 1257);
-        rejects([&] { Audio::embed(discontinuous, ref); }, "Missing page accepted");
-        std::vector<uint8_t> notVorbis;
-        appendPage(notVorbis, 7, 0, std::vector<uint8_t>(30), 2);
-        rejects([&] { Audio::embed(notVorbis, ref); }, "Non-Vorbis Ogg accepted");
-
-        // A legitimate Vorbis stream can itself use the wrapper's serial number.
-        std::vector<uint8_t> specialSerial;
-        appendPage(specialSerial, 0xffffffffu, 0, identification(), 2);
-        appendPage(specialSerial, 0xffffffffu, 1, {}, 4, 0);
-        const auto emptyAudio = Audio::embed(specialSerial, ref);
-        require(Audio::extract(emptyAudio) == specialSerial &&
-                readU32(emptyAudio, 4) == emptyAudio.size() - 8,
-                "Real empty EOS page removed or even RIFF size incorrect");
-
-        // Share structurally valid synthetic audio with the archive integration
-        // test, rather than teaching it to rely on malformed WAV/Ogg fixtures.
         if (argc == 2) {
             const std::string directory = argv[1];
             auto save = [&](const char* name, const std::vector<uint8_t>& data) {
                 std::ofstream out(directory + "/" + name, std::ios::binary);
                 out.write(reinterpret_cast<const char*>(data.data()), data.size());
-                if (!out) throw std::runtime_error("Cannot write audio test fixture");
+                if (!out) throw std::runtime_error("Cannot write audio test input");
             };
-            save("audio.ogg", clean);
-            save("audio.wav", Audio::embed(clean, ref));
-            save("badref.ogg", clean);
-            save("badref.wav", pcm);
-            save("pcm.wav", pcm);
-            save("mode3.wav", mode3Wav);
-            save("mode3.ogg", clean);
+            save("audio.ogg", clean); save("audio.wav", wav);
+            save("badref.ogg", {'b','a','d'}); save("badref.wav", pcm);
+            save("pcm.wav", pcm); save("mode3.wav", mode3); save("mode3.ogg", clean);
         }
     } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
+        std::cerr << e.what() << '\n';
         return 1;
     }
-    return 0;
 }

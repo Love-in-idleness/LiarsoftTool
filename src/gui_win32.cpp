@@ -28,7 +28,7 @@ static HWND g_hBtnRef, g_hBtnOutDir;
 static HWND g_hCboEnc, g_hEditRef, g_hEditOutDir, g_hProgress, g_hStatus;
 static HWND g_hLblEnc, g_hLblRef, g_hLblOutDir;
 static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly, g_hChkGscToTxt;
-static HWND g_hChkOggToWav;
+static HWND g_hChkVorbisInWav;
 static std::vector<std::string> g_inputs;
 static std::vector<std::string> g_outputs;
 
@@ -199,11 +199,11 @@ static void rebuildOutputs() {
 static void convertAll(std::vector<ConversionJob> jobs,
                        const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
-                       bool gscToTsc, bool experimentalOggToWav) {
+                       bool gscToTsc, bool vorbisInWav) {
     bool hasErrors = false;
     std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
     const liarsoft::gui::ConversionOptions options{
-        encoding, refPath, recursive, gscToTsc, unpackOnly, experimentalOggToWav};
+        encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav};
     const size_t total = jobs.size();
     
     for (size_t i = 0; i < total; ++i) {
@@ -309,7 +309,7 @@ static void onChooseRef() {
     char buf[MAX_PATH] = {};
     OPENFILENAMEA ofn = {sizeof(ofn)};
     ofn.hwndOwner = g_hWnd;
-    ofn.lpstrFilter = "GSC or WAV Files\0*.gsc;*.wav\0";
+    ofn.lpstrFilter = "GSC Files\0*.gsc\0";
     ofn.lpstrFile = buf;
     ofn.nMaxFile = sizeof(buf);
     ofn.Flags = OFN_FILEMUSTEXIST;
@@ -325,14 +325,14 @@ static void onConvert() {
     bool packOnly = SendMessage(g_hChkPackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool unpackOnly = SendMessage(g_hChkUnpackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool gscToTsc = SendMessage(g_hChkGscToTxt, BM_GETCHECK, 0, 0) != BST_CHECKED;
-    bool experimentalOggToWav = SendMessage(g_hChkOggToWav, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    bool vorbisInWav = SendMessage(g_hChkVorbisInWav, BM_GETCHECK, 0, 0) == BST_CHECKED;
     std::vector<ConversionJob> jobs;
     jobs.reserve(g_inputs.size());
     for (size_t i = 0; i < g_inputs.size(); ++i)
         jobs.push_back({g_inputs[i], g_outputs[i]});
     EnableWindow(g_hBtnConvert, FALSE);
     std::thread t(convertAll, std::move(jobs), encoding, refPath, recursive,
-                  packOnly, unpackOnly, gscToTsc, experimentalOggToWav);
+                  packOnly, unpackOnly, gscToTsc, vorbisInWav);
     t.detach();
 }
 
@@ -399,7 +399,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         g_hChkGscToTxt = CreateWindowA("BUTTON", "GSC -> TXT",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
             320, 42, 115, 20, hWnd, (HMENU)110, NULL, NULL);
-        g_hChkOggToWav = CreateWindowA("BUTTON", "OGG -> WAV (experimental)",
+        g_hChkVorbisInWav = CreateWindowA("BUTTON", "Vorbis-in-WAV",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
             440, 42, 285, 20, hWnd, (HMENU)111, NULL, NULL);
         
@@ -520,7 +520,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         SetWindowPos(g_hChkPackOnly,   NULL, 110, 42,  95, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkUnpackOnly, NULL, 210, 42, 105, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkGscToTxt,   NULL, 320, 42, 115, 20, SWP_NOZORDER);
-        SetWindowPos(g_hChkOggToWav,   NULL, 440, 42, 285, 20, SWP_NOZORDER);
+        SetWindowPos(g_hChkVorbisInWav,   NULL, 440, 42, 285, 20, SWP_NOZORDER);
         SetWindowPos(g_hListView, NULL, m, 65, w - 2*m, lvH, SWP_NOZORDER);
 
         // --- Resize ListView columns: Type+Status fixed, Input+Output split 50/50 ---

@@ -5,6 +5,9 @@
 #include <stdexcept>
 #include <cstring>
 #include <array>
+#include <algorithm>
+#define OV_EXCLUDE_STATIC_CALLBACKS
+#include <vorbis/vorbisfile.h>
 
 namespace liarsoft {
 
@@ -29,16 +32,15 @@ void writeU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
     data[offset + 3] = static_cast<uint8_t>(value >> 24);
 }
 
-bool isVorbisWavHeader(const std::vector<uint8_t>& data) {
-    return data.size() >= WavOggExtractor::OGG_OFFSET &&
-           std::memcmp(data.data(), "RIFF", 4) == 0 &&
-           std::memcmp(data.data() + 8, "WAVEfmt ", 8) == 0 &&
-           readU32(data, 16) == 26 &&
-           (readU16(data, 20) == 0x6771 || readU16(data, 20) == 0x6751) &&
-           readU16(data, 36) == 8 &&
-           std::memcmp(data.data() + 46, "fact", 4) == 0 &&
-           readU32(data, 50) == 4 &&
-           std::memcmp(data.data() + 58, "data", 4) == 0;
+void writeU16(std::vector<uint8_t>& data, size_t offset, uint16_t value) {
+    data[offset] = static_cast<uint8_t>(value);
+    data[offset + 1] = static_cast<uint8_t>(value >> 8);
+}
+
+bool isVorbisTag(uint16_t tag) {
+    // Modes 1/3 keep an Ogg stream in data. Mode 2 has separate codec headers
+    // in fmt and is deliberately not treated as a self-contained Ogg stream.
+    return tag == 0x674f || tag == 0x676f || tag == 0x6751 || tag == 0x6771;
 }
 
 struct OggPage {
@@ -87,23 +89,26 @@ uint32_t pageChecksum(const std::vector<uint8_t>& data, size_t pos, size_t size)
     return crc;
 }
 
-uint32_t vorbisSamples(const std::vector<uint8_t>& data,
-                       const std::vector<uint8_t>& reference) {
+struct VorbisStream {
+    uint16_t channels;
+    uint32_t rate;
+    uint32_t samples;
+    std::vector<uint8_t> bytes;
+};
+
+VorbisStream inspectVorbis(const std::vector<uint8_t>& data) {
     const auto first = readPage(data, 0, data.size());
     const size_t packet = first.headerSize;
     if (data[5] != 2 || readU32(data, 18) != 0 || first.size != packet + 30 ||
         std::memcmp(data.data() + packet, "\x01vorbis", 7) != 0 ||
         readU32(data, packet + 7) != 0 || data[packet + 29] != 1)
         throw std::runtime_error("Input must be a single Ogg Vorbis stream");
-    if (data[packet + 11] == 0 || readU32(data, packet + 12) == 0 ||
-        data[packet + 11] != readU16(reference, 22) ||
-        readU32(data, packet + 12) != readU32(reference, 24))
-        throw std::runtime_error("Ogg channels/sample rate do not match the WAV template; "
-                                 "use a matching Vorbis WAV template or resample the Ogg");
+    VorbisStream stream{data[packet + 11], readU32(data, packet + 12), 0, {}};
+    if (stream.channels == 0 || stream.rate == 0)
+        throw std::runtime_error("Invalid Vorbis channels/sample rate");
 
     size_t pos = 0;
     uint32_t sequence = 0;
-    uint32_t samples = 0;
     bool eos = false;
     while (pos < data.size()) {
         const auto page = readPage(data, pos, data.size());
@@ -118,14 +123,129 @@ uint32_t vorbisSamples(const std::vector<uint8_t>& data,
             if (flags & 4u) {
                 if (readU32(data, pos + 10) != 0)
                     throw std::runtime_error("Ogg sample count exceeds the WAV fact field");
-                samples = readU32(data, pos + 6);
+                stream.samples = readU32(data, pos + 6);
                 eos = true;
             }
+            stream.bytes.insert(stream.bytes.end(), data.begin() + pos,
+                                data.begin() + pos + page.size);
         }
         pos += page.size;
     }
     if (!eos) throw std::runtime_error("Ogg Vorbis stream has no end-of-stream page");
-    return samples;
+    return stream;
+}
+
+struct WavChunks {
+    size_t format = 0;
+    size_t audio = 0;
+    size_t audioSize = 0;
+};
+
+WavChunks parseWav(const std::vector<uint8_t>& data) {
+    if (data.size() < 12 || std::memcmp(data.data(), "RIFF", 4) != 0 ||
+        std::memcmp(data.data() + 8, "WAVE", 4) != 0)
+        return {};
+    const uint64_t declaredEnd = uint64_t(readU32(data, 4)) + 8;
+    if (declaredEnd < 12) throw std::runtime_error("Invalid RIFF size");
+    // Some legacy files declare decoded PCM lengths instead of stored bytes.
+    size_t end = static_cast<size_t>(std::min<uint64_t>(declaredEnd, data.size()));
+    // Sound Forge-authored game assets can omit one alignment byte from the
+    // RIFF total even though it precedes a valid LIST chunk in the file.
+    if ((declaredEnd & 1u) && declaredEnd + 1 == data.size()) ++end;
+    WavChunks chunks;
+    for (size_t pos = 12; pos < end;) {
+        if (end - pos < 8) throw std::runtime_error("Truncated RIFF chunk header");
+        const size_t start = pos + 8;
+        size_t size = readU32(data, pos + 4);
+        const bool audio = std::memcmp(data.data() + pos, "data", 4) == 0;
+        if (size > end - start) {
+            if (!audio || !chunks.format ||
+                !isVorbisTag(readU16(data, chunks.format)) ||
+                end - start < 4 || std::memcmp(data.data() + start, "OggS", 4) != 0)
+                throw std::runtime_error("Truncated RIFF chunk");
+            // Recover only complete Ogg pages through the actual stream EOS.
+            // Do not absorb subsequent LIST/cue chunks as audio.
+            size_t cursor = start;
+            const auto first = readPage(data, cursor, end);
+            bool eos = false;
+            while (cursor < end) {
+                const auto page = readPage(data, cursor, end);
+                eos = page.serial == first.serial && (data[cursor + 5] & 4u);
+                cursor += page.size;
+                if (eos) break;
+            }
+            if (!eos) throw std::runtime_error("Legacy WAV audio has no EOS");
+            size = cursor - start;
+        }
+        if (std::memcmp(data.data() + pos, "fmt ", 4) == 0) {
+            if (chunks.format || size < 16)
+                throw std::runtime_error("Invalid or duplicate WAV fmt chunk");
+            chunks.format = start;
+            if (size >= 18 && readU16(data, start + 16) > size - 18)
+                throw std::runtime_error("Truncated WAV format extension");
+        } else if (audio) {
+            if (chunks.audio) throw std::runtime_error("Duplicate WAV data chunk");
+            chunks.audio = start;
+            chunks.audioSize = size;
+        }
+        pos = start + size;
+        if (size & 1u) {
+            // Old Liar-soft WAVs sometimes omit the final alignment byte.
+            if (pos < end) ++pos;
+        }
+    }
+    return chunks;
+}
+
+struct MemoryInput {
+    const std::vector<uint8_t>& bytes;
+    size_t pos = 0;
+};
+
+size_t readVorbis(void* ptr, size_t size, size_t count, void* source) {
+    auto& input = *static_cast<MemoryInput*>(source);
+    if (size == 0) return 0;
+    count = std::min(count, (input.bytes.size() - input.pos) / size);
+    std::memcpy(ptr, input.bytes.data() + input.pos, count * size);
+    input.pos += count * size;
+    return count;
+}
+
+class VorbisDecoder {
+public:
+    OggVorbis_File file{};
+    explicit VorbisDecoder(MemoryInput& input) {
+        if (ov_open_callbacks(&input, &file, nullptr, 0,
+                              {readVorbis, nullptr, nullptr, nullptr}) != 0)
+            throw std::runtime_error("Invalid Vorbis headers/codebooks");
+    }
+    ~VorbisDecoder() { ov_clear(&file); }
+    VorbisDecoder(const VorbisDecoder&) = delete;
+    VorbisDecoder& operator=(const VorbisDecoder&) = delete;
+};
+
+std::vector<uint8_t> wavHeader(uint16_t tag, uint16_t channels, uint32_t rate) {
+    const bool pcm = tag == 1;
+    std::vector<uint8_t> out(pcm ? 44 : 66, 0);
+    std::memcpy(out.data(), "RIFF", 4);
+    std::memcpy(out.data() + 8, "WAVEfmt ", 8);
+    writeU32(out, 16, pcm ? 16 : 26);
+    writeU16(out, 20, tag);
+    writeU16(out, 22, channels);
+    writeU32(out, 24, rate);
+    writeU16(out, 32, pcm ? channels * 2 : 1);
+    writeU16(out, 34, 16);
+    if (!pcm) {
+        writeU16(out, 36, 8);
+        // OGGWAVEFORMAT compatibility identifiers from the original ACM source.
+        // Mode 1 carries its own codebooks; these do not select built-in ones.
+        writeU32(out, 38, 0x20020201);
+        writeU32(out, 42, 0x20011231);
+        std::memcpy(out.data() + 46, "fact", 4);
+        writeU32(out, 50, 4);
+    }
+    std::memcpy(out.data() + out.size() - 8, "data", 4);
+    return out;
 }
 
 std::vector<uint8_t> readFile(const std::string& path) {
@@ -144,82 +264,90 @@ std::vector<uint8_t> readFile(const std::string& path) {
 } // namespace
 
 bool WavOggExtractor::hasEmbeddedOgg(const std::vector<uint8_t>& data) {
-    if (!isVorbisWavHeader(data) || data.size() < OGG_OFFSET + 4) return false;
-    return data[OGG_OFFSET]     == OGG_MAGIC[0] &&
-           data[OGG_OFFSET + 1] == OGG_MAGIC[1] &&
-           data[OGG_OFFSET + 2] == OGG_MAGIC[2] &&
-           data[OGG_OFFSET + 3] == OGG_MAGIC[3];
+    try {
+        const auto chunks = parseWav(data);
+        return chunks.format && chunks.audio && chunks.audioSize >= 4 &&
+               isVorbisTag(readU16(data, chunks.format)) &&
+               std::memcmp(data.data() + chunks.audio, "OggS", 4) == 0;
+    } catch (const std::runtime_error&) { return false; }
 }
 
 bool WavOggExtractor::isStandardPcmWav(const std::vector<uint8_t>& data) {
-    if (data.size() < 12 || std::memcmp(data.data(), "RIFF", 4) != 0 ||
-        std::memcmp(data.data() + 8, "WAVE", 4) != 0)
-        return false;
-
-    bool pcm = false;
-    bool samples = false;
-    size_t pos = 12;
-    while (pos + 8 <= data.size()) {
-        const uint32_t chunkSize = readU32(data, pos + 4);
-        const size_t chunkData = pos + 8;
-        if (chunkSize > data.size() - chunkData) return false;
-        if (std::memcmp(data.data() + pos, "fmt ", 4) == 0 && chunkSize >= 16)
-            pcm = readU16(data, chunkData) == 1;
-        else if (std::memcmp(data.data() + pos, "data", 4) == 0)
-            samples = true;
-        pos = chunkData + chunkSize + (chunkSize & 1u);
-    }
-    return pcm && samples;
+    try {
+        const auto chunks = parseWav(data);
+        return chunks.format && chunks.audio && readU16(data, chunks.format) == 1;
+    } catch (const std::runtime_error&) { return false; }
 }
 
 std::vector<uint8_t> WavOggExtractor::extract(const std::vector<uint8_t>& wavData) {
-    if (!hasEmbeddedOgg(wavData)) return {};
-
-    const uint32_t dataSize = readU32(wavData, OGG_OFFSET - 4);
-    const size_t available = wavData.size() - OGG_OFFSET;
-    // Some original RScript WAV files store the decoded PCM size in the data
-    // chunk instead of the embedded Ogg byte size. In that case the Ogg stream
-    // simply runs to EOF. Files produced here store the exact Ogg size so an
-    // optional RIFF alignment byte is not parsed as another page.
-    const size_t dataEnd = OGG_OFFSET +
-        (dataSize <= available ? static_cast<size_t>(dataSize) : available);
-
-    std::vector<uint8_t> output;
-    size_t pos = OGG_OFFSET;
-    const auto first = readPage(wavData, pos, dataEnd);
-
-    while (pos < dataEnd) {
-        if (dataEnd - pos == 1 && wavData[pos] == 0) break;
-        const auto page = readPage(wavData, pos, dataEnd);
-        if (!isPaddingPage(page, first.serial)) {
-            output.insert(output.end(),
-                          wavData.begin() + static_cast<ptrdiff_t>(pos),
-                          wavData.begin() + static_cast<ptrdiff_t>(pos + page.size));
-        }
-        pos += page.size;
+    const auto chunks = parseWav(wavData);
+    if (!chunks.format || !chunks.audio ||
+        !isVorbisTag(readU16(wavData, chunks.format))) return {};
+    std::vector<uint8_t> ogg(wavData.begin() + chunks.audio,
+                             wavData.begin() + chunks.audio + chunks.audioSize);
+    // Compatibility: older files can include the alignment byte in data size.
+    if (ogg.size() > 1 && ogg.back() == 0) {
+        size_t pos = 0;
+        while (pos + 1 < ogg.size()) pos += readPage(ogg, pos, ogg.size()).size;
+        if (pos + 1 == ogg.size()) ogg.pop_back();
     }
-
-    return output;
+    const auto stream = inspectVorbis(ogg);
+    if (stream.channels != readU16(wavData, chunks.format + 2) ||
+        stream.rate != readU32(wavData, chunks.format + 4))
+        throw std::runtime_error("WAV format does not match embedded Vorbis audio");
+    return stream.bytes;
 }
 
 std::vector<uint8_t> WavOggExtractor::embed(
-    const std::vector<uint8_t>& oggData,
-    const std::vector<uint8_t>& refWavData) {
-    if (!isVorbisWavHeader(refWavData))
-        throw std::runtime_error("Reference must be an RScript Ogg-in-WAV template (format 0x6771 or 0x6751), "
-                                 "not a PCM WAV; PCM replacement requires PCM audio");
-    if (oggData.size() > std::numeric_limits<uint32_t>::max() - OGG_OFFSET)
+    const std::vector<uint8_t>& oggData) {
+    const auto stream = inspectVorbis(oggData);
+    MemoryInput input{stream.bytes};
+    VorbisDecoder decoder(input); // Validate real Vorbis headers, not just Ogg pages.
+    if (stream.bytes.size() > std::numeric_limits<uint32_t>::max() - 66)
         throw std::runtime_error("Ogg data is too large for a WAV container");
+    auto output = wavHeader(0x674f, stream.channels, stream.rate);
+    const uint64_t average = (uint64_t(stream.bytes.size()) * stream.rate +
+        std::max(1u, stream.samples) - 1) / std::max(1u, stream.samples);
+    if (average > std::numeric_limits<uint32_t>::max())
+        throw std::runtime_error("Vorbis average byte rate exceeds WAV limit");
+    writeU32(output, 28, static_cast<uint32_t>(std::max<uint64_t>(1, average)));
+    writeU32(output, 54, stream.samples);
+    writeU32(output, 62, static_cast<uint32_t>(stream.bytes.size()));
+    output.insert(output.end(), stream.bytes.begin(), stream.bytes.end());
+    if (stream.bytes.size() & 1u) output.push_back(0);
+    writeU32(output, 4, static_cast<uint32_t>(output.size() - 8));
+    return output;
+}
 
-    const uint32_t samples = vorbisSamples(oggData, refWavData);
-    std::vector<uint8_t> output(refWavData.begin(),
-                                refWavData.begin() + OGG_OFFSET);
-    const uint32_t oggSize = static_cast<uint32_t>(oggData.size());
-    writeU32(output, 4, static_cast<uint32_t>(OGG_OFFSET - 8) + oggSize + (oggSize & 1u));
-    writeU32(output, 54, samples);
-    writeU32(output, OGG_OFFSET - 4, oggSize);
-    output.insert(output.end(), oggData.begin(), oggData.end());
-    if (oggData.size() % 2 != 0) output.push_back(0);
+std::vector<uint8_t> WavOggExtractor::decodeToPcm(const std::vector<uint8_t>& oggData) {
+    const auto stream = inspectVorbis(oggData);
+    // Game engines and plain WAVE PCM agree on mono/stereo channel order.
+    // Multichannel needs an explicit speaker mapping, not silent channel mixing.
+    if (stream.channels > 2)
+        throw std::runtime_error("PCM WAV conversion supports mono/stereo Vorbis only");
+    const uint64_t bytes = uint64_t(stream.samples) * stream.channels * 2;
+    const uint64_t byteRate = uint64_t(stream.rate) * stream.channels * 2;
+    if (bytes > std::numeric_limits<uint32_t>::max() - 36 ||
+        byteRate > std::numeric_limits<uint32_t>::max())
+        throw std::runtime_error("Decoded PCM is too large for a WAV container");
+    MemoryInput input{stream.bytes};
+    VorbisDecoder decoder(input);
+    auto output = wavHeader(1, stream.channels, stream.rate);
+    writeU32(output, 28, static_cast<uint32_t>(byteRate));
+    std::array<char, 16384> buffer;
+    int section = 0;
+    for (;;) {
+        const long count = ov_read(&decoder.file, buffer.data(), buffer.size(), 0, 2, 1, &section);
+        if (count < 0) throw std::runtime_error("Corrupt Vorbis audio during PCM decoding");
+        if (count == 0) break;
+        if (section != 0 || output.size() - 44 + count > bytes)
+            throw std::runtime_error("Vorbis decoded length exceeds its EOS sample count");
+        output.insert(output.end(), buffer.data(), buffer.data() + count);
+    }
+    if (output.size() - 44 != bytes)
+        throw std::runtime_error("Vorbis decoded length does not match its EOS sample count");
+    writeU32(output, 4, static_cast<uint32_t>(output.size() - 8));
+    writeU32(output, 40, static_cast<uint32_t>(bytes));
     return output;
 }
 
@@ -234,9 +362,10 @@ bool WavOggExtractor::extractToFile(const std::string& wavPath, const std::strin
     return true;
 }
 
-void WavOggExtractor::embedToFile(const std::string& oggPath, const std::string& refWavPath,
-                                   const std::string& wavPath) {
-    writeFileIfChanged(wavPath, embed(readFile(oggPath), readFile(refWavPath)));
+void WavOggExtractor::convertToFile(const std::string& oggPath, const std::string& wavPath,
+                                   bool vorbisInWav) {
+    const auto ogg = readFile(oggPath);
+    writeFileIfChanged(wavPath, vorbisInWav ? embed(ogg) : decodeToPcm(ogg));
 }
 
 } // namespace liarsoft

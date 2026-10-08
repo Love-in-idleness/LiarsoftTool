@@ -28,13 +28,13 @@ static void printUsage(const char* prog) {
               << "Options:\n"
               << "  -e, --encoding <enc>  Text encoding (default: cp932 / Windows-31J)\n"
               << "                        Supported: cp932, gbk, cp1251\n"
-              << "  -r, --reference <path> Reference GSC or WAV file for conversion\n"
+              << "  -r, --reference <path> Reference GSC file for TXT injection\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
               << "  -R, --recursive        Recursively pack/unpack and convert resources\n"
               << "      --pack-only        Only pack/encode inputs\n"
               << "      --unpack-only      Only unpack/decode inputs\n"
               << "      --gsc-to-tsc       Structured GSC -> TSC output\n"
-              << "      --experimental-ogg-to-wav  Enable experimental OGG -> WAV (default: off)\n"
+              << "      --vorbis-in-wav    Wrap Ogg in WAV instead of decoding to PCM\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
@@ -46,7 +46,7 @@ static void printUsage(const char* prog) {
               << "  .lim  -> .webp        Convert LIM image to lossless WebP\n"
               << "  .webp -> .lim         Convert WebP image to LIM\n"
               << "  .wav  -> .ogg         Extract embedded Ogg; retain standard PCM WAV\n"
-              << "  .ogg  -> .wav         Experimental; needs --experimental-ogg-to-wav and a WAV template\n"
+              << "  .ogg  -> .wav         Decode to 16-bit PCM; --vorbis-in-wav keeps compressed audio\n"
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
               << "  directory -> .xfl     Pack a folder into an XFL archive\n"
               << "  directory -> .lwg     Pack folder with .meta.xml into LWG\n"
@@ -62,7 +62,8 @@ static void printUsage(const char* prog) {
               << "  " << prog << " -e gbk game.exe          # set GBK text rules\n"
               << "  " << prog << " -e cp1251 game.exe       # set CP1251 text rules\n"
               << "  " << prog << " -e cp932 game.exe        # set CP932 text rules\n"
-              << "  " << prog << " --experimental-ogg-to-wav -r template.wav audio.ogg\n"
+              << "  " << prog << " audio.ogg              # decode to PCM WAV, no reference needed\n"
+              << "  " << prog << " --vorbis-in-wav audio.ogg  # compressed Vorbis-in-WAV\n"
               << "  " << prog << " -R archive.xfl         # recursive unpack + conversion\n"
               << "  " << prog << " -R ./extracted_dir      # conversion + recursive pack\n"
               << "  " << prog << " 0*.png                  # batch convert all matching PNGs\n"
@@ -155,7 +156,7 @@ static bool processOne(const std::string& inputPath,
                        const std::string& encoding,
                        const std::string& referencePath,
                        bool recursive, bool unpackOnly, bool gscToTsc,
-                       bool experimentalOggToWav)
+                       bool vorbisInWav)
 {
     auto printWarnings = [](const std::vector<std::string>& warnings) {
         for (const auto& warning : warnings)
@@ -192,7 +193,7 @@ static bool processOne(const std::string& inputPath,
             if (out.empty()) out = resolved + ".xfl";
         }
         auto warnings = liarsoft::packDirectoryToFile(resolved, out, encoding,
-                                                       recursive, experimentalOggToWav);
+                                                       recursive, vorbisInWav);
         printWarnings(warnings);
         std::cout << "Packed to: " << out << std::endl;
         return true;
@@ -273,16 +274,10 @@ static bool processOne(const std::string& inputPath,
             std::cout << "Standard PCM WAV retained unchanged: " << inputPath << std::endl;
 
     } else if (ext == ".ogg") {
-        if (!experimentalOggToWav) {
-            printWarnings({liarsoft::WavOggExtractor::EXPERIMENTAL_DISABLED});
-            return true;
-        }
-        std::string ref = referencePath;
-        if (ref.empty()) ref = replaceExtension(inputPath, ".wav");
-        std::cout << "Embedding OGG into WAV: " << inputPath << std::endl;
-        std::cout << "Using WAV template: " << ref << std::endl;
+        std::cout << (vorbisInWav ? "Wrapping Vorbis in WAV: " : "Decoding OGG to PCM WAV: ")
+                  << inputPath << std::endl;
         if (out.empty()) out = replaceExtension(inputPath, ".wav");
-        liarsoft::WavOggExtractor::embedToFile(inputPath, ref, out);
+        liarsoft::WavOggExtractor::convertToFile(inputPath, out, vorbisInWav);
         std::cout << "Saved WAV to: " << out << std::endl;
 
     } else if (ext == ".wcg") {
@@ -345,7 +340,7 @@ int main(int argc, char* argv[]) {
     bool packOnly = false;
     bool unpackOnly = false;
     bool gscToTsc = false;
-    bool experimentalOggToWav = false;
+    bool vorbisInWav = false;
 
     // Parse arguments
     int i = 1;
@@ -371,8 +366,8 @@ int main(int argc, char* argv[]) {
             unpackOnly = true;
         } else if (arg == "--gsc-to-tsc") {
             gscToTsc = true;
-        } else if (arg == "--experimental-ogg-to-wav") {
-            experimentalOggToWav = true;
+        } else if (arg == "--vorbis-in-wav") {
+            vorbisInWav = true;
         } else if (arg[0] == '-') {
             std::cerr << "Error: unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -444,7 +439,7 @@ int main(int argc, char* argv[]) {
             if (allFiles.size() > 1)
                 std::cout << "\n[" << (fi + 1) << "/" << allFiles.size() << "] ";
             if (!processOne(f, out, encoding, referencePath, recursive,
-                            unpackOnly, gscToTsc, experimentalOggToWav))
+                            unpackOnly, gscToTsc, vorbisInWav))
                 ++errors;
         }
     } catch (const std::exception& e) {

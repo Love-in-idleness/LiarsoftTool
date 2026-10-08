@@ -40,7 +40,8 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | WebP 转 LIM | `liarsofttool image.webp` |
 | PNG 转 WCG | `liarsofttool image.png` |
 | WAV 提取 OGG（标准 PCM 保留） | `liarsofttool audio.wav` |
-| OGG 嵌入 WAV（实验性） | `liarsofttool --experimental-ogg-to-wav -r template.wav audio.ogg` |
+| OGG 解码为 PCM WAV（默认） | `liarsofttool audio.ogg` |
+| OGG 保留压缩流、封装为 WAV | `liarsofttool --vorbis-in-wav audio.ogg` |
 | 打包目录→XFL | `liarsofttool -e cp932 ./dir` |
 | 打包目录→LWG | `liarsofttool -e cp932 ./dir_with_meta` |
 | 递归解包并转换 | `liarsofttool -R -e cp932 archive.xfl` |
@@ -54,7 +55,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 
 ### 编译
 
-**依赖：** CMake ≥ 3.10, GCC ≥ 9（C++17 + `<filesystem>`）, libiconv、libwebp 开发库（Debian/Ubuntu：`libwebp-dev`）
+**依赖：** CMake ≥ 3.10, GCC ≥ 9（C++17 + `<filesystem>`）, libiconv、libwebp、libvorbis/libogg 开发库（Debian/Ubuntu：`libwebp-dev libvorbis-dev libogg-dev`）
 
 ```bash
 cd LiarsoftTool
@@ -71,7 +72,7 @@ sudo cp liarsofttool /usr/local/bin/
 
 ```bash
 # 在 MSYS2 UCRT64 终端中
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp,libvorbis,libogg}
 cd LiarsoftTool
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
@@ -84,6 +85,9 @@ make -j$(nproc)
 需先为 MinGW 准备 Windows 目标的 libwebp 头文件和库，并通过 CMake 的
 `WEBP_INCLUDE_DIR` / `WEBP_LIBRARY` 指定；不能链接本机 Linux 的 libwebp。
 新版静态 libwebp 还需同一目标平台的 libsharpyuv，可通过 `WEBP_SHARPYUV_LIBRARY` 指定。
+音频还需目标平台的 libogg/libvorbis/libvorbisfile；使用 `CMAKE_PREFIX_PATH` 指向其安装目录，
+或指定 `OGG_INCLUDE_DIR`、`VORBIS_INCLUDE_DIR`、`OGG_LIBRARY`、`VORBIS_LIBRARY`、`VORBISFILE_LIBRARY`。
+启用测试时还需 `VORBISENC_LIBRARY`（仅用于生成测试音频）。动态构建需附带相应 DLL。
 若链接动态库，运行时须随程序提供对应的 WebP DLL；静态链接则无需该 DLL。
 
 ```bash
@@ -101,7 +105,7 @@ make -j$(nproc)
 直接运行 `liarsofttool-gui` 或双击可执行文件启动：
 
 - **拖放文件**到窗口即可添加到转换列表
-- 编码选择（CP932 / GBK / CP1251）、参考 GSC/WAV 指定、输出目录，以及递归/仅封包/仅解包/GSC→TXT/OGG→WAV（实验性）开关；GSC 默认转换为结构化 TSC，OGG→WAV 默认关闭
+- 编码选择（CP932 / GBK / CP1251）、参考 GSC 指定、输出目录，以及递归/仅封包/仅解包/GSC→TXT/Vorbis-in-WAV 开关；GSC 默认转换为结构化 TSC，OGG 默认解码为 PCM WAV，勾选 Vorbis-in-WAV 改为压缩封装
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
 - 警告与错误提示提供“Copy details”一键复制，包含完整诊断信息及输入/输出路径，方便反馈问题
@@ -118,7 +122,7 @@ make -j$(nproc)
 | `--pack-only` | 只执行封包及编码方向的输入 |
 | `--unpack-only` | 只执行解包及解码方向的输入 |
 | `--gsc-to-tsc` | 将 GSC 反编译为结构化 UTF-8 TSC，而非提取为 TXT |
-| `--experimental-ogg-to-wav` | 启用实验性 OGG→WAV，含递归封包；默认关闭 |
+| `--vorbis-in-wav` | OGG→WAV 改为保留压缩流的 Vorbis-in-WAV 封装，含递归封包；不勾选默认解码为 PCM |
 | `-h, --help` | 显示帮助 |
 
 支持多个输入文件及 shell 通配符：`liarsofttool *.wcg`、`liarsofttool * -e gbk`。
@@ -136,8 +140,8 @@ make -j$(nproc)
 | WCG | `.wcg` | ↔ PNG | 8 位 RGBA 像素无损转换，支持配对通道、独立四通道及透明度遮罩 |
 | LIM | `.lim` | ↔ WebP | 无损 RGBA；读取 16-bit BGR565/遮罩，回写为版本 3 的独立 A/R/G/B 通道 |
 | EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换已识别的日文、中文或俄文禁则标点表 |
-| WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
-| OGG | `.ogg` | → WAV（实验性） | 需显式启用并提供模板 WAV（复用其 66 字节头） |
+| WAV | `.wav` | → OGG/保留 | 按 RIFF 块定位嵌入 Ogg，不限制偏移 66；标准 PCM WAV 无需转换 |
+| OGG | `.ogg` | → WAV | 默认解码为 16 位 PCM；可选 Vorbis-in-WAV；两种方式均不需要原 WAV |
 
 WCG 编码默认使用两个 16 位颜色对；任一颜色对达到 65536 种时，自动改用独立 A/R/G/B 通道，避免调色板计数溢出并保持像素无损。仅透明度的 WCG 导出为 RGB 全零、透明度保留的 PNG，不补造颜色。四通道路径已根据 Cannonball 原程序验证静态逻辑，其他引擎的游戏内兼容性仍需测试；PNG 的 ICC/gamma 等元数据不会写入 WCG。
 
@@ -201,18 +205,21 @@ liarsofttool -e cp932 game.exe      # 恢复 CP932 字体及日文禁则表
 
 # --- 音频往返 ---
 liarsofttool audio.wav                         # 嵌入式 → audio.ogg；标准 PCM 原样保留
-liarsofttool --experimental-ogg-to-wav -r audio.wav audio.ogg  # → audio.wav（重新封装）
+liarsofttool audio.ogg                         # → audio.wav（16 位 PCM）
+liarsofttool --vorbis-in-wav audio.ogg          # → audio.wav（保留 Vorbis 压缩流）
 ```
 
-OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771` 或 `0x6751`），不能使用普通 PCM WAV；输入必须是完整的单流 Ogg Vorbis，声道数和采样率需与参考文件一致。不符合条件会报错，递归封包时会警告并跳过，不覆盖原文件。封装时根据新音频重建 `fact` 采样数及 RIFF/data 长度，保留参考文件的编解码器参数和格式标记。普通 PCM 音频需要按原格式制作 PCM WAV，而不是把 Ogg 字节塞进 PCM 容器。
+OGG→WAV 默认完整解码为有符号 16 位小端 PCM，保留单/双声道和采样率，不重采样、不再次有损压缩；文件通常明显增大。为避免错误声道映射，暂不支持多于两声道的 PCM 输出，会明确报错。PCM WAV 不再含可直接提取的 OGG，也不能无损恢复原 OGG 压缩字节。
 
-OGG→WAV 为默认关闭的实验性功能：GUI 勾选“OGG → WAV (experimental)”，CLI 添加 `--experimental-ogg-to-wav` 后才执行。未启用时警告并跳过 OGG，不生成或覆盖 WAV；递归封包仍收录已有 WAV，不将它视为失败旧产物。启用后转换失败则沿用排除旧目标的规则。此功能保留受支持的 Ogg 音频流，但不保证原 WAV 容器逐字节还原，也不代替原游戏播放验收；请保留原 WAV 模板。
+GUI 勾选 **Vorbis-in-WAV** 或 CLI 添加 `--vorbis-in-wav`，改为保留完整 Vorbis 流，自动构造 mode 1（`0x674f`）头、`fact` 和 RIFF/data 长度。不冒用可能依赖驱动内置码本的 mode 3 标记；读取仍支持含完整 Ogg 的 mode 1/1+/3/3+，不支持将 mode 2 的独立头直接当作完整 Ogg。RIFF 读取按块 ID、长度和偶数字节对齐定位，允许额外元数据、不同块顺序及不同长度的 `fmt`。
+
+两种方式都不读取或依赖原 WAV，`-r` 仅用于 TXT→GSC。输入须为完整、连续的单流 Ogg Vorbis；损坏或不支持的输入报错且不覆盖已有目标。递归封包时警告、继续处理其他文件，并排除该失败项的旧目标。原游戏实际播放仍由用户验收，不承诺原 WAV 容器逐字节还原。旧实验性开关已移除。
 
 > 提示：所有输出文件采用"内容相同则不重写"策略——若生成结果与磁盘上已有文件二进制完全一致，将跳过写入以保留原文件的修改时间，方便增量/批量转换时避免无关文件被标记为已修改。
 
 目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写），PNG 等工程文件不会直接进入封包。默认只处理指定目录或封包的当前层。
 
-启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、WebP→LIM；OGG→WAV 仅在显式启用实验性选项后执行（需同名 WAV 作为模板）。PNG 与 WebP 可同名共存，不再改名或生成 `.lim.old`。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
+启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、WebP→LIM、OGG→WAV（默认 PCM，可选 Vorbis-in-WAV，无需模板）。PNG 与 WebP 可同名共存，不再改名或生成 `.lim.old`。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
 
 递归解包会继续解开内嵌 XFL/LWG，并自动处理 GSC（命令行默认生成 TXT，GUI 默认生成 TSC、勾选“GSC→TXT”后生成 TXT）、WCG→PNG、LIM→WebP、嵌入式 WAV→OGG；已经是标准 PCM 的 WAV 会原样保留并视为成功。单个文件失败只会产生警告，不会中断其余处理。
 
@@ -242,7 +249,8 @@ OGG→WAV 为默认关闭的实验性功能：GUI 勾选“OGG → WAV (experime
 | WebP to LIM | `liarsofttool image.webp` |
 | PNG to WCG | `liarsofttool image.png` |
 | WAV extract OGG (retain PCM) | `liarsofttool audio.wav` |
-| OGG embed to WAV (experimental) | `liarsofttool --experimental-ogg-to-wav -r template.wav audio.ogg` |
+| OGG decode to PCM WAV (default) | `liarsofttool audio.ogg` |
+| OGG wrap to compressed WAV | `liarsofttool --vorbis-in-wav audio.ogg` |
 | Pack directory → XFL | `liarsofttool -e cp932 ./dir` |
 | Pack directory → LWG | `liarsofttool -e cp932 ./dir_with_meta` |
 | Recursively unpack and convert | `liarsofttool -R -e cp932 archive.xfl` |
@@ -257,7 +265,7 @@ OGG→WAV 为默认关闭的实验性功能：GUI 勾选“OGG → WAV (experime
 
 ### Build
 
-**Requirements:** CMake ≥ 3.10, GCC ≥ 9 (C++17 + `<filesystem>`), libiconv, libwebp development files (`libwebp-dev` on Debian/Ubuntu)
+**Requirements:** CMake ≥ 3.10, GCC ≥ 9 (C++17 + `<filesystem>`), libiconv, libwebp and libvorbis/libogg development files (`libwebp-dev libvorbis-dev libogg-dev` on Debian/Ubuntu)
 
 ```bash
 cd LiarsoftTool
@@ -274,7 +282,7 @@ sudo cp liarsofttool /usr/local/bin/
 
 ```bash
 # In MSYS2 UCRT64 terminal
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp,libvorbis,libogg}
 cd LiarsoftTool
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
@@ -287,6 +295,10 @@ make -j$(nproc)
 Provide MinGW-targeted libwebp headers and libraries using CMake's
 `WEBP_INCLUDE_DIR` / `WEBP_LIBRARY`; do not link the host Linux library.
 Newer static libwebp also needs target-platform libsharpyuv; use `WEBP_SHARPYUV_LIBRARY` if necessary.
+Audio also requires target-platform libogg/libvorbis/libvorbisfile. Set `CMAKE_PREFIX_PATH`
+to their installation prefix, or provide `OGG_INCLUDE_DIR`, `VORBIS_INCLUDE_DIR`,
+`OGG_LIBRARY`, `VORBIS_LIBRARY`, and `VORBISFILE_LIBRARY`.
+Tests also need `VORBISENC_LIBRARY` to generate test audio. Dynamic builds must ship the audio DLLs.
 Dynamic builds must ship the corresponding WebP DLL; static builds need no WebP DLL.
 
 ```bash
@@ -304,7 +316,7 @@ make -j$(nproc)
 Run `liarsofttool-gui` or double-click the executable:
 
 - **Drag & drop** files onto the window to add them
-- Encoding selector (CP932 / GBK / CP1251), optional reference, output directory, and recursive/pack-only/unpack-only/GSC→TXT/experimental OGG→WAV toggles; GSC defaults to structured TSC output, OGG→WAV defaults to off
+- Encoding selector (CP932 / GBK / CP1251), optional GSC reference, output directory, and recursive/pack-only/unpack-only/GSC→TXT/Vorbis-in-WAV toggles; GSC defaults to structured TSC output, OGG defaults to PCM WAV unless Vorbis-in-WAV is checked
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Warning/error dialogs offer **Copy details**, copying the complete diagnostics and input/output paths for bug reports
@@ -315,13 +327,13 @@ Run `liarsofttool-gui` or double-click the executable:
 | Option | Description |
 |--------|-------------|
 | `-e, --encoding <enc>` | Encoding: `cp932` (Windows-31J JP, default) / `gbk` (CN) / `cp1251` (Cyrillic & English) |
-| `-r, --reference <path>` | Reference GSC or WAV for injection |
+| `-r, --reference <path>` | Reference GSC for TXT injection |
 | `-o, --output <path>` | Explicit output path |
 | `-R, --recursive` | Process nested archives and convert resources while packing/unpacking |
 | `--pack-only` | Only process packing and encoding inputs |
 | `--unpack-only` | Only process unpacking and decoding inputs |
 | `--gsc-to-tsc` | Decompile GSC to structured UTF-8 TSC instead of extracting TXT |
-| `--experimental-ogg-to-wav` | Opt in to experimental OGG→WAV, including recursive packing (default: off) |
+| `--vorbis-in-wav` | Wrap compressed Ogg in WAV instead of default PCM decoding, including recursive packing |
 | `-h, --help` | Show help |
 
 Multiple inputs and shell wildcards are supported: `liarsofttool *.wcg`, `liarsofttool * -e gbk`.
@@ -338,8 +350,8 @@ When exactly two args have different extensions, the second is treated as output
 | WCG | `.wcg` | ↔ PNG | Lossless 8-bit RGBA pixels; paired channels, four separate channels, and alpha masks |
 | LIM | `.lim` | ↔ WebP | Lossless RGBA; reads BGR565/masks and writes version-3 separate A/R/G/B channels |
 | EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and Japanese, Chinese, or Russian line-break punctuation tables |
-| WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
-| OGG | `.ogg` | → WAV (experimental) | Requires explicit opt-in and a template WAV (reuses its 66-byte header) |
+| WAV | `.wav` | → OGG/retain | Locate embedded Ogg by RIFF chunks, not fixed offset 66; retain standard PCM |
+| OGG | `.ogg` | → WAV | Default: 16-bit PCM; optional Vorbis-in-WAV; neither needs an original WAV |
 
 WCG encoding normally uses two 16-bit color pairs. If either pair has all 65536 values, it switches to separate A/R/G/B streams without losing pixels or overflowing the palette count. Alpha-only WCG files export as PNG with zero RGB and preserved alpha, without inventing colors. The four-channel path follows Cannonball's statically verified decoder; in-game compatibility with other engines still needs testing. PNG ICC/gamma metadata is not stored in WCG.
 
@@ -421,23 +433,28 @@ liarsofttool -e cp932 game.exe      # Restore CP932 font and Japanese line-break
 
 # --- Audio roundtrip ---
 liarsofttool audio.wav                         # embedded → audio.ogg; standard PCM retained
-liarsofttool --experimental-ogg-to-wav -r audio.wav audio.ogg  # → audio.wav (rewrapped)
+liarsofttool audio.ogg                         # → audio.wav (16-bit PCM)
+liarsofttool --vorbis-in-wav audio.ogg          # → audio.wav (compressed Vorbis)
 ```
 
-OGG→WAV requires an RScript Ogg-in-WAV template (format `0x6771` or `0x6751`), not a
-standard PCM WAV. The input must be a complete single-stream Ogg Vorbis file
-with the template's channel count and sample rate. Invalid inputs fail without
-overwriting the original; recursive packing warns and skips them. The new
-sample count (`fact`) and RIFF/data lengths are rebuilt while opaque codec
-parameters are retained. Replace PCM audio with a PCM WAV of the original
-format, not Ogg bytes wrapped in a PCM header.
+OGG→WAV defaults to fully decoded signed 16-bit little-endian PCM, preserving
+mono/stereo channels and sample rate without resampling or another lossy encode.
+Files are usually much larger. More than two channels are explicitly rejected
+for PCM output to avoid incorrect speaker mapping. PCM WAV no longer contains
+an extractable Ogg stream and cannot restore the original compressed Ogg bytes.
 
-OGG→WAV is experimental and disabled by default. Check **OGG → WAV (experimental)**
-in the GUI or pass `--experimental-ogg-to-wav` on the CLI to enable it.
-When disabled, Ogg inputs produce warnings without creating or replacing WAVs;
-recursive packing retains existing WAVs. When enabled, failed conversions still
-exclude their old targets from the archive. Supported Ogg audio data is retained,
-but original WAV bytes and in-game playback are not guaranteed. Keep the original WAV template.
+Check **Vorbis-in-WAV** in the GUI or pass `--vorbis-in-wav` to preserve the complete
+Vorbis stream and construct a mode-1 (`0x674f`) header, `fact`, and RIFF/data lengths.
+It does not misuse mode-3 tags that can depend on driver-specific built-in codebooks.
+Reading still supports full Ogg streams in modes 1/1+/3/3+, but does not treat
+mode-2 separate headers as a self-contained Ogg stream. RIFF chunks are located
+by ID, length and word alignment, allowing metadata, different order and longer fmt chunks.
+
+Neither mode reads or requires an original WAV; `-r` is only for TXT→GSC.
+Inputs must be complete, continuous single-stream Ogg Vorbis. Invalid/unsupported
+inputs fail before overwriting an output; recursive packing warns, continues,
+and excludes that failed item's old target. In-game playback still needs user
+validation; original WAV container bytes are not guaranteed. The experimental switch was removed.
 
 > Tip: all outputs use a "skip if identical" policy — when the generated
 > result is byte-identical to the file already on disk, the write is skipped
@@ -446,7 +463,7 @@ but original WAV bytes and in-game playback are not guaranteed. Keep the origina
 
 Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive); project files such as PNG are never stored directly. By default, only the current level of the selected directory or archive is processed.
 
-With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG and WebP→LIM. OGG→WAV requires explicit experimental opt-in and a same-name WAV template. Same-name PNG and WebP coexist without renaming LIM or creating `.lim.old` backups. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
+With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, WebP→LIM and OGG→WAV (default PCM, optional Vorbis-in-WAV, no template). Same-name PNG and WebP coexist without renaming LIM or creating `.lim.old` backups. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
 
 Recursive unpacking opens nested XFL/LWG archives and processes GSC files (the CLI defaults to TXT; the GUI defaults to TSC and uses the **GSC→TXT** toggle for legacy TXT output), WCG→PNG, LIM→WebP, and embedded WAV→OGG. Standard PCM WAV files are retained unchanged and count as successful. Failure of one file produces a warning without stopping the remaining work.
 
@@ -466,4 +483,7 @@ GNU General Public License v3.0 (inherited from arc_unpacker's CG decompression 
 Third-party code:
 - [stb_image](https://github.com/nothings/stb) (public domain) — PNG read/write
 - [libwebp](https://chromium.googlesource.com/webm/libwebp/) (BSD) — lossless WebP read/write
+- [libogg/libvorbis](https://xiph.org/vorbis/) (BSD) — Vorbis decoding; libvorbisenc generates test audio only
 - CG decompression algorithm from [arc_unpacker](https://github.com/vn-tools/arc_unpacker) (GPLv3)
+
+Audio library notices: [libogg/libvorbis licenses](docs/THIRD_PARTY_AUDIO_LICENSES.md).

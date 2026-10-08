@@ -11,7 +11,7 @@ struct ConversionOptions {
     bool recursive = false;
     bool gscToTsc = false;
     bool unpackOnly = false;
-    bool experimentalOggToWav = false;
+    bool vorbisInWav = false;
 };
 
 struct ConversionDiagnostic {

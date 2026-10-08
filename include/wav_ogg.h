@@ -10,17 +10,10 @@ namespace liarsoft {
 /**
  * Extract embedded Ogg Vorbis data from a WAV file.
  *
- * Liar-soft WAV files may contain Ogg Vorbis audio embedded at offset 66.
- * The OGG magic bytes are "OggS" (0x4F 0x67 0x67 0x53).
+ * Locate embedded Ogg by RIFF chunks, or decode Ogg to 16-bit PCM WAV.
  */
 class WavOggExtractor {
 public:
-    static constexpr size_t OGG_OFFSET = 66;
-    static constexpr uint8_t OGG_MAGIC[4] = {0x4F, 0x67, 0x67, 0x53}; // "OggS"
-    static constexpr const char* EXPERIMENTAL_DISABLED =
-        "OGG -> WAV skipped: experimental conversion is disabled; enable "
-        "OGG -> WAV (experimental) or --experimental-ogg-to-wav. Existing WAV is unchanged.";
-
     /// Check if a WAV file contains embedded Ogg data.
     static bool hasEmbeddedOgg(const std::vector<uint8_t>& data);
 
@@ -31,19 +24,22 @@ public:
     /// Returns the extracted OGG data, or empty if no OGG found.
     static std::vector<uint8_t> extract(const std::vector<uint8_t>& wavData);
 
-    /// Wrap one complete Ogg Vorbis stream using an RScript 0x6771/0x6751 WAV
-    /// header. Channels/rate must match; lengths and fact samples are rebuilt.
-    static std::vector<uint8_t> embed(const std::vector<uint8_t>& oggData,
-                                      const std::vector<uint8_t>& refWavData);
+    /// Wrap a complete Ogg stream as Vorbis mode 1 (0x674f), including its
+    /// own headers/codebooks. All WAV fields are built without a template.
+    static std::vector<uint8_t> embed(const std::vector<uint8_t>& oggData);
+
+    /// Fully decode mono/stereo Vorbis to signed 16-bit little-endian PCM.
+    /// Keeps the source sample rate and channels; rejects corrupt/partial audio.
+    static std::vector<uint8_t> decodeToPcm(const std::vector<uint8_t>& oggData);
 
     /// Extract from file and save to .ogg file. Returns false when the input is
     /// already a standard PCM WAV and is deliberately retained unchanged.
     static bool extractToFile(const std::string& wavPath, const std::string& oggPath);
 
-    /// Embed Ogg Vorbis data into a WAV container.
-    /// Uses the validated first 66 bytes of `refWavPath` as the header template.
-    static void embedToFile(const std::string& oggPath, const std::string& refWavPath,
-                            const std::string& wavPath);
+    /// Default: PCM WAV. With vorbisInWav: preserve the compressed Ogg stream.
+    /// Neither mode reads or requires an existing WAV file.
+    static void convertToFile(const std::string& oggPath, const std::string& wavPath,
+                              bool vorbisInWav = false);
 };
 
 } // namespace liarsoft
