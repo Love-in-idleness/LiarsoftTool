@@ -83,6 +83,7 @@ make -j$(nproc)
 
 需先为 MinGW 准备 Windows 目标的 libwebp 头文件和库，并通过 CMake 的
 `WEBP_INCLUDE_DIR` / `WEBP_LIBRARY` 指定；不能链接本机 Linux 的 libwebp。
+新版静态 libwebp 还需同一目标平台的 libsharpyuv，可通过 `WEBP_SHARPYUV_LIBRARY` 指定。
 若链接动态库，运行时须随程序提供对应的 WebP DLL；静态链接则无需该 DLL。
 
 ```bash
@@ -282,6 +283,7 @@ make -j$(nproc)
 
 Provide MinGW-targeted libwebp headers and libraries using CMake's
 `WEBP_INCLUDE_DIR` / `WEBP_LIBRARY`; do not link the host Linux library.
+Newer static libwebp also needs target-platform libsharpyuv; use `WEBP_SHARPYUV_LIBRARY` if necessary.
 Dynamic builds must ship the corresponding WebP DLL; static builds need no WebP DLL.
 
 ```bash

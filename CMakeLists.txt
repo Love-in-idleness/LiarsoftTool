@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(LiarsoftTool VERSION 2.2.1 LANGUAGES CXX)
+project(LiarsoftTool VERSION 2.2.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,6 +13,13 @@ add_library(WebP::webp UNKNOWN IMPORTED)
 set_target_properties(WebP::webp PROPERTIES
     IMPORTED_LOCATION "${WEBP_LIBRARY}"
     INTERFACE_INCLUDE_DIRECTORIES "${WEBP_INCLUDE_DIR}")
+# Newer static libwebp builds also require libsharpyuv.
+get_filename_component(WEBP_LIBRARY_DIR "${WEBP_LIBRARY}" DIRECTORY)
+find_library(WEBP_SHARPYUV_LIBRARY NAMES sharpyuv HINTS "${WEBP_LIBRARY_DIR}")
+if(WEBP_SHARPYUV_LIBRARY)
+    set_property(TARGET WebP::webp PROPERTY
+        INTERFACE_LINK_LIBRARIES "${WEBP_SHARPYUV_LIBRARY}")
+endif()
 
 # Find iconv (needed on Unix; Windows uses Win32 API via encoding.cpp)
 if(NOT WIN32)

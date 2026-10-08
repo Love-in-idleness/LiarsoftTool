@@ -11,6 +11,7 @@
 
 int main() {
     using namespace liarsoft::gui;
+    namespace fs = std::filesystem;
 
     assert(extension("VOICE.WAV") == ".wav");
     assert(replaceExtension("scene.gsc", ".tsc") == "scene.tsc");
@@ -24,8 +25,10 @@ int main() {
     assert(isSupported("IMAGE.JPEG"));
     assert(!isSupported("README.md"));
 
-    if (guessOutput("/game/image.LIM", "", false, "CP932") != "/game/image.webp" ||
-        guessOutput("/game/image.WEBP", "/out", false, "CP932") != "/out/image.lim" ||
+    if (guessOutput("/game/image.LIM", "", false, "CP932") !=
+            (fs::path("/game") / "image.webp").string() ||
+        guessOutput("/game/image.WEBP", "/out", false, "CP932") !=
+            (fs::path("/out") / "image.lim").string() ||
         guessType("image.lim", false, "CP932") != "LIM -> WebP" ||
         guessType("image.webp", false, "CP932") != "WebP -> LIM" ||
         !isSupported("image.WEBP") ||
@@ -35,7 +38,6 @@ int main() {
         std::cerr << "GUI WebP detection, routing or operation modes are incorrect\n";
         return 1;
     }
-    namespace fs = std::filesystem;
     const auto directory = fs::temp_directory_path() / ("liarsoft-webp-gui-" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(directory);
