@@ -134,10 +134,16 @@ static std::vector<fs::path> editableFiles(const fs::path& directory) {
 static void prepareDirectoryForPacking(const fs::path& directory,
                                        const std::string& encoding,
                                        std::set<std::string>& excludedPaths,
-                                       std::vector<std::string>& warnings) {
+                                       std::vector<std::string>& warnings,
+                                       bool experimentalOggToWav) {
     std::set<std::string> convertedTargets;
     for (const auto& source : editableFiles(directory)) {
         const auto ext = lower(source.extension().string());
+        if (ext == ".ogg" && !experimentalOggToWav) {
+            warnings.push_back("Skipped '" + source.string() + "': " +
+                               WavOggExtractor::EXPERIMENTAL_DISABLED);
+            continue;
+        }
         fs::path target;
         if (ext == ".tsc" || ext == ".txt") target = outputFile(source, ".gsc");
         else if (ext == ".ogg") target = outputFile(source, ".wav");
@@ -221,7 +227,8 @@ static void packOneDirectory(const fs::path& directory, const fs::path& output,
 static void packSubdirectories(const fs::path& directory,
                                const std::string& encoding,
                                std::set<std::string>& excludedPaths,
-                               std::vector<std::string>& warnings) {
+                               std::vector<std::string>& warnings,
+                               bool experimentalOggToWav) {
     std::vector<fs::path> subdirectories;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (!entry.is_symlink() && entry.is_directory())
@@ -230,8 +237,10 @@ static void packSubdirectories(const fs::path& directory,
     std::sort(subdirectories.begin(), subdirectories.end());
 
     for (const auto& subdirectory : subdirectories) {
-        packSubdirectories(subdirectory, encoding, excludedPaths, warnings);
-        prepareDirectoryForPacking(subdirectory, encoding, excludedPaths, warnings);
+        packSubdirectories(subdirectory, encoding, excludedPaths, warnings,
+                           experimentalOggToWav);
+        prepareDirectoryForPacking(subdirectory, encoding, excludedPaths, warnings,
+                                   experimentalOggToWav);
         const bool isLwg = isLwgDirectory(subdirectory.string());
         fs::path output = subdirectory;
         output += isLwg ? ".lwg" : ".xfl";
@@ -252,7 +261,7 @@ static void packSubdirectories(const fs::path& directory,
 
 std::vector<std::string> packDirectoryToFile(
     const std::string& dirPath, const std::string& outputPath,
-    const std::string& encoding, bool recursive) {
+    const std::string& encoding, bool recursive, bool experimentalOggToWav) {
     if (!fs::is_directory(dirPath))
         throw std::runtime_error("Directory not found: " + dirPath);
 
@@ -260,8 +269,10 @@ std::vector<std::string> packDirectoryToFile(
     std::set<std::string> excludedPaths;
     excludedPaths.insert(normalized(outputPath));
     if (recursive) {
-        packSubdirectories(dirPath, encoding, excludedPaths, warnings);
-        prepareDirectoryForPacking(dirPath, encoding, excludedPaths, warnings);
+        packSubdirectories(dirPath, encoding, excludedPaths, warnings,
+                           experimentalOggToWav);
+        prepareDirectoryForPacking(dirPath, encoding, excludedPaths, warnings,
+                                   experimentalOggToWav);
     }
     packOneDirectory(dirPath, outputPath, encoding, excludedPaths);
     return warnings;

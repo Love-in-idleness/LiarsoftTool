@@ -40,7 +40,7 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 | WebP 转 LIM | `liarsofttool image.webp` |
 | PNG 转 WCG | `liarsofttool image.png` |
 | WAV 提取 OGG（标准 PCM 保留） | `liarsofttool audio.wav` |
-| OGG 嵌入 WAV | `liarsofttool -r template.wav audio.ogg` |
+| OGG 嵌入 WAV（实验性） | `liarsofttool --experimental-ogg-to-wav -r template.wav audio.ogg` |
 | 打包目录→XFL | `liarsofttool -e cp932 ./dir` |
 | 打包目录→LWG | `liarsofttool -e cp932 ./dir_with_meta` |
 | 递归解包并转换 | `liarsofttool -R -e cp932 archive.xfl` |
@@ -101,7 +101,7 @@ make -j$(nproc)
 直接运行 `liarsofttool-gui` 或双击可执行文件启动：
 
 - **拖放文件**到窗口即可添加到转换列表
-- 编码选择（CP932 / GBK / CP1251）、参考 GSC 指定、输出目录，以及递归/仅封包/仅解包/GSC→TXT 开关；GSC 默认转换为结构化 TSC
+- 编码选择（CP932 / GBK / CP1251）、参考 GSC/WAV 指定、输出目录，以及递归/仅封包/仅解包/GSC→TXT/OGG→WAV（实验性）开关；GSC 默认转换为结构化 TSC，OGG→WAV 默认关闭
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
 - 警告与错误提示提供“Copy details”一键复制，包含完整诊断信息及输入/输出路径，方便反馈问题
@@ -118,6 +118,7 @@ make -j$(nproc)
 | `--pack-only` | 只执行封包及编码方向的输入 |
 | `--unpack-only` | 只执行解包及解码方向的输入 |
 | `--gsc-to-tsc` | 将 GSC 反编译为结构化 UTF-8 TSC，而非提取为 TXT |
+| `--experimental-ogg-to-wav` | 启用实验性 OGG→WAV，含递归封包；默认关闭 |
 | `-h, --help` | 显示帮助 |
 
 支持多个输入文件及 shell 通配符：`liarsofttool *.wcg`、`liarsofttool * -e gbk`。
@@ -136,7 +137,7 @@ make -j$(nproc)
 | LIM | `.lim` | ↔ WebP | 无损 RGBA；读取 16-bit BGR565/遮罩，回写为版本 3 的独立 A/R/G/B 通道 |
 | EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换已识别的日文、中文或俄文禁则标点表 |
 | WAV | `.wav` | → OGG/保留 | 提取偏移 66 的嵌入 Ogg；标准 PCM WAV 无需转换 |
-| OGG | `.ogg` | → WAV | 需 `-r` 指定模板 WAV（自动复用其 66 字节头） |
+| OGG | `.ogg` | → WAV（实验性） | 需显式启用并提供模板 WAV（复用其 66 字节头） |
 
 WCG 编码默认使用两个 16 位颜色对；任一颜色对达到 65536 种时，自动改用独立 A/R/G/B 通道，避免调色板计数溢出并保持像素无损。仅透明度的 WCG 导出为 RGB 全零、透明度保留的 PNG，不补造颜色。四通道路径已根据 Cannonball 原程序验证静态逻辑，其他引擎的游戏内兼容性仍需测试；PNG 的 ICC/gamma 等元数据不会写入 WCG。
 
@@ -200,16 +201,18 @@ liarsofttool -e cp932 game.exe      # 恢复 CP932 字体及日文禁则表
 
 # --- 音频往返 ---
 liarsofttool audio.wav                         # 嵌入式 → audio.ogg；标准 PCM 原样保留
-liarsofttool -r audio.wav audio.ogg            # → audio.wav（还原）
+liarsofttool --experimental-ogg-to-wav -r audio.wav audio.ogg  # → audio.wav（重新封装）
 ```
 
 OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771` 或 `0x6751`），不能使用普通 PCM WAV；输入必须是完整的单流 Ogg Vorbis，声道数和采样率需与参考文件一致。不符合条件会报错，递归封包时会警告并跳过，不覆盖原文件。封装时根据新音频重建 `fact` 采样数及 RIFF/data 长度，保留参考文件的编解码器参数和格式标记。普通 PCM 音频需要按原格式制作 PCM WAV，而不是把 Ogg 字节塞进 PCM 容器。
+
+OGG→WAV 为默认关闭的实验性功能：GUI 勾选“OGG → WAV (experimental)”，CLI 添加 `--experimental-ogg-to-wav` 后才执行。未启用时警告并跳过 OGG，不生成或覆盖 WAV；递归封包仍收录已有 WAV，不将它视为失败旧产物。启用后转换失败则沿用排除旧目标的规则。此功能保留受支持的 Ogg 音频流，但不保证原 WAV 容器逐字节还原，也不代替原游戏播放验收；请保留原 WAV 模板。
 
 > 提示：所有输出文件采用"内容相同则不重写"策略——若生成结果与磁盘上已有文件二进制完全一致，将跳过写入以保留原文件的修改时间，方便增量/批量转换时避免无关文件被标记为已修改。
 
 目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写），PNG 等工程文件不会直接进入封包。默认只处理指定目录或封包的当前层。
 
-启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、WebP→LIM、OGG→WAV（需同名 WAV 作为模板）。PNG 与 WebP 可同名共存，不再改名或生成 `.lim.old`。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
+启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、WebP→LIM；OGG→WAV 仅在显式启用实验性选项后执行（需同名 WAV 作为模板）。PNG 与 WebP 可同名共存，不再改名或生成 `.lim.old`。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
 
 递归解包会继续解开内嵌 XFL/LWG，并自动处理 GSC（命令行默认生成 TXT，GUI 默认生成 TSC、勾选“GSC→TXT”后生成 TXT）、WCG→PNG、LIM→WebP、嵌入式 WAV→OGG；已经是标准 PCM 的 WAV 会原样保留并视为成功。单个文件失败只会产生警告，不会中断其余处理。
 
@@ -239,7 +242,7 @@ OGG→WAV 的参考文件必须是 RScript 的 Ogg-in-WAV（格式标记 `0x6771
 | WebP to LIM | `liarsofttool image.webp` |
 | PNG to WCG | `liarsofttool image.png` |
 | WAV extract OGG (retain PCM) | `liarsofttool audio.wav` |
-| OGG embed to WAV | `liarsofttool -r template.wav audio.ogg` |
+| OGG embed to WAV (experimental) | `liarsofttool --experimental-ogg-to-wav -r template.wav audio.ogg` |
 | Pack directory → XFL | `liarsofttool -e cp932 ./dir` |
 | Pack directory → LWG | `liarsofttool -e cp932 ./dir_with_meta` |
 | Recursively unpack and convert | `liarsofttool -R -e cp932 archive.xfl` |
@@ -301,7 +304,7 @@ make -j$(nproc)
 Run `liarsofttool-gui` or double-click the executable:
 
 - **Drag & drop** files onto the window to add them
-- Encoding selector (CP932 / GBK / CP1251), optional reference, output directory, and recursive/pack-only/unpack-only/GSC→TXT toggles; GSC defaults to structured TSC output
+- Encoding selector (CP932 / GBK / CP1251), optional reference, output directory, and recursive/pack-only/unpack-only/GSC→TXT/experimental OGG→WAV toggles; GSC defaults to structured TSC output, OGG→WAV defaults to off
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Warning/error dialogs offer **Copy details**, copying the complete diagnostics and input/output paths for bug reports
@@ -318,6 +321,7 @@ Run `liarsofttool-gui` or double-click the executable:
 | `--pack-only` | Only process packing and encoding inputs |
 | `--unpack-only` | Only process unpacking and decoding inputs |
 | `--gsc-to-tsc` | Decompile GSC to structured UTF-8 TSC instead of extracting TXT |
+| `--experimental-ogg-to-wav` | Opt in to experimental OGG→WAV, including recursive packing (default: off) |
 | `-h, --help` | Show help |
 
 Multiple inputs and shell wildcards are supported: `liarsofttool *.wcg`, `liarsofttool * -e gbk`.
@@ -335,7 +339,7 @@ When exactly two args have different extensions, the second is treated as output
 | LIM | `.lim` | ↔ WebP | Lossless RGBA; reads BGR565/masks and writes version-3 separate A/R/G/B channels |
 | EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and Japanese, Chinese, or Russian line-break punctuation tables |
 | WAV | `.wav` | → OGG/retain | Extract Ogg embedded at offset 66; standard PCM WAV needs no conversion |
-| OGG | `.ogg` | → WAV | Needs `-r` template WAV (reuses its 66-byte header) |
+| OGG | `.ogg` | → WAV (experimental) | Requires explicit opt-in and a template WAV (reuses its 66-byte header) |
 
 WCG encoding normally uses two 16-bit color pairs. If either pair has all 65536 values, it switches to separate A/R/G/B streams without losing pixels or overflowing the palette count. Alpha-only WCG files export as PNG with zero RGB and preserved alpha, without inventing colors. The four-channel path follows Cannonball's statically verified decoder; in-game compatibility with other engines still needs testing. PNG ICC/gamma metadata is not stored in WCG.
 
@@ -417,7 +421,7 @@ liarsofttool -e cp932 game.exe      # Restore CP932 font and Japanese line-break
 
 # --- Audio roundtrip ---
 liarsofttool audio.wav                         # embedded → audio.ogg; standard PCM retained
-liarsofttool -r audio.wav audio.ogg            # → audio.wav (restored)
+liarsofttool --experimental-ogg-to-wav -r audio.wav audio.ogg  # → audio.wav (rewrapped)
 ```
 
 OGG→WAV requires an RScript Ogg-in-WAV template (format `0x6771` or `0x6751`), not a
@@ -428,6 +432,13 @@ sample count (`fact`) and RIFF/data lengths are rebuilt while opaque codec
 parameters are retained. Replace PCM audio with a PCM WAV of the original
 format, not Ogg bytes wrapped in a PCM header.
 
+OGG→WAV is experimental and disabled by default. Check **OGG → WAV (experimental)**
+in the GUI or pass `--experimental-ogg-to-wav` on the CLI to enable it.
+When disabled, Ogg inputs produce warnings without creating or replacing WAVs;
+recursive packing retains existing WAVs. When enabled, failed conversions still
+exclude their old targets from the archive. Supported Ogg audio data is retained,
+but original WAV bytes and in-game playback are not guaranteed. Keep the original WAV template.
+
 > Tip: all outputs use a "skip if identical" policy — when the generated
 > result is byte-identical to the file already on disk, the write is skipped
 > so the existing file's modification time is preserved. This keeps
@@ -435,7 +446,7 @@ format, not Ogg bytes wrapped in a PCM header.
 
 Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive); project files such as PNG are never stored directly. By default, only the current level of the selected directory or archive is processed.
 
-With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, WebP→LIM, and OGG→WAV (requiring a same-name WAV template). Same-name PNG and WebP coexist without renaming LIM or creating `.lim.old` backups. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
+With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG and WebP→LIM. OGG→WAV requires explicit experimental opt-in and a same-name WAV template. Same-name PNG and WebP coexist without renaming LIM or creating `.lim.old` backups. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
 
 Recursive unpacking opens nested XFL/LWG archives and processes GSC files (the CLI defaults to TXT; the GUI defaults to TSC and uses the **GSC→TXT** toggle for legacy TXT output), WCG→PNG, LIM→WebP, and embedded WAV→OGG. Standard PCM WAV files are retained unchanged and count as successful. Failure of one file produces a warning without stopping the remaining work.
 

@@ -22,10 +22,12 @@ bool matchesOperationMode(const std::string& path, bool packOnly,
 
 /// Pack `dirPath`. With `recursive`, editable files are converted first and
 /// subdirectories are packed from the deepest level upward.
-/// Recoverable per-file failures are returned as warnings.
+/// OGG -> WAV requires explicit experimental opt-in; otherwise existing WAVs
+/// are retained. Recoverable per-file failures are returned as warnings.
 std::vector<std::string> packDirectoryToFile(
     const std::string& dirPath, const std::string& outputPath,
-    const std::string& encoding, bool recursive = false);
+    const std::string& encoding, bool recursive = false,
+    bool experimentalOggToWav = false);
 
 /// Recursively unpack nested XFL/LWG files and convert extracted resources to
 /// editable formats. Recoverable failures are returned as warnings.

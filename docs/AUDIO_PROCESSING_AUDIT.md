@@ -54,3 +54,12 @@
 
 日常回归：`cmake --build build -j 4`，然后 `ctest --test-dir build --output-on-failure`。
 音频单元测试同时为目录递归测试生成合成容器，避免继续用无效 WAV/Ogg 数据充当成功样本。
+
+## 2026-10-08：实验性回写开关
+
+两版 `RsComp.dll` 的媒体相关路径属于脚本编译，没有找到新的音频/图像编解码实现，
+见 [DLL 核对](RSCOMP_MEDIA_AUDIT.md)。OGG→WAV 暂改为默认关闭的实验性功能：
+GUI 勾选 `OGG → WAV (experimental)`，CLI 使用 `--experimental-ogg-to-wav`。
+开关传递至递归封包的每一层；关闭时警告并跳过 OGG，但保留、收录已有 WAV；
+开启后的参数校验及失败旧目标排除规则不变。WAV→OGG 和普通 PCM 保留不受影响。
+这不是新的编码器，也不承诺容器逐字节还原；原游戏播放仍需用户验收。

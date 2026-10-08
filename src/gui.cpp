@@ -26,6 +26,7 @@ static Gtk::CheckButton* g_recursiveCheck = nullptr;
 static Gtk::CheckButton* g_packOnlyCheck = nullptr;
 static Gtk::CheckButton* g_unpackOnlyCheck = nullptr;
 static Gtk::CheckButton* g_gscToTxtCheck = nullptr;
+static Gtk::CheckButton* g_oggToWavCheck = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
@@ -81,14 +82,14 @@ static void addFiles(const std::vector<std::string>& paths, const std::string& o
 static void convertAll(std::vector<ConversionJob> jobs,
                        const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
-                       bool gscToTsc) {
+                       bool gscToTsc, bool experimentalOggToWav) {
     int total = jobs.size();
     int done = 0;
     int totalWarnings = 0;
     bool hasErrors = false;
     std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
     const liarsoft::gui::ConversionOptions options{
-        encoding, refPath, recursive, gscToTsc, unpackOnly};
+        encoding, refPath, recursive, gscToTsc, unpackOnly, experimentalOggToWav};
 
     for (const auto& job : jobs) {
         const std::string& in = job.inputPath;
@@ -326,6 +327,11 @@ int runGui(int argc, char* argv[]) {
     optionsBar->pack_start(*g_packOnlyCheck, false, false);
     optionsBar->pack_start(*g_unpackOnlyCheck, false, false);
     optionsBar->pack_start(*g_gscToTxtCheck, false, false);
+    g_oggToWavCheck = Gtk::manage(new Gtk::CheckButton("OGG → WAV (experimental)"));
+    g_oggToWavCheck->set_tooltip_text(
+        "Opt in to Ogg-in-WAV wrapping, including recursive packing. Requires a matching WAV template; "
+        "does not restore the original WAV bytes. Disabled: keep existing WAV files unchanged.");
+    optionsBar->pack_start(*g_oggToWavCheck, false, false);
     mainBox->pack_start(*optionsBar, false, false);
 
     // --- File list ---
@@ -383,6 +389,7 @@ int runGui(int argc, char* argv[]) {
         bool packOnly = g_packOnlyCheck->get_active();
         bool unpackOnly = g_unpackOnlyCheck->get_active();
         bool gscToTsc = !g_gscToTxtCheck->get_active();
+        bool experimentalOggToWav = g_oggToWavCheck->get_active();
         std::vector<ConversionJob> jobs;
         for (const auto& child : g_store->children()) {
             jobs.push_back({
@@ -392,7 +399,7 @@ int runGui(int argc, char* argv[]) {
         }
         g_convertBtn->set_sensitive(false);
         std::thread t(convertAll, std::move(jobs), enc, ref, recursive,
-                      packOnly, unpackOnly, gscToTsc);
+                      packOnly, unpackOnly, gscToTsc, experimentalOggToWav);
         t.detach();
     });
 

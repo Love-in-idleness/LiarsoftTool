@@ -154,8 +154,80 @@ if(result)
 endif()
 file(READ "${TEST_ROOT}/convert/badref.wav" original_pcm HEX)
 
+# Disabled direct conversion must neither create output nor alter an existing one.
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/convert.xfl" "${TEST_ROOT}/convert"
+    COMMAND "${TOOL}" -o "${TEST_ROOT}/disabled.wav" "${TEST_ROOT}/convert/audio.ogg"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR EXISTS "${TEST_ROOT}/disabled.wav" OR
+   NOT error MATCHES "experimental conversion is disabled")
+    message(FATAL_ERROR "CLI audio conversion is not disabled by default: ${error}")
+endif()
+file(WRITE "${TEST_ROOT}/disabled.wav" "retain-original")
+execute_process(
+    COMMAND "${TOOL}" --pack-only -o "${TEST_ROOT}/disabled.wav"
+            "${TEST_ROOT}/convert/audio.ogg"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+file(READ "${TEST_ROOT}/disabled.wav" retained)
+if(result OR NOT retained STREQUAL "retain-original")
+    message(FATAL_ERROR "Disabled audio conversion overwrote the existing WAV: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" --experimental-ogg-to-wav --pack-only
+            -r "${TEST_ROOT}/convert/audio.wav" -o "${TEST_ROOT}/enabled.wav"
+            "${TEST_ROOT}/convert/audio.ogg"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/enabled.wav")
+    message(FATAL_ERROR "Explicit audio opt-in failed: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" --unpack-only -o "${TEST_ROOT}/enabled.ogg" "${TEST_ROOT}/enabled.wav"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+file(READ "${TEST_ROOT}/convert/audio.ogg" original_ogg HEX)
+file(READ "${TEST_ROOT}/enabled.ogg" roundtrip_ogg HEX)
+if(result OR NOT original_ogg STREQUAL roundtrip_ogg)
+    message(FATAL_ERROR "Opted-in audio round trip changed the Ogg stream: ${error}")
+endif()
+
+# Disabled recursive conversion preserves WAVs even beside broken Ogg sources,
+# including subdirectories. Disabled is not a conversion failure/exclusion.
+file(MAKE_DIRECTORY "${TEST_ROOT}/audio_disabled/sub")
+file(WRITE "${TEST_ROOT}/audio_disabled/sub/layout.xml" "resource")
+configure_file("${TEST_ROOT}/convert/badref.wav"
+               "${TEST_ROOT}/audio_disabled/sub/voice.wav" COPYONLY)
+file(WRITE "${TEST_ROOT}/audio_disabled/sub/voice.OGG" "broken-ogg")
+execute_process(
+    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/audio_disabled.xfl" "${TEST_ROOT}/audio_disabled"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT error MATCHES "experimental conversion is disabled")
+    message(FATAL_ERROR "Recursive audio opt-in did not reach the child: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" -R --unpack-only -o "${TEST_ROOT}/audio_disabled_unpacked"
+            "${TEST_ROOT}/audio_disabled.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+file(READ "${TEST_ROOT}/audio_disabled_unpacked/sub/voice.wav" retained_pcm HEX)
+if(result OR NOT retained_pcm STREQUAL original_pcm)
+    message(FATAL_ERROR "Disabled recursive conversion excluded or changed the original WAV")
+endif()
+execute_process(
+    COMMAND "${TOOL}" -R --experimental-ogg-to-wav
+            -o "${TEST_ROOT}/audio_enabled_nested.xfl" "${TEST_ROOT}/audio_disabled"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT error MATCHES "not a PCM WAV")
+    message(FATAL_ERROR "Audio opt-in did not reach nested conversion: ${error}")
+endif()
+execute_process(
+    COMMAND "${TOOL}" -R --unpack-only -o "${TEST_ROOT}/audio_enabled_nested_unpacked"
+            "${TEST_ROOT}/audio_enabled_nested.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR EXISTS "${TEST_ROOT}/audio_enabled_nested_unpacked/sub/voice.wav" OR
+   NOT EXISTS "${TEST_ROOT}/audio_enabled_nested_unpacked/sub/layout.xml")
+    message(FATAL_ERROR "Enabled failed nested audio conversion did not exclude its old WAV")
+endif()
+
+execute_process(
+    COMMAND "${TOOL}" -R --experimental-ogg-to-wav
+            -o "${TEST_ROOT}/convert.xfl" "${TEST_ROOT}/convert"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Recursive conversion packing failed: ${error}")

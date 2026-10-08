@@ -17,6 +17,9 @@ class WavOggExtractor {
 public:
     static constexpr size_t OGG_OFFSET = 66;
     static constexpr uint8_t OGG_MAGIC[4] = {0x4F, 0x67, 0x67, 0x53}; // "OggS"
+    static constexpr const char* EXPERIMENTAL_DISABLED =
+        "OGG -> WAV skipped: experimental conversion is disabled; enable "
+        "OGG -> WAV (experimental) or --experimental-ogg-to-wav. Existing WAV is unchanged.";
 
     /// Check if a WAV file contains embedded Ogg data.
     static bool hasEmbeddedOgg(const std::vector<uint8_t>& data);

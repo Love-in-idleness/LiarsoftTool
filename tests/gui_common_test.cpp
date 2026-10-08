@@ -21,7 +21,7 @@ int main() {
            "/game/voice.wav");
     assert(guessOutput("/game/start.exe", "", false, "CP1251") ==
            "/game/start.cp1251.exe");
-    assert(guessType("VOICE.OGG", false, "CP932") == "OGG -> WAV");
+    assert(guessType("VOICE.OGG", false, "CP932") == "OGG -> WAV (experimental)");
     assert(isSupported("IMAGE.JPEG"));
     assert(!isSupported("README.md"));
 
@@ -58,6 +58,43 @@ int main() {
         const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
         if (liarsoft::limDecode(bytes).pixels != image.pixels)
             throw std::runtime_error("GUI LIM/WebP round trip changed pixels");
+
+        const auto ogg = directory / "voice.ogg";
+        const auto wav = directory / "voice.wav";
+        const std::vector<uint8_t> untouched{'o','r','i','g','i','n','a','l'};
+        liarsoft::writeFileIfChanged(ogg.string(), std::vector<uint8_t>{'b','a','d'});
+        liarsoft::writeFileIfChanged(wav.string(), untouched);
+        const auto wavTime = fs::last_write_time(wav);
+        auto warnings = convert(ogg.string(), wav.string(), options);
+        if (warnings.size() != 1 ||
+            warnings[0].find("experimental conversion is disabled") == std::string::npos ||
+            fs::last_write_time(wav) != wavTime)
+            throw std::runtime_error("GUI OGG -> WAV is not disabled by default");
+        const auto absent = directory / "absent.wav";
+        convert(ogg.string(), absent.string(), options);
+        if (fs::exists(absent))
+            throw std::runtime_error("Disabled GUI audio conversion created a file");
+        ConversionOptions enabled = options;
+        enabled.experimentalOggToWav = true;
+        bool rejected = false;
+        try { convert(ogg.string(), wav.string(), enabled); }
+        catch (const std::runtime_error&) { rejected = true; }
+        if (!rejected || fs::last_write_time(wav) != wavTime)
+            throw std::runtime_error("Experimental GUI audio bypassed template validation");
+
+        const auto audioDirectory = directory / "audio";
+        fs::create_directory(audioDirectory);
+        liarsoft::writeFileIfChanged((audioDirectory / "voice.wav").string(), untouched);
+        liarsoft::writeFileIfChanged((audioDirectory / "voice.ogg").string(),
+                                    std::vector<uint8_t>{'b','a','d'});
+        ConversionOptions recursive;
+        recursive.encoding = "CP932";
+        recursive.recursive = true;
+        const auto archive = directory / "audio.xfl";
+        warnings = convert(audioDirectory.string(), archive.string(), recursive);
+        const auto entries = liarsoft::XflArchive::fromFile(archive.string()).entries;
+        if (warnings.size() != 1 || entries.size() != 1 || entries[0].data != untouched)
+            throw std::runtime_error("Disabled recursive GUI audio did not retain the WAV");
     } catch (const std::exception& error) {
         fs::remove_all(directory);
         std::cerr << error.what() << '\n';

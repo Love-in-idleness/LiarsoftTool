@@ -39,3 +39,19 @@
 结论是**本次没有找到可用于媒体格式处理的新实现**，而非证明 DLL 中每个未识别函数都不可能涉及媒体。
 音频实际加载/转换仍应以引擎 EXE 的 ACM 路径和 `vorbis.acm` 为依据，图像以 EXE 的 WCG/LIM 解码函数为依据。
 这些 DLL 对 GSC/TSC 媒体命令布局有帮助，但没有解决 WAV 容器逐字节还原；现有音频边界见 [音频处理核对](AUDIO_PROCESSING_AUDIT.md)。
+
+## `oc_reference/bgmsv` 的 MP3 是否为游戏音频格式
+
+这些文件确实是带 ID3 的 MPEG Layer III 音频；但 `oc_reference/bgmlist.html` 明确将
+`bgmsv/TrackNN.mp3` 的链接放在“试听”列。`CodeXRScript/readme.txt`（CP932）说明
+`oc_reference` 是在浏览器打开的参考资料；追加安装清单只有图片、脚本、`RsComp.dll`
+和 `version.dat`，没有安装 `bgmsv`。这不能证明原引擎会直接使用 MP3。
+
+静态交叉核对 `res_ft/exe/{Cannonball,Forest,kagerou}.exe`：三者均有
+`%s\\Track%02d.wav` 与 `%s\\%04d.wav` 路径模板，未检出 `.mp3` 或 `bgmsv` 特征。
+Cannonball 中前者的调用引用位于 `0x0042c71c`，后者包括 `0x004136ae`；
+`mpegvideo` 的引用位于 `0x00431f8f`，是另一条媒体路径，不能据此将 MP3 放进 BGM/WAV 路径。
+
+结论限于这些样本：MP3 是文档试听资源，没有证据支持用同名 MP3 替换游戏 WAV。
+不应为此扩大封包白名单或仅改后缀。若某个引擎另有明确的 MP3/裸 Ogg 路径，
+应单独按调用证据支持；目标是可播放，不要求 WAV 逐字节复原。
