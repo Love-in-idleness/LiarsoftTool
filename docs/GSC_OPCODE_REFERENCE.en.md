@@ -33,6 +33,7 @@ stale index, so the game reads an out-of-range or wrong string at runtime:
 
 | Opcode | Operand positions holding a string reference |
 |---|---|
+| 12 `*jump` | 2nd (named entry in the destination script; empty means its start) |
 | 14 `*select` | 2nd (choice text) and 8th–12th |
 | 15 `*gosub` | 2nd (called subroutine name; always `"select"` in the main-story samples, i.e. the shared choice-branch handler) |
 | 32 `*font` | 6th (text) |

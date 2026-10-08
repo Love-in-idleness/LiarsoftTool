@@ -746,13 +746,9 @@ InstructionSchema parseSchemaName(const std::string& value) {
 }
 
 bool isStringOperand(uint16_t opcode, size_t index) {
-    // gosub carries the name of the shared subroutine it enters as a string
-    // reference: every shipped script that calls the choice helper encodes the
-    // string "select" at this position, so the operand has to be pooled and
-    // renumbered like any other string reference. Treating it as a plain
-    // number drops the string from the rebuilt table and leaves the code
-    // pointing at a stale index.
-    if (opcode == 15) return index == 1;
+    // jump/gosub carry a named entry in the destination script. Pool it even
+    // when empty; a raw old index becomes stale when rebuilding the table.
+    if (opcode == 12 || opcode == 15) return index == 1;
     if (opcode == 14) return index == 1 || (index >= 7 && index <= 11);
     if (opcode == 32) return index == 5;
     if (opcode == 81) return index == 4 || index == 5;

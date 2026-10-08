@@ -82,16 +82,17 @@ int main(int argc, char** argv) {
     appendU16(code, 15);
     appendU32(code, 99); appendU32(code, 4);
     for (int i = 0; i < 10; ++i) appendU32(code, i == 0 ? 8031 : (i == 1 ? 8032 : 0));
+    appendU16(code, 12); appendU32(code, 1); appendU32(code, 5);
     appendU16(code, 8);
 
     std::vector<uint8_t> modern(36, 0);
-    patchU32(modern, 4, 36); patchU32(modern, 8, code.size()); patchU32(modern, 12, 20);
-    const std::string strings("\0Name\0Text\0Font Text\0select\0", 28);
+    patchU32(modern, 4, 36); patchU32(modern, 8, code.size()); patchU32(modern, 12, 24);
+    const std::string strings("\0Name\0Text\0Font Text\0select\0TOP2\0", 33);
     patchU32(modern, 16, strings.size());
     patchU32(modern, 28, 4); patchU32(modern, 32, 1);
     modern.insert(modern.end(), code.begin(), code.end());
     appendU32(modern, 0); appendU32(modern, 1); appendU32(modern, 6); appendU32(modern, 11);
-    appendU32(modern, 21);
+    appendU32(modern, 21); appendU32(modern, 28);
     modern.insert(modern.end(), strings.begin(), strings.end());
     modern.insert(modern.end(), 9, 0);
     patchU32(modern, 0, modern.size());
@@ -111,6 +112,7 @@ int main(int argc, char** argv) {
         !contains(listing, "*TXT 0 123 0 0 \"Name\" \"Text\" 0") ||
         !contains(listing, "*font 40 400 250 0 0 \"Font Text\"") ||
         !contains(listing, "*gosub 99 \"select\" 8031 8032 0 0 0 0 0 0 0 0") ||
+        !contains(listing, "*jump 1 \"TOP2\"") ||
         !contains(listing, "*flagset 1 2 3") ||
         !contains(listing, "*dynsel \"Text\" 4") ||
         !contains(listing, "*dynans \"Font Text\" 5 6 7") ||
@@ -130,7 +132,8 @@ int main(int argc, char** argv) {
     for (const auto& change : std::vector<std::pair<std::string, std::string>>{
              {"*dynsel \"Text\"", "*dynsel \"Changed Prompt\""},
              {"*dynans \"Font Text\"", "*dynans \"Changed Choice\""},
-             {"*dynnext \"select\"", "*dynnext \"Changed Next\""}})
+             {"*dynnext \"select\"", "*dynnext \"Changed Next\""},
+             {"*jump 1 \"TOP2\"", "*jump 1 \"Changed Entry\""}})
         edited.replace(edited.find(change.first), change.first.size(), change.second);
     const auto editedGsc = liarsoft::restoreGscFromTsc(edited);
     save(temp, editedGsc);
@@ -139,6 +142,7 @@ int main(int argc, char** argv) {
         !contains(editedListing, "*dynsel \"Changed Prompt\" 4") ||
         !contains(editedListing, "*dynans \"Changed Choice\" 5 6 7") ||
         !contains(editedListing, "*dynnext \"Changed Next\"") ||
+        !contains(editedListing, "*jump 1 \"Changed Entry\"") ||
         editedGsc == modern) {
         std::cerr << "TSC body edits were not compiled into GSC" << std::endl; return 1;
     }
