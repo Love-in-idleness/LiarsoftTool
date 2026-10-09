@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <memory>
+#include <charconv>
 #include <algorithm>
 
 namespace fs = std::filesystem;
@@ -31,6 +32,7 @@ static void printUsage(const char* prog) {
               << "  -r, --reference <path> Reference GSC file for TXT injection\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
               << "  -R, --recursive        Recursively pack/unpack and convert resources\n"
+              << "  -j, --jobs <0..64>    Resource conversion workers (0=auto, 1=serial)\n"
               << "      --pack-only        Only pack/encode inputs\n"
               << "      --unpack-only      Only unpack/decode inputs\n"
               << "      --gsc-to-tsc       Structured GSC -> TSC output\n"
@@ -156,7 +158,7 @@ static bool processOne(const std::string& inputPath,
                        const std::string& encoding,
                        const std::string& referencePath,
                        bool recursive, bool unpackOnly, bool gscToTsc,
-                       bool vorbisInWav)
+                       bool vorbisInWav, unsigned workers)
 {
     auto printWarnings = [](const std::vector<std::string>& warnings) {
         for (const auto& warning : warnings)
@@ -177,7 +179,7 @@ static bool processOne(const std::string& inputPath,
             std::cout << "Recursively unpacking directory: " << resolved
                       << " (encoding: " << encoding << ")" << std::endl;
             printWarnings(liarsoft::unpackDirectoryRecursively(
-                resolved, encoding, gscToTsc));
+                resolved, encoding, gscToTsc, workers));
             return true;
         }
 
@@ -193,7 +195,7 @@ static bool processOne(const std::string& inputPath,
             if (out.empty()) out = resolved + ".xfl";
         }
         auto warnings = liarsoft::packDirectoryToFile(resolved, out, encoding,
-                                                       recursive, vorbisInWav);
+                                                       recursive, vorbisInWav, workers);
         printWarnings(warnings);
         std::cout << "Packed to: " << out << std::endl;
         return true;
@@ -252,7 +254,7 @@ static bool processOne(const std::string& inputPath,
         archive.extractToDirectory(out, fs::last_write_time(inputPath));
         if (recursive)
             printWarnings(liarsoft::unpackDirectoryRecursively(
-                out, encoding, gscToTsc));
+                out, encoding, gscToTsc, workers));
         std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
 
     } else if (ext == ".lwg") {
@@ -264,7 +266,7 @@ static bool processOne(const std::string& inputPath,
                                                 fs::last_write_time(inputPath));
         if (recursive)
             printWarnings(liarsoft::unpackDirectoryRecursively(
-                out, encoding, gscToTsc));
+                out, encoding, gscToTsc, workers));
         std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
 
     } else if (ext == ".wav") {
@@ -345,6 +347,7 @@ int main(int argc, char* argv[]) {
     bool unpackOnly = false;
     bool gscToTsc = false;
     bool vorbisInWav = false;
+    unsigned workers = 0;
 
     // Parse arguments
     int i = 1;
@@ -364,6 +367,18 @@ int main(int argc, char* argv[]) {
             else { std::cerr << "Error: --output requires a value" << std::endl; return 1; }
         } else if (arg == "-R" || arg == "--recursive") {
             recursive = true;
+        } else if (arg == "-j" || arg == "--jobs") {
+            if (++i == argc) {
+                std::cerr << "Error: --jobs requires a value (0..64)\n";
+                return 1;
+            }
+            const std::string value(argv[i]);
+            const auto parsed = std::from_chars(value.data(), value.data() + value.size(), workers);
+            if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() ||
+                workers > liarsoft::MaxConversionWorkers) {
+                std::cerr << "Error: --jobs must be an integer between 0 and 64\n";
+                return 1;
+            }
         } else if (arg == "--pack-only") {
             packOnly = true;
         } else if (arg == "--unpack-only") {
@@ -443,7 +458,7 @@ int main(int argc, char* argv[]) {
             if (allFiles.size() > 1)
                 std::cout << "\n[" << (fi + 1) << "/" << allFiles.size() << "] ";
             if (!processOne(f, out, encoding, referencePath, recursive,
-                            unpackOnly, gscToTsc, vorbisInWav))
+                            unpackOnly, gscToTsc, vorbisInWav, workers))
                 ++errors;
         }
     } catch (const std::exception& e) {

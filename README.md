@@ -119,6 +119,7 @@ make -j$(nproc)
 | `-r, --reference <path>` | TXT→GSC 时所需的参考 GSC 文件 |
 | `-o, --output <path>` | 显式指定输出路径 |
 | `-R, --recursive` | 递归处理输入目录和子封包，并在打包/解包时自动转换资源 |
+| `-j, --jobs <0..64>` | 递归资源转换的线程数；0 为自动（最多 4 个），1 为串行 |
 | `--pack-only` | 只执行封包及编码方向的输入 |
 | `--unpack-only` | 只执行解包及解码方向的输入 |
 | `--gsc-to-tsc` | 将 GSC 反编译为结构化 UTF-8 TSC，而非提取为 TXT |
@@ -224,6 +225,8 @@ XFL/LWG 不保存条目的原始修改时间，解出的所有文件（含 `.met
 启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、WebP→LIM、OGG→WAV（默认 PCM，可选 Vorbis-in-WAV，无需模板）。PNG 与 WebP 可同名共存，不再改名或生成 `.lim.old`。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
 
 递归解包会继续解开内嵌 XFL/LWG，并自动处理 GSC（命令行默认生成 TXT，GUI 默认生成 TSC、勾选“GSC→TXT”后生成 TXT）、WCG→PNG、LIM→WebP、嵌入式 WAV→OGG；已经是标准 PCM 的 WAV 会原样保留并视为成功。单个文件失败只会产生警告，不会中断其余处理。
+
+递归处理会一次建立当前目录的文件索引，并并行转换独立资源，CLI、Linux GUI 和 Windows GUI 共用这一逻辑。CLI 用 `-j N` / `--jobs N`（如 `liarsofttool -R -j 8 archive.xfl`），GUI 用 **Threads (0 = auto)** 设置线程数：范围 0～64，0 默认自动选择至多 4 个工作线程，1 为串行。同名来源仍按优先级串行处理，警告按固定顺序汇总；子目录先封包、外层先解包的顺序不变，不会递归叠加线程。多个大封包及 GUI/CLI 的输入队列仍串行处理，避免并发加载整个封包导致内存暴涨；手动增加资源转换线程仍会增加内存和磁盘压力。
 
 “仅封包”包括目录→XFL/LWG、TSC/TXT→GSC、PNG 等图片→WCG、WebP→LIM、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG→PNG、LIM→WebP、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
 
@@ -332,6 +335,7 @@ Run `liarsofttool-gui` or double-click the executable:
 | `-r, --reference <path>` | Reference GSC for TXT injection |
 | `-o, --output <path>` | Explicit output path |
 | `-R, --recursive` | Process nested archives and convert resources while packing/unpacking |
+| `-j, --jobs <0..64>` | Recursive resource conversion workers; 0 = automatic (up to 4), 1 = serial |
 | `--pack-only` | Only process packing and encoding inputs |
 | `--unpack-only` | Only process unpacking and decoding inputs |
 | `--gsc-to-tsc` | Decompile GSC to structured UTF-8 TSC instead of extracting TXT |
@@ -475,6 +479,8 @@ Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, 
 With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, WebP→LIM and OGG→WAV (default PCM, optional Vorbis-in-WAV, no template). Same-name PNG and WebP coexist without renaming LIM or creating `.lim.old` backups. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
 
 Recursive unpacking opens nested XFL/LWG archives and processes GSC files (the CLI defaults to TXT; the GUI defaults to TSC and uses the **GSC→TXT** toggle for legacy TXT output), WCG→PNG, LIM→WebP, and embedded WAV→OGG. Standard PCM WAV files are retained unchanged and count as successful. Failure of one file produces a warning without stopping the remaining work.
+
+Recursive processing indexes each directory once and converts independent resource groups in parallel, shared by the CLI and both GUIs. Set `-j N` / `--jobs N` (e.g. `liarsofttool -R -j 8 archive.xfl`) or **Threads (0 = auto)** in the GUI: 0–64, with 0 automatically choosing up to four workers and 1 running serially. Same-name sources remain serial and priority-ordered; warnings are collected in a fixed order. Children are still packed before parents and outer archives extracted before their contents; recursion does not multiply the worker count. Whole archives and the CLI/GUI input queues remain serial to avoid loading several large archives into memory at once. Manually raising the resource worker count still increases memory use and disk contention.
 
 **Pack only** covers directory→XFL/LWG, TSC/TXT→GSC, PNG and other images→WCG, WebP→LIM, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG→PNG, LIM→WebP, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
 

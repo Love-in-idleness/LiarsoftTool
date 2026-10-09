@@ -13,6 +13,120 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
+
+static std::vector<uint8_t> readBytes(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) throw std::runtime_error("Cannot read test output: " + path.string());
+    return {(std::istreambuf_iterator<char>(in)), {}};
+}
+
+static void testParallelConversions(const std::filesystem::path& directory,
+                                    const std::vector<uint8_t>& ogg,
+                                    const liarsoft::LimImage& image) {
+    namespace fs = std::filesystem;
+    using namespace liarsoft;
+    const auto root = directory / "parallel";
+    const auto packed = directory / "parallel.xfl";
+    const auto tsc = ";@gsc-byte-format modern-36\n;@gsc-schema modern\n"
+                     "*TXT 0 0 0 0 \"\" \"original\" 0\n*end\n";
+    const auto gsc = restoreGscFromTsc(tsc);
+    const auto wcg = wcgEncode(image.pixels, image.width, image.height);
+    const auto lim = limEncode(image);
+    const auto wav = WavOggExtractor::embed(ogg);
+    const auto sourceTime = fs::file_time_type::clock::now() - std::chrono::hours(24);
+    const auto wcgImage = wcgDecode(wcg);
+    for (bool wrapped : {false, true}) {
+        std::vector<uint8_t> expectedArchive;
+        std::vector<std::string> expectedPackWarnings;
+        std::vector<std::string> expectedUnpackWarnings[2];
+        std::map<std::string, std::vector<uint8_t>> expectedFiles;
+        for (unsigned workers : {1u, 2u, 4u, 8u, 0u}) {
+            fs::remove_all(root);
+            fs::create_directories(root / "nested/scene");
+            for (int i = 0; i < 16; ++i) {
+                const auto stem = root / ("resource" + std::to_string(i));
+                writeTextFileIfChanged(stem.string() + ".tsc", tsc);
+                writeTextFileIfChanged(stem.string() + ".txt", "#original\n>wrong-priority\n");
+                wcgSavePng(wcgImage, stem.string() + ".png");
+                limSaveWebp(image, stem.string() + ".webp");
+                writeFileIfChanged(stem.string() + ".ogg", ogg);
+            }
+            // A failed preferred source must allow the next one to succeed.
+            writeTextFileIfChanged((root / "Fallback.tsc").string(), "*unknown-command\n");
+            writeFileIfChanged((root / "FALLBACK.GSC").string(), gsc);
+            writeTextFileIfChanged((root / "fallback.txt").string(), "#original\n>translated\n");
+            writeTextFileIfChanged((root / "photo.png").string(), "broken");
+            wcgSavePng(wcgImage, (root / "PHOTO.bmp").string());
+            // Multiple failing groups, stale outputs, and a missing reference.
+            for (const auto* name : {"bad0", "bad1", "bad2"}) {
+                writeTextFileIfChanged((root / (std::string(name) + ".webp")).string(), "broken");
+                writeFileIfChanged((root / (std::string(name) + ".lim")).string(), lim);
+            }
+            writeTextFileIfChanged((root / "orphan.txt").string(), "#text\n>translation\n");
+            for (const auto* name : {"invalidraw0.wcg", "invalidraw1.lim", "invalidraw2.wav"})
+                writeTextFileIfChanged((root / name).string(), "broken");
+            writeTextFileIfChanged((root / "nested/scene/.meta.xml").string(),
+                "<Canvas><Width>2</Width><Height>1</Height><Items>"
+                "<Item x=\"0\" y=\"0\" flag=\"40\">background</Item></Items></Canvas>");
+            writeFileIfChanged((root / "nested/scene/background.lim").string(), lim);
+            limSaveWebp(image, (root / "nested/scene/background.webp").string());
+            writeFileIfChanged((root / "nested/voice.ogg").string(), ogg);
+
+            const auto warnings = packDirectoryToFile(root.string(), packed.string(),
+                                                       "CP932", true, wrapped, workers);
+            const auto archiveBytes = readBytes(packed);
+            if (workers == 1) {
+                expectedArchive = archiveBytes;
+                expectedPackWarnings = warnings;
+            } else if (archiveBytes != expectedArchive || warnings != expectedPackWarnings) {
+                throw std::runtime_error("Parallel packing changed bytes or warning order");
+            }
+            if (warnings.size() != 22)
+                throw std::runtime_error("Missing conversion failure/duplicate warning");
+            const auto archive = XflArchive::fromFile(packed.string());
+            for (const auto& entry : archive.entries) {
+                if (entry.fileName == "resource0.gsc" && entry.data != gsc)
+                    throw std::runtime_error("TSC/TXT source priority changed");
+                if (entry.fileName.rfind("bad", 0) == 0)
+                    throw std::runtime_error("Failed resource retained its stale target");
+                if (entry.fileName == "FALLBACK.GSC" && entry.data == gsc)
+                    throw std::runtime_error("TXT fallback did not update same-name GSC");
+            }
+            // Recreate the same destination so warnings and paths can compare exactly.
+            fs::remove_all(root);
+            fs::last_write_time(packed, sourceTime);
+            archive.extractToDirectory(root.string(), sourceTime);
+            for (bool tscOutput : {false, true}) {
+                const auto unpackWarnings = unpackDirectoryRecursively(
+                    root.string(), "CP932", tscOutput, workers);
+                if (unpackWarnings.size() != 3)
+                    throw std::runtime_error("Unpacking did not warn and continue after bad resources");
+                if (workers == 1) expectedUnpackWarnings[tscOutput] = unpackWarnings;
+                else if (unpackWarnings != expectedUnpackWarnings[tscOutput])
+                    throw std::runtime_error("Parallel unpacking changed warning order");
+            }
+            std::map<std::string, std::vector<uint8_t>> actualFiles;
+            for (const auto& entry : fs::recursive_directory_iterator(root)) {
+                if (!entry.is_regular_file()) continue;
+                if (fs::last_write_time(entry.path()) != sourceTime)
+                    throw std::runtime_error("Parallel extraction changed timestamp inheritance");
+                actualFiles.emplace(entry.path().lexically_relative(root).string(), readBytes(entry.path()));
+            }
+            if (workers == 1) expectedFiles = actualFiles;
+            else if (actualFiles != expectedFiles)
+                throw std::runtime_error("Parallel extraction changed resource contents or filenames");
+            // Repeated conversion must also reuse upper-case targets from the index.
+            if (!fs::exists(root / "FALLBACK.GSC") || fs::exists(root / "fallback.gsc") ||
+                !fs::exists(root / "PHOTO.wcg") || !fs::exists(root / "nested/scene/background.webp"))
+                throw std::runtime_error("Case-insensitive lookup or nested ordering changed");
+        }
+    }
+    bool rejected = false;
+    try { unpackDirectoryRecursively(root.string(), "CP932", false, MaxConversionWorkers + 1); }
+    catch (const std::runtime_error&) { rejected = true; }
+    if (!rejected) throw std::runtime_error("Invalid worker count accepted");
+}
 
 int main(int argc, char** argv) {
     using namespace liarsoft::gui;
@@ -141,6 +255,17 @@ int main(int argc, char** argv) {
         ConversionOptions unpack;
         unpack.recursive = true;
         unpack.gscToTsc = true;
+        unpack.workers = 2;
+        {
+            auto invalid = unpack;
+            invalid.workers = liarsoft::MaxConversionWorkers + 1;
+            const auto rejectedOutput = directory / "invalid-workers";
+            bool rejected = false;
+            try { convert(datedPath.string(), rejectedOutput.string(), invalid); }
+            catch (const std::runtime_error&) { rejected = true; }
+            if (!rejected || fs::exists(rejectedOutput))
+                throw std::runtime_error("Invalid GUI worker count modified outputs");
+        }
         for (int pass = 0; pass < 2; ++pass) {
             fs::last_write_time(datedPath, originalTime + std::chrono::hours(pass));
             const auto expected = fs::last_write_time(datedPath);
@@ -182,11 +307,13 @@ int main(int argc, char** argv) {
         ConversionOptions recursive;
         recursive.encoding = "CP932";
         recursive.recursive = true;
+        recursive.workers = 4;
         const auto archive = directory / "audio.xfl";
         auto warnings = convert(audioDirectory.string(), archive.string(), recursive);
         const auto entries = liarsoft::XflArchive::fromFile(archive.string()).entries;
         if (warnings.size() != 1 || entries.size() != 1 || entries[0].fileName != "layout.xml")
             throw std::runtime_error("Failed recursive GUI audio included the stale WAV");
+        testParallelConversions(directory, clean, image);
     } catch (const std::exception& error) {
         fs::remove_all(directory);
         std::cerr << error.what() << '\n';

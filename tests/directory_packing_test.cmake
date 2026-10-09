@@ -39,10 +39,18 @@ file(WRITE "${TEST_ROOT}/root/project.cpp" "not-packed")
 file(WRITE "${TEST_ROOT}/root/source.PNG" "not-packed")
 
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
+    COMMAND "${TOOL}" -R -j 1 -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Packing test directory failed: ${error}")
+endif()
+file(SHA256 "${TEST_ROOT}/root.xfl" serial_hash)
+set(serial_warnings "${error}")
+execute_process(COMMAND "${TOOL}" -R --jobs 8 -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+file(SHA256 "${TEST_ROOT}/root.xfl" parallel_hash)
+if(result OR NOT serial_hash STREQUAL parallel_hash OR NOT error STREQUAL serial_warnings)
+    message(FATAL_ERROR "CLI worker selection changed packed bytes or warning order: ${error}")
 endif()
 if(NOT EXISTS "${TEST_ROOT}/root/nested/scene.lwg")
     message(FATAL_ERROR "Nested LWG directory was not packed")
@@ -459,3 +467,15 @@ endif()
 foreach(name IN ITEMS .meta.xml background.lim)
     expect_source_time("${TEST_ROOT}/dated_unpacked/scene.lwg" "${TEST_ROOT}/dated_scene/${name}")
 endforeach()
+# Reject invalid thread counts before touching any input/output.
+foreach(jobs "-1" "65" "abc" "2x" "99999999999999999999999999" "")
+    execute_process(COMMAND "${TOOL}" --jobs "${jobs}" --help
+        RESULT_VARIABLE result ERROR_VARIABLE error)
+    if(NOT result OR NOT error MATCHES "jobs")
+        message(FATAL_ERROR "Invalid thread count was not rejected: '${jobs}' ${error}")
+    endif()
+endforeach()
+execute_process(COMMAND "${TOOL}" -j RESULT_VARIABLE result ERROR_VARIABLE error)
+if(NOT result OR NOT error MATCHES "requires a value")
+    message(FATAL_ERROR "Missing worker argument was not rejected")
+endif()

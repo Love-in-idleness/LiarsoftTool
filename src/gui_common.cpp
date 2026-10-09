@@ -131,17 +131,19 @@ static std::vector<uint8_t> readBinary(const std::string& path) {
 std::vector<std::string> convert(const std::string& inputPath,
                                  const std::string& outputPath,
                                  const ConversionOptions& options) {
+    if (options.workers > liarsoft::MaxConversionWorkers)
+        throw std::runtime_error("Worker count must be between 0 and 64");
     const std::string ext = extension(inputPath);
     std::vector<std::string> warnings;
 
     if (fs::is_directory(inputPath)) {
         if (options.unpackOnly)
             warnings = liarsoft::unpackDirectoryRecursively(
-                inputPath, options.encoding, options.gscToTsc);
+                inputPath, options.encoding, options.gscToTsc, options.workers);
         else
             warnings = liarsoft::packDirectoryToFile(
                 inputPath, outputPath, options.encoding, options.recursive,
-                options.vorbisInWav);
+                options.vorbisInWav, options.workers);
     } else if (ext == ".gsc") {
         if (options.gscToTsc)
             liarsoft::decompileGscToFile(inputPath, outputPath, options.encoding);
@@ -162,7 +164,7 @@ std::vector<std::string> convert(const std::string& inputPath,
             .extractToDirectory(outputPath, fs::last_write_time(inputPath));
         if (options.recursive)
             warnings = liarsoft::unpackDirectoryRecursively(
-                outputPath, options.encoding, options.gscToTsc);
+                outputPath, options.encoding, options.gscToTsc, options.workers);
     } else if (ext == ".lwg") {
         const auto archive = liarsoft::LwgDecoder::decode(
             readBinary(inputPath), options.encoding);
@@ -170,7 +172,7 @@ std::vector<std::string> convert(const std::string& inputPath,
             archive, outputPath, options.encoding, fs::last_write_time(inputPath));
         if (options.recursive)
             warnings = liarsoft::unpackDirectoryRecursively(
-                outputPath, options.encoding, options.gscToTsc);
+                outputPath, options.encoding, options.gscToTsc, options.workers);
     } else if (ext == ".wcg") {
         liarsoft::wcgSavePng(liarsoft::wcgDecode(readBinary(inputPath)), outputPath);
         liarsoft::copyModificationTime(inputPath, outputPath);

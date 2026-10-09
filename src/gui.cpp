@@ -27,6 +27,7 @@ static Gtk::CheckButton* g_packOnlyCheck = nullptr;
 static Gtk::CheckButton* g_unpackOnlyCheck = nullptr;
 static Gtk::CheckButton* g_gscToTxtCheck = nullptr;
 static Gtk::CheckButton* g_vorbisInWavCheck = nullptr;
+static Gtk::SpinButton* g_workersSpin = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
@@ -82,14 +83,14 @@ static void addFiles(const std::vector<std::string>& paths, const std::string& o
 static void convertAll(std::vector<ConversionJob> jobs,
                        const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
-                       bool gscToTsc, bool vorbisInWav) {
+                       bool gscToTsc, bool vorbisInWav, unsigned workers) {
     int total = jobs.size();
     int done = 0;
     int totalWarnings = 0;
     bool hasErrors = false;
     std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
     const liarsoft::gui::ConversionOptions options{
-        encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav};
+        encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav, workers};
 
     for (const auto& job : jobs) {
         const std::string& in = job.inputPath;
@@ -333,6 +334,18 @@ int runGui(int argc, char* argv[]) {
     optionsBar->pack_start(*g_vorbisInWavCheck, false, false);
     mainBox->pack_start(*optionsBar, false, false);
 
+    auto workersBar = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 8));
+    auto workersLabel = Gtk::manage(new Gtk::Label("Threads (0 = auto):"));
+    g_workersSpin = Gtk::manage(new Gtk::SpinButton());
+    g_workersSpin->set_range(0, liarsoft::MaxConversionWorkers);
+    g_workersSpin->set_increments(1, 4);
+    g_workersSpin->set_numeric(true);
+    g_workersSpin->set_value(0);
+    g_workersSpin->set_tooltip_text("Recursive resource conversion: 0 = auto (up to 4), 1 = serial. More threads use more memory.");
+    workersBar->pack_start(*workersLabel, false, false);
+    workersBar->pack_start(*g_workersSpin, false, false);
+    mainBox->pack_start(*workersBar, false, false);
+
     // --- File list ---
     auto scrolled = Gtk::manage(new Gtk::ScrolledWindow());
     scrolled->set_hexpand(true);
@@ -389,6 +402,8 @@ int runGui(int argc, char* argv[]) {
         bool unpackOnly = g_unpackOnlyCheck->get_active();
         bool gscToTsc = !g_gscToTxtCheck->get_active();
         bool vorbisInWav = g_vorbisInWavCheck->get_active();
+        g_workersSpin->update();
+        const unsigned workers = g_workersSpin->get_value_as_int();
         std::vector<ConversionJob> jobs;
         for (const auto& child : g_store->children()) {
             jobs.push_back({
@@ -398,7 +413,7 @@ int runGui(int argc, char* argv[]) {
         }
         g_convertBtn->set_sensitive(false);
         std::thread t(convertAll, std::move(jobs), enc, ref, recursive,
-                      packOnly, unpackOnly, gscToTsc, vorbisInWav);
+                      packOnly, unpackOnly, gscToTsc, vorbisInWav, workers);
         t.detach();
     });
 

@@ -3,6 +3,7 @@ project(LiarsoftTool VERSION 2.2.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+find_package(Threads REQUIRED)
 
 # libvorbisfile provides the same PCM decoder on Linux and Windows.
 find_path(VORBIS_INCLUDE_DIR vorbis/vorbisfile.h)
@@ -214,7 +215,7 @@ endif()
 
 foreach(target liarsofttool liarsofttool-gui gui_common_test archive_test cg_decompress_test)
     if(TARGET ${target})
-        target_link_libraries(${target} PRIVATE WebP::webp)
+        target_link_libraries(${target} PRIVATE WebP::webp Threads::Threads)
     endif()
 endforeach()
 

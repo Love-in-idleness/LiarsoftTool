@@ -10,6 +10,8 @@
 
 namespace liarsoft {
 
+constexpr unsigned MaxConversionWorkers = 64;
+
 /// Whether a regular file may be included while packing a directory.
 /// Supported extensions are matched case-insensitively.
 bool isPackableFile(const std::string& path);
@@ -26,16 +28,18 @@ bool matchesOperationMode(const std::string& path, bool packOnly,
 /// subdirectories are packed from the deepest level upward.
 /// OGG -> WAV decodes to PCM unless vorbisInWav selects compressed wrapping.
 /// Recoverable per-file failures are returned as warnings.
+/// Workers: 0 = automatic (at most four), 1 = serial, up to MaxConversionWorkers.
 std::vector<std::string> packDirectoryToFile(
     const std::string& dirPath, const std::string& outputPath,
     const std::string& encoding, bool recursive = false,
-    bool vorbisInWav = false);
+    bool vorbisInWav = false, unsigned workers = 0);
 
 /// Recursively unpack nested XFL/LWG files and convert extracted resources to
 /// editable formats. Recoverable failures are returned as warnings.
+/// Workers: 0 = automatic (at most four), 1 = serial, up to MaxConversionWorkers.
 std::vector<std::string> unpackDirectoryRecursively(
     const std::string& dirPath, const std::string& encoding,
-    bool gscToTsc = false);
+    bool gscToTsc = false, unsigned workers = 0);
 
 /// Represents a single file entry inside an XFL archive.
 struct XflEntry {

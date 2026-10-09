@@ -29,6 +29,7 @@ static HWND g_hCboEnc, g_hEditRef, g_hEditOutDir, g_hProgress, g_hStatus;
 static HWND g_hLblEnc, g_hLblRef, g_hLblOutDir;
 static HWND g_hChkRecursive, g_hChkPackOnly, g_hChkUnpackOnly, g_hChkGscToTxt;
 static HWND g_hChkVorbisInWav;
+static HWND g_hEditWorkers;
 static std::vector<std::string> g_inputs;
 static std::vector<std::string> g_outputs;
 
@@ -199,11 +200,11 @@ static void rebuildOutputs() {
 static void convertAll(std::vector<ConversionJob> jobs,
                        const std::string& encoding, const std::string& refPath,
                        bool recursive, bool packOnly, bool unpackOnly,
-                       bool gscToTsc, bool vorbisInWav) {
+                       bool gscToTsc, bool vorbisInWav, unsigned workers) {
     bool hasErrors = false;
     std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
     const liarsoft::gui::ConversionOptions options{
-        encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav};
+        encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav, workers};
     const size_t total = jobs.size();
     
     for (size_t i = 0; i < total; ++i) {
@@ -326,13 +327,20 @@ static void onConvert() {
     bool unpackOnly = SendMessage(g_hChkUnpackOnly, BM_GETCHECK, 0, 0) == BST_CHECKED;
     bool gscToTsc = SendMessage(g_hChkGscToTxt, BM_GETCHECK, 0, 0) != BST_CHECKED;
     bool vorbisInWav = SendMessage(g_hChkVorbisInWav, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    BOOL validWorkers = FALSE;
+    const unsigned workers = GetDlgItemInt(g_hWnd, 112, &validWorkers, FALSE);
+    if (!validWorkers || workers > liarsoft::MaxConversionWorkers) {
+        MessageBoxA(g_hWnd, "Threads must be between 0 and 64 (0 = auto, 1 = serial).",
+                    "Invalid thread count", MB_OK | MB_ICONERROR);
+        return;
+    }
     std::vector<ConversionJob> jobs;
     jobs.reserve(g_inputs.size());
     for (size_t i = 0; i < g_inputs.size(); ++i)
         jobs.push_back({g_inputs[i], g_outputs[i]});
     EnableWindow(g_hBtnConvert, FALSE);
     std::thread t(convertAll, std::move(jobs), encoding, refPath, recursive,
-                  packOnly, unpackOnly, gscToTsc, vorbisInWav);
+                  packOnly, unpackOnly, gscToTsc, vorbisInWav, workers);
     t.detach();
 }
 
@@ -401,7 +409,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
             320, 42, 115, 20, hWnd, (HMENU)110, NULL, NULL);
         g_hChkVorbisInWav = CreateWindowA("BUTTON", "Vorbis-in-WAV",
             WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
-            440, 42, 285, 20, hWnd, (HMENU)111, NULL, NULL);
+            440, 42, 140, 20, hWnd, (HMENU)111, NULL, NULL);
+        CreateWindowA("STATIC", "Threads (0=auto):", WS_VISIBLE | WS_CHILD,
+            590, 42, 120, 20, hWnd, NULL, NULL, NULL);
+        g_hEditWorkers = CreateWindowA("EDIT", "0",
+            WS_VISIBLE | WS_CHILD | WS_BORDER | WS_TABSTOP | ES_NUMBER,
+            715, 40, 55, 22, hWnd, (HMENU)112, NULL, NULL);
         
         // --- ListView ---
         g_hListView = CreateWindowA(WC_LISTVIEWA, NULL,
@@ -520,7 +533,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         SetWindowPos(g_hChkPackOnly,   NULL, 110, 42,  95, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkUnpackOnly, NULL, 210, 42, 105, 20, SWP_NOZORDER);
         SetWindowPos(g_hChkGscToTxt,   NULL, 320, 42, 115, 20, SWP_NOZORDER);
-        SetWindowPos(g_hChkVorbisInWav,   NULL, 440, 42, 285, 20, SWP_NOZORDER);
+        SetWindowPos(g_hChkVorbisInWav, NULL, 440, 42, 140, 20, SWP_NOZORDER);
         SetWindowPos(g_hListView, NULL, m, 65, w - 2*m, lvH, SWP_NOZORDER);
 
         // --- Resize ListView columns: Type+Status fixed, Input+Output split 50/50 ---

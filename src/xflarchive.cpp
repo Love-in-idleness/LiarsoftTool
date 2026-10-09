@@ -11,12 +11,16 @@
 #include "wcg_decoder.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <set>
 #include "encoding.h"
 #include <limits>
+#include <map>
+#include <thread>
 
 namespace fs = std::filesystem;
 
@@ -81,113 +85,154 @@ static std::vector<uint8_t> readFile(const fs::path& path) {
     return data;
 }
 
-static fs::path findFile(const fs::path& directory, const std::string& stem,
-                         const std::string& extension) {
-    const auto wantedStem = lower(stem);
-    const auto wantedExt = lower(extension);
-    for (const auto& entry : fs::directory_iterator(directory)) {
-        if (!entry.is_symlink() && entry.is_regular_file() &&
-            lower(entry.path().stem().string()) == wantedStem &&
-            lower(entry.path().extension().string()) == wantedExt)
-            return entry.path();
+struct ConversionGroup {
+    std::vector<fs::path> sources;
+    std::map<std::string, fs::path> files;
+    std::vector<std::string> warnings;
+    std::set<std::string> excluded;
+    std::set<std::string> converted;
+
+    fs::path outputFile(const fs::path& source, const std::string& extension) const {
+        const auto existing = files.find(extension);
+        return existing == files.end()
+            ? source.parent_path() / (source.stem().string() + extension)
+            : existing->second;
     }
-    return {};
-}
 
-static fs::path outputFile(const fs::path& source, const std::string& extension) {
-    auto existing = findFile(source.parent_path(), source.stem().string(), extension);
-    return existing.empty()
-        ? source.parent_path() / (source.stem().string() + extension)
-        : existing;
-}
+    void rememberOutput(const fs::path& target) {
+        std::error_code ec;
+        if (fs::is_regular_file(target, ec) && !fs::is_symlink(target, ec))
+            files.emplace(lower(target.extension().string()), target);
+    }
+};
 
-static std::vector<fs::path> editableFiles(const fs::path& directory) {
-    static constexpr std::array<const char*, 8> extensions = {
-        ".tsc", ".txt", ".ogg", ".png", ".jpg", ".jpeg", ".bmp", ".webp"
-    };
-    std::vector<fs::path> files;
+static std::vector<ConversionGroup> conversionGroups(
+    const fs::path& directory, const std::vector<std::string>& extensions) {
+    std::map<std::string, ConversionGroup> byStem;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (!entry.is_symlink() && entry.is_regular_file()) {
-            auto ext = lower(entry.path().extension().string());
+            const auto ext = lower(entry.path().extension().string());
+            auto& group = byStem[lower(entry.path().stem().string())];
+            group.files.emplace(ext, entry.path());
             if (std::find(extensions.begin(), extensions.end(), ext) != extensions.end())
-                files.push_back(entry.path());
+                group.sources.push_back(entry.path());
         }
     }
-    auto rank = [](const fs::path& path) {
-        const auto ext = lower(path.extension().string());
-        if (ext == ".tsc") return 0;
-        if (ext == ".txt") return 1;
-        if (ext == ".ogg") return 2;
-        if (ext == ".png") return 3;
-        if (ext == ".jpg") return 4;
-        if (ext == ".jpeg") return 5;
-        return ext == ".bmp" ? 6 : 7;
+    auto rank = [&](const fs::path& path) {
+        return std::find(extensions.begin(), extensions.end(),
+                         lower(path.extension().string())) - extensions.begin();
     };
-    std::sort(files.begin(), files.end(), [&](const fs::path& a, const fs::path& b) {
-        const auto aStem = lower(a.stem().string()), bStem = lower(b.stem().string());
-        if (aStem != bStem) return aStem < bStem;
-        return rank(a) < rank(b);
-    });
-    return files;
+    std::vector<ConversionGroup> groups;
+    for (auto& item : byStem) {
+        auto& group = item.second;
+        if (group.sources.empty()) continue;
+        std::sort(group.sources.begin(), group.sources.end(),
+            [&](const fs::path& a, const fs::path& b) {
+                return rank(a) == rank(b) ? a < b : rank(a) < rank(b);
+            });
+        groups.push_back(std::move(group));
+    }
+    return groups;
+}
+
+// Directory traversal waits for each batch: no nested workers or parallel large archives.
+template<class Function>
+static void convertGroups(std::vector<ConversionGroup>& groups, unsigned workers,
+                          Function convert) {
+    if (groups.empty()) return;
+    const auto count = std::min<size_t>(groups.size(), workers ? workers :
+        std::min(4u, std::max(1u, std::thread::hardware_concurrency())));
+    if (count == 1) {
+        for (auto& group : groups) convert(group);
+        return;
+    }
+    std::atomic<size_t> next{0};
+    std::vector<std::exception_ptr> errors(groups.size());
+    auto run = [&] {
+        for (size_t i; (i = next.fetch_add(1)) < groups.size();) {
+            try { convert(groups[i]); }
+            catch (...) { errors[i] = std::current_exception(); }
+        }
+    };
+    std::vector<std::thread> threads;
+    threads.reserve(count - 1);
+    for (size_t i = 1; i < count; ++i) {
+        try { threads.emplace_back(run); }
+        catch (const std::system_error&) { break; } // Keep working if threads are unavailable.
+    }
+    run();
+    for (auto& thread : threads) thread.join();
+    for (const auto& error : errors)
+        if (error) std::rethrow_exception(error);
 }
 
 static void prepareDirectoryForPacking(const fs::path& directory,
                                        const std::string& encoding,
                                        std::set<std::string>& excludedPaths,
                                        std::vector<std::string>& warnings,
-                                       bool vorbisInWav) {
-    std::set<std::string> convertedTargets;
-    for (const auto& source : editableFiles(directory)) {
-        const auto ext = lower(source.extension().string());
-        fs::path target;
-        if (ext == ".tsc" || ext == ".txt") target = outputFile(source, ".gsc");
-        else if (ext == ".ogg") target = outputFile(source, ".wav");
-        else if (ext == ".webp") target = outputFile(source, ".lim");
-        else target = outputFile(source, ".wcg");
+                                       bool vorbisInWav, unsigned workers) {
+    auto groups = conversionGroups(directory,
+        {".tsc", ".txt", ".ogg", ".png", ".jpg", ".jpeg", ".bmp", ".webp"});
+    convertGroups(groups, workers, [&](ConversionGroup& group) {
+        for (const auto& source : group.sources) {
+            const auto ext = lower(source.extension().string());
+            fs::path target;
+            if (ext == ".tsc" || ext == ".txt") target = group.outputFile(source, ".gsc");
+            else if (ext == ".ogg") target = group.outputFile(source, ".wav");
+            else if (ext == ".webp") target = group.outputFile(source, ".lim");
+            else target = group.outputFile(source, ".wcg");
 
-        const auto targetKey = normalized(target);
-        if (convertedTargets.count(targetKey)) {
-            warnings.push_back("Skipped duplicate source '" + source.string() +
-                               "' for '" + target.string() + "'");
-            continue;
-        }
-
-        try {
-            if (ext == ".tsc") {
-                restoreGscFromTscFile(source.string(), target.string(), encoding);
-            } else if (ext == ".txt") {
-                if (!fs::is_regular_file(target))
-                    throw std::runtime_error("same-name reference GSC not found");
-                TransFile::fromFile(source.string()).toGsc(target.string(), encoding)
-                    .save(target.string());
-            } else if (ext == ".ogg") {
-                WavOggExtractor::convertToFile(source.string(), target.string(), vorbisInWav);
-            } else if (ext == ".webp") {
-                writeFileIfChanged(target.string(), limEncode(webpDecode(readFile(source))));
-            } else {
-                int width, height, channels;
-                unsigned char* pixels = stbi_load(source.string().c_str(), &width,
-                                                  &height, &channels, 4);
-                if (!pixels)
-                    throw std::runtime_error("failed to load image");
-                std::vector<uint8_t> wcg;
-                try {
-                    wcg = wcgEncode(pixels, static_cast<uint32_t>(width),
-                                    static_cast<uint32_t>(height));
-                } catch (...) {
-                    stbi_image_free(pixels);
-                    throw;
-                }
-                stbi_image_free(pixels);
-
-                writeFileIfChanged(target.string(), wcg);
+            const auto targetKey = normalized(target);
+            if (group.converted.count(targetKey)) {
+                group.warnings.push_back("Skipped duplicate source '" + source.string() +
+                                         "' for '" + target.string() + "'");
+                continue;
             }
-            convertedTargets.insert(targetKey);
-            excludedPaths.erase(targetKey);
-        } catch (const std::exception& e) {
-            excludedPaths.insert(targetKey);
-            warnings.push_back("Skipped '" + source.string() + "': " + e.what());
+
+            try {
+                if (ext == ".tsc") {
+                    restoreGscFromTscFile(source.string(), target.string(), encoding);
+                } else if (ext == ".txt") {
+                    if (!fs::is_regular_file(target))
+                        throw std::runtime_error("same-name reference GSC not found");
+                    TransFile::fromFile(source.string()).toGsc(target.string(), encoding)
+                        .save(target.string());
+                } else if (ext == ".ogg") {
+                    WavOggExtractor::convertToFile(source.string(), target.string(), vorbisInWav);
+                } else if (ext == ".webp") {
+                    writeFileIfChanged(target.string(), limEncode(webpDecode(readFile(source))));
+                } else {
+                    int width, height, channels;
+                    unsigned char* pixels = stbi_load(source.string().c_str(), &width,
+                                                      &height, &channels, 4);
+                    if (!pixels)
+                        throw std::runtime_error("failed to load image");
+                    std::vector<uint8_t> wcg;
+                    try {
+                        wcg = wcgEncode(pixels, static_cast<uint32_t>(width),
+                                        static_cast<uint32_t>(height));
+                    } catch (...) {
+                        stbi_image_free(pixels);
+                        throw;
+                    }
+                    stbi_image_free(pixels);
+
+                    writeFileIfChanged(target.string(), wcg);
+                }
+                group.converted.insert(targetKey);
+                group.excluded.erase(targetKey);
+            } catch (const std::exception& e) {
+                group.excluded.insert(targetKey);
+                group.warnings.push_back("Skipped '" + source.string() + "': " + e.what());
+            }
+            group.rememberOutput(target);
         }
+    });
+    for (const auto& group : groups) {
+        for (const auto& target : group.converted)
+            excludedPaths.erase(target);
+        excludedPaths.insert(group.excluded.begin(), group.excluded.end());
+        warnings.insert(warnings.end(), group.warnings.begin(), group.warnings.end());
     }
 }
 
@@ -220,7 +265,7 @@ static void packSubdirectories(const fs::path& directory,
                                const std::string& encoding,
                                std::set<std::string>& excludedPaths,
                                std::vector<std::string>& warnings,
-                               bool vorbisInWav) {
+                               bool vorbisInWav, unsigned workers) {
     std::vector<fs::path> subdirectories;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (!entry.is_symlink() && entry.is_directory())
@@ -230,9 +275,9 @@ static void packSubdirectories(const fs::path& directory,
 
     for (const auto& subdirectory : subdirectories) {
         packSubdirectories(subdirectory, encoding, excludedPaths, warnings,
-                           vorbisInWav);
+                           vorbisInWav, workers);
         prepareDirectoryForPacking(subdirectory, encoding, excludedPaths, warnings,
-                                   vorbisInWav);
+                                   vorbisInWav, workers);
         const bool isLwg = isLwgDirectory(subdirectory.string());
         fs::path output = subdirectory;
         output += isLwg ? ".lwg" : ".xfl";
@@ -253,7 +298,9 @@ static void packSubdirectories(const fs::path& directory,
 
 std::vector<std::string> packDirectoryToFile(
     const std::string& dirPath, const std::string& outputPath,
-    const std::string& encoding, bool recursive, bool vorbisInWav) {
+    const std::string& encoding, bool recursive, bool vorbisInWav, unsigned workers) {
+    if (workers > MaxConversionWorkers)
+        throw std::runtime_error("Worker count must be between 0 and 64");
     if (!fs::is_directory(dirPath))
         throw std::runtime_error("Directory not found: " + dirPath);
 
@@ -262,9 +309,9 @@ std::vector<std::string> packDirectoryToFile(
     excludedPaths.insert(normalized(outputPath));
     if (recursive) {
         packSubdirectories(dirPath, encoding, excludedPaths, warnings,
-                           vorbisInWav);
+                           vorbisInWav, workers);
         prepareDirectoryForPacking(dirPath, encoding, excludedPaths, warnings,
-                                   vorbisInWav);
+                                   vorbisInWav, workers);
     }
     packOneDirectory(dirPath, outputPath, encoding, excludedPaths);
     return warnings;
@@ -272,7 +319,7 @@ std::vector<std::string> packDirectoryToFile(
 
 static void unpackDirectory(const fs::path& directory, const std::string& encoding,
                             unsigned depth, std::vector<std::string>& warnings,
-                            bool gscToTsc) {
+                            bool gscToTsc, unsigned workers) {
     // ponytail: depth cap prevents malicious self-nesting; raise it if real
     // archives are ever observed deeper than 32 levels.
     if (depth > 32) {
@@ -319,62 +366,53 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
     }
     std::sort(subdirectories.begin(), subdirectories.end());
     for (const auto& subdirectory : subdirectories)
-        unpackDirectory(subdirectory, encoding, depth + 1, warnings, gscToTsc);
+        unpackDirectory(subdirectory, encoding, depth + 1, warnings, gscToTsc, workers);
 
-    struct Conversion { fs::path source; int rank; };
-    std::vector<Conversion> conversions;
-    for (const auto& entry : fs::directory_iterator(directory)) {
-        if (entry.is_symlink() || !entry.is_regular_file()) continue;
-        const auto ext = lower(entry.path().extension().string());
-        int rank = ext == ".gsc" ? 0 : ext == ".wcg" ? 1 :
-                   ext == ".lim" ? 2 : ext == ".wav" ? 3 : -1;
-        if (rank >= 0) conversions.push_back({entry.path(), rank});
-    }
-    std::sort(conversions.begin(), conversions.end(), [](const Conversion& a,
-                                                          const Conversion& b) {
-        auto aStem = lower(a.source.stem().string());
-        auto bStem = lower(b.source.stem().string());
-        if (aStem != bStem) return aStem < bStem;
-        return a.rank < b.rank;
-    });
-
-    for (const auto& conversion : conversions) {
-        const auto& source = conversion.source;
-        const auto ext = lower(source.extension().string());
-        auto target = outputFile(source, ext == ".gsc" ?
-                                         (gscToTsc ? ".tsc" : ".txt") :
-                                         ext == ".wav" ? ".ogg" :
-                                         ext == ".lim" ? ".webp" : ".png");
-        try {
-            if (ext == ".gsc") {
-                if (gscToTsc) {
-                    decompileGscToFile(source.string(), target.string(), encoding);
-                } else {
-                    auto gsc = GscFile::fromFile(source.string(), encoding);
-                    TransFile::fromGsc(gsc).save(target.string());
+    auto groups = conversionGroups(directory, {".gsc", ".wcg", ".lim", ".wav"});
+    convertGroups(groups, workers, [&](ConversionGroup& group) {
+        for (const auto& source : group.sources) {
+            const auto ext = lower(source.extension().string());
+            auto target = group.outputFile(source, ext == ".gsc" ?
+                                             (gscToTsc ? ".tsc" : ".txt") :
+                                             ext == ".wav" ? ".ogg" :
+                                             ext == ".lim" ? ".webp" : ".png");
+            try {
+                if (ext == ".gsc") {
+                    if (gscToTsc) {
+                        decompileGscToFile(source.string(), target.string(), encoding);
+                    } else {
+                        auto gsc = GscFile::fromFile(source.string(), encoding);
+                        TransFile::fromGsc(gsc).save(target.string());
+                        copyModificationTime(source.string(), target.string());
+                    }
+                } else if (ext == ".wcg") {
+                    wcgSavePng(wcgDecode(readFile(source)), target.string());
                     copyModificationTime(source.string(), target.string());
+                } else if (ext == ".lim") {
+                    limSaveWebp(limDecode(readFile(source)), target.string());
+                    copyModificationTime(source.string(), target.string());
+                } else {
+                    WavOggExtractor::extractToFile(source.string(), target.string());
                 }
-            } else if (ext == ".wcg") {
-                wcgSavePng(wcgDecode(readFile(source)), target.string());
-                copyModificationTime(source.string(), target.string());
-            } else if (ext == ".lim") {
-                limSaveWebp(limDecode(readFile(source)), target.string());
-                copyModificationTime(source.string(), target.string());
-            } else {
-                WavOggExtractor::extractToFile(source.string(), target.string());
+            } catch (const std::exception& e) {
+                group.warnings.push_back("Skipped '" + source.string() + "': " + e.what());
             }
-        } catch (const std::exception& e) {
-            warnings.push_back("Skipped '" + source.string() + "': " + e.what());
+            group.rememberOutput(target);
         }
-    }
+    });
+    for (const auto& group : groups)
+        warnings.insert(warnings.end(), group.warnings.begin(), group.warnings.end());
 }
 
 std::vector<std::string> unpackDirectoryRecursively(
-    const std::string& dirPath, const std::string& encoding, bool gscToTsc) {
+    const std::string& dirPath, const std::string& encoding, bool gscToTsc,
+    unsigned workers) {
+    if (workers > MaxConversionWorkers)
+        throw std::runtime_error("Worker count must be between 0 and 64");
     if (!fs::is_directory(dirPath))
         throw std::runtime_error("Directory not found: " + dirPath);
     std::vector<std::string> warnings;
-    unpackDirectory(dirPath, encoding, 0, warnings, gscToTsc);
+    unpackDirectory(dirPath, encoding, 0, warnings, gscToTsc, workers);
     return warnings;
 }
 

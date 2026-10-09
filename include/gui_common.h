@@ -12,6 +12,7 @@ struct ConversionOptions {
     bool gscToTsc = false;
     bool unpackOnly = false;
     bool vorbisInWav = false;
+    unsigned workers = 0;
 };
 
 struct ConversionDiagnostic {
