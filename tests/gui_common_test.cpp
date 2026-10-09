@@ -4,6 +4,9 @@
 #include "fileio.h"
 #include "wav_ogg.h"
 #include "vorbis_fixture.h"
+#include "gsc_decompiler.h"
+#include "lwg_decoder.h"
+#include "wcg_decoder.h"
 
 #include <cassert>
 #include <chrono>
@@ -11,7 +14,7 @@
 #include <fstream>
 #include <iostream>
 
-int main() {
+int main(int argc, char** argv) {
     using namespace liarsoft::gui;
     namespace fs = std::filesystem;
 
@@ -49,13 +52,19 @@ int main() {
         const auto rebuilt = directory / "rebuilt.lim";
         const liarsoft::LimImage image{2, 1, {17, 34, 51, 0, 67, 89, 123, 127}};
         liarsoft::writeFileIfChanged(original.string(), liarsoft::limEncode(image));
+        fs::last_write_time(original, fs::file_time_type::clock::now() - std::chrono::hours(48));
+        const auto originalTime = fs::last_write_time(original);
         const ConversionOptions options;
         convert(original.string(), webp.string(), options);
         const auto time = fs::last_write_time(webp);
+        if (time != originalTime)
+            throw std::runtime_error("Decoded WebP did not inherit LIM modification time");
         convert(original.string(), webp.string(), options);
         if (fs::last_write_time(webp) != time)
             throw std::runtime_error("Identical WebP was rewritten");
         convert(webp.string(), rebuilt.string(), options);
+        if (fs::last_write_time(rebuilt) == originalTime)
+            throw std::runtime_error("Packing unexpectedly inherited extraction timestamps");
         std::ifstream input(rebuilt, std::ios::binary);
         const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
         if (liarsoft::limDecode(bytes).pixels != image.pixels)
@@ -98,6 +107,71 @@ int main() {
         const std::vector<uint8_t> wrappedBytes((std::istreambuf_iterator<char>(wrappedInput)), {});
         if (liarsoft::WavOggExtractor::extract(wrappedBytes) != clean)
             throw std::runtime_error("GUI compressed wrapping required a reference or changed Ogg");
+
+        // A dated outer archive must propagate its time through every unpacking layer.
+        const auto sceneSource = directory / "scene_source";
+        fs::create_directory(sceneSource);
+        liarsoft::writeTextFileIfChanged((sceneSource / ".meta.xml").string(),
+            "<Canvas><Width>2</Width><Height>1</Height><Items>"
+            "<Item x=\"0\" y=\"0\" flag=\"40\">background</Item></Items></Canvas>");
+        liarsoft::writeFileIfChanged((sceneSource / "background.lim").string(),
+                                    liarsoft::limEncode(image));
+        liarsoft::XflArchive nested;
+        nested.encoding = "CP932";
+        nested.entries = {{"layout.xml", {'x'}}};
+        liarsoft::XflArchive dated;
+        dated.encoding = "CP932";
+        dated.entries = {
+            {"nested.xfl", nested.toBytes()},
+            {"scene.lwg", liarsoft::LwgPacker::pack(sceneSource.string(), "CP932")},
+            {"image.wcg", liarsoft::wcgEncode(image.pixels, image.width, image.height)},
+            {"image.lim", liarsoft::limEncode(image)},
+            {"voice.wav", liarsoft::WavOggExtractor::embed(clean)},
+            {"script.gsc", liarsoft::restoreGscFromTsc(
+                ";@gsc-byte-format modern-36\n;@gsc-schema modern\n"
+                "*TXT 0 0 0 0 \"\" \"Text\" 0\n*end\n")}
+        };
+        const auto datedPath = directory / "dated.xfl";
+        dated.save(datedPath.string());
+        const auto output = directory / "dated";
+        fs::create_directory(output);
+        const auto unrelated = output / "keep.txt";
+        liarsoft::writeTextFileIfChanged(unrelated.string(), "user file");
+        const auto unrelatedTime = fs::last_write_time(unrelated);
+        ConversionOptions unpack;
+        unpack.recursive = true;
+        unpack.gscToTsc = true;
+        for (int pass = 0; pass < 2; ++pass) {
+            fs::last_write_time(datedPath, originalTime + std::chrono::hours(pass));
+            const auto expected = fs::last_write_time(datedPath);
+            if (!convert(datedPath.string(), output.string(), unpack).empty())
+                throw std::runtime_error("Dated archive unpacking failed");
+            for (const auto* name : {"nested.xfl", "nested/layout.xml", "scene.lwg",
+                     "scene/.meta.xml", "scene/background.lim", "scene/background.webp",
+                     "image.wcg", "image.png", "image.lim", "image.webp", "voice.wav",
+                     "voice.ogg", "script.gsc", "script.tsc"}) {
+                if (fs::last_write_time(output / name) != expected)
+                    throw std::runtime_error(std::string("Unpacked timestamp mismatch: ") + name);
+            }
+            if (fs::last_write_time(unrelated) != unrelatedTime)
+                throw std::runtime_error("Unpacking retimed an unrelated existing file");
+        }
+        convert((output / "script.gsc").string(), (output / "script.txt").string(), options);
+        if (fs::last_write_time(output / "script.txt") != fs::last_write_time(datedPath))
+            throw std::runtime_error("Extracted TXT timestamp mismatch");
+        convert((output / "scene.lwg").string(), (directory / "scene_direct").string(), options);
+        if (fs::last_write_time(directory / "scene_direct/.meta.xml") != fs::last_write_time(datedPath))
+            throw std::runtime_error("Direct LWG extraction timestamp mismatch");
+        const auto staleOggTime = fs::last_write_time(ogg);
+        convert(wav.string(), ogg.string(), options); // PCM: no extraction, leave the old Ogg alone.
+        if (fs::last_write_time(ogg) != staleOggTime)
+            throw std::runtime_error("Retained PCM retimed an unrelated Ogg");
+        if (argc == 2) {
+            const fs::path fixtures(argv[1]);
+            fs::create_directories(fixtures);
+            fs::copy_file(datedPath, fixtures / "dated.xfl", fs::copy_options::overwrite_existing);
+            liarsoft::copyModificationTime(datedPath.string(), (fixtures / "dated.xfl").string());
+        }
 
         const auto audioDirectory = directory / "audio";
         fs::create_directory(audioDirectory);

@@ -359,6 +359,7 @@ bool WavOggExtractor::extractToFile(const std::string& wavPath, const std::strin
         throw std::runtime_error("No embedded Ogg Vorbis found in: " + wavPath);
 
     writeFileIfChanged(oggPath, ogg);
+    copyModificationTime(wavPath, oggPath);
     return true;
 }
 

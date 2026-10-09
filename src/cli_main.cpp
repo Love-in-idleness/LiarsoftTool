@@ -225,6 +225,7 @@ static bool processOne(const std::string& inputPath,
             auto trans = liarsoft::TransFile::fromGsc(gsc);
             if (out.empty()) out = replaceExtension(inputPath, ".txt");
             trans.save(out);
+            liarsoft::copyModificationTime(inputPath, out);
             std::cout << "Extracted " << trans.strings.size() << " strings to: " << out << std::endl;
         }
 
@@ -248,7 +249,7 @@ static bool processOne(const std::string& inputPath,
         std::cout << "Reading XFL: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
         auto archive = liarsoft::XflArchive::fromFile(inputPath, encoding);
         if (out.empty()) out = replaceExtension(inputPath, "");
-        archive.extractToDirectory(out);
+        archive.extractToDirectory(out, fs::last_write_time(inputPath));
         if (recursive)
             printWarnings(liarsoft::unpackDirectoryRecursively(
                 out, encoding, gscToTsc));
@@ -259,7 +260,8 @@ static bool processOne(const std::string& inputPath,
         auto raw = readFile(inputPath);
         auto archive = liarsoft::LwgDecoder::decode(raw, encoding);
         if (out.empty()) out = replaceExtension(inputPath, "");
-        liarsoft::LwgDecoder::extractToDirectory(archive, out, encoding);
+        liarsoft::LwgDecoder::extractToDirectory(archive, out, encoding,
+                                                fs::last_write_time(inputPath));
         if (recursive)
             printWarnings(liarsoft::unpackDirectoryRecursively(
                 out, encoding, gscToTsc));
@@ -285,6 +287,7 @@ static bool processOne(const std::string& inputPath,
         auto img = liarsoft::wcgDecode(readFile(inputPath));
         if (out.empty()) out = replaceExtension(inputPath, ".png");
         liarsoft::wcgSavePng(img, out);
+        liarsoft::copyModificationTime(inputPath, out);
         std::cout << "Saved " << img.width << "x" << img.height << " PNG to: " << out << std::endl;
 
     } else if (ext == ".lim") {
@@ -292,6 +295,7 @@ static bool processOne(const std::string& inputPath,
         auto img = liarsoft::limDecode(readFile(inputPath));
         if (out.empty()) out = replaceExtension(inputPath, ".webp");
         liarsoft::limSaveWebp(img, out);
+        liarsoft::copyModificationTime(inputPath, out);
         std::cout << "Saved " << img.width << "x" << img.height << " WebP to: " << out << std::endl;
 
     } else if (ext == ".webp") {

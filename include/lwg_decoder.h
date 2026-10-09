@@ -5,6 +5,8 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <optional>
 
 namespace liarsoft {
 
@@ -59,8 +61,10 @@ public:
     /// Extract non-empty payloads and write .meta.xml for every entry.
     /// Zero-data entries use empty="1" so repacking preserves them even when
     /// another image entry has the same name.
+    /// Payloads and .meta.xml inherit sourceTime when supplied.
     static void extractToDirectory(const Archive& archive, const std::string& dirPath,
-                                   const std::string& encoding);
+                                   const std::string& encoding,
+                                   std::optional<std::filesystem::file_time_type> sourceTime = {});
 };
 
 /// Pack a directory (with .meta.xml) into an LWG archive.

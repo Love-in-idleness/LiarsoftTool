@@ -215,7 +215,9 @@ GUI 勾选 **Vorbis-in-WAV** 或 CLI 添加 `--vorbis-in-wav`，改为保留完�
 
 两种方式都不读取或依赖原 WAV，`-r` 仅用于 TXT→GSC。输入须为完整、连续的单流 Ogg Vorbis；损坏或不支持的输入报错且不覆盖已有目标。递归封包时警告、继续处理其他文件，并排除该失败项的旧目标。原游戏实际播放仍由用户验收，不承诺原 WAV 容器逐字节还原。旧实验性开关已移除。
 
-> 提示：所有输出文件采用"内容相同则不重写"策略——若生成结果与磁盘上已有文件二进制完全一致，将跳过写入以保留原文件的修改时间，方便增量/批量转换时避免无关文件被标记为已修改。
+> 提示：输出内容相同则不重写。解包/解码产生的文件会同步为直接来源文件的修改时间，即使内容相同也会同步时间；封包/编码方向仍保留内容相同的已有输出时间。
+
+XFL/LWG 不保存条目的原始修改时间，解出的所有文件（含 `.meta.xml`）继承输入封包的修改时间；递归时向下传递到内层封包及 PNG、WebP、OGG、TXT/TSC。单独执行 GSC/WCG/LIM/WAV 解码也继承输入时间。不更改源文件、目录时间或输出目录内与本次解包无关的文件；标准 PCM WAV 不产生新 OGG，不改动已有同名 OGG。时间无法读取或设置时报告错误（递归时作为警告），不静默忽略。
 
 目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写），PNG 等工程文件不会直接进入封包。默认只处理指定目录或封包的当前层。
 
@@ -456,10 +458,17 @@ inputs fail before overwriting an output; recursive packing warns, continues,
 and excludes that failed item's old target. In-game playback still needs user
 validation; original WAV container bytes are not guaranteed. The experimental switch was removed.
 
-> Tip: all outputs use a "skip if identical" policy — when the generated
-> result is byte-identical to the file already on disk, the write is skipped
-> so the existing file's modification time is preserved. This keeps
-> incremental/batch conversions from touching unchanged files.
+> Tip: identical output content is not rewritten. Unpacking/decoding synchronizes
+> the output modification time with its immediate source even when content is
+> identical; packing/encoding still preserves the time of identical existing outputs.
+
+XFL/LWG do not store per-entry modification times. Extracted files, including
+`.meta.xml`, inherit the input archive's time. Recursive extraction propagates it
+through nested archives and generated PNG, WebP, OGG and TXT/TSC files. Standalone
+GSC/WCG/LIM/WAV decoding also inherits the input time. Sources, directory times
+and unrelated files in the output directory are not changed. Retained PCM WAV
+does not create or retime an existing OGG. Timestamp read/write failures are
+reported as errors (warnings during recursive processing), never silently ignored.
 
 Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive); project files such as PNG are never stored directly. By default, only the current level of the selected directory or archive is processed.
 

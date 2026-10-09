@@ -1,9 +1,16 @@
 #include "fileio.h"
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include <stdexcept>
 
 namespace liarsoft {
+
+void copyModificationTime(const std::string& source, const std::string& output) {
+    const auto time = std::filesystem::last_write_time(source);
+    if (std::filesystem::last_write_time(output) != time)
+        std::filesystem::last_write_time(output, time);
+}
 
 namespace {
 

@@ -25,6 +25,10 @@ bool writeFileIfChanged(const std::string& path, const std::vector<uint8_t>& dat
 /// regenerating an identical text file still preserves its modification time.
 bool writeTextFileIfChanged(const std::string& path, const std::string& text);
 
+/// Synchronize an extracted file's modification time with its source.
+/// Also applies when identical output content was not rewritten.
+void copyModificationTime(const std::string& source, const std::string& output);
+
 } // namespace liarsoft
 
 #endif // LIARSOFTTOOL_FILEIO_H

@@ -406,3 +406,56 @@ execute_process(
 if(result OR EXISTS "${TEST_ROOT}/both_enabled.xfl")
     message(FATAL_ERROR "Both operation filters enabled still did work: ${error}")
 endif()
+
+# Use an archive dated two days ago, not freshly written fixtures whose times
+# could accidentally agree even without timestamp inheritance.
+execute_process(COMMAND "${GUI_TEST}" "${TEST_ROOT}/timestamps"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result)
+    message(FATAL_ERROR "Creating dated archive failed: ${error}")
+endif()
+function(expect_source_time source output)
+    file(TIMESTAMP "${source}" source_time "%s" UTC)
+    file(TIMESTAMP "${output}" output_time "%s" UTC)
+    if(source_time STREQUAL "" OR NOT output_time STREQUAL source_time)
+        message(FATAL_ERROR "Modification time not inherited: ${source} -> ${output}")
+    endif()
+endfunction()
+execute_process(COMMAND "${TOOL}" -R --gsc-to-tsc
+    -o "${TEST_ROOT}/dated_unpacked" "${TEST_ROOT}/timestamps/dated.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result)
+    message(FATAL_ERROR "Recursive dated archive extraction failed: ${error}")
+endif()
+foreach(name IN ITEMS nested.xfl nested/layout.xml scene.lwg scene/.meta.xml
+        scene/background.lim scene/background.webp image.wcg image.png image.lim
+        image.webp voice.wav voice.ogg script.gsc script.tsc)
+    expect_source_time("${TEST_ROOT}/timestamps/dated.xfl" "${TEST_ROOT}/dated_unpacked/${name}")
+endforeach()
+foreach(pair IN ITEMS "wcg;png" "lim;webp" "wav;ogg" "gsc;txt")
+    list(GET pair 0 source_ext)
+    list(GET pair 1 output_ext)
+    if(source_ext STREQUAL "wav")
+        set(stem voice)
+    elseif(source_ext STREQUAL "gsc")
+        set(stem script)
+    else()
+        set(stem image)
+    endif()
+    set(source "${TEST_ROOT}/dated_unpacked/${stem}.${source_ext}")
+    set(output "${TEST_ROOT}/timestamps/direct.${output_ext}")
+    execute_process(COMMAND "${TOOL}" -o "${output}" "${source}"
+        RESULT_VARIABLE result ERROR_VARIABLE error)
+    if(result)
+        message(FATAL_ERROR "Direct ${source_ext} extraction failed: ${error}")
+    endif()
+    expect_source_time("${source}" "${output}")
+endforeach()
+execute_process(COMMAND "${TOOL}" -o "${TEST_ROOT}/dated_scene"
+    "${TEST_ROOT}/dated_unpacked/scene.lwg" RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result)
+    message(FATAL_ERROR "Direct dated LWG extraction failed: ${error}")
+endif()
+foreach(name IN ITEMS .meta.xml background.lim)
+    expect_source_time("${TEST_ROOT}/dated_unpacked/scene.lwg" "${TEST_ROOT}/dated_scene/${name}")
+endforeach()

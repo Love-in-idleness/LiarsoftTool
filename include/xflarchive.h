@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <filesystem>
+#include <optional>
 
 namespace liarsoft {
 
@@ -91,8 +93,9 @@ public:
 
     // ---- Unpack ----
 
-    /// Extract all entries to a directory.
-    void extractToDirectory(const std::string& dirPath) const;
+    /// Extract all entries, inheriting the source file's time when supplied.
+    void extractToDirectory(const std::string& dirPath,
+        std::optional<std::filesystem::file_time_type> sourceTime = {}) const;
 
 private:
     static void createDirectory(const std::string& path);

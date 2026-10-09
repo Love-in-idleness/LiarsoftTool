@@ -1206,6 +1206,7 @@ void decompileGscToFile(const std::string& inputPath,
     const auto output = decompileGsc(inputPath, encoding);
     writeFileIfChanged(outputPath,
         reinterpret_cast<const uint8_t*>(output.data()), output.size());
+    copyModificationTime(inputPath, outputPath);
 }
 
 void restoreGscFromTscFile(const std::string& inputPath,

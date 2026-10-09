@@ -160,12 +160,13 @@ LwgDecoder::Archive LwgDecoder::decode(const std::vector<uint8_t>& data,
 }
 
 void LwgDecoder::extractToDirectory(const Archive& archive, const std::string& dirPath,
-                                     const std::string& encoding) {
+                                     const std::string& encoding,
+                                     std::optional<fs::file_time_type> sourceTime) {
     std::error_code ec;
     fs::create_directories(dirPath, ec);
     if (ec) throw std::runtime_error("Cannot create directory: " + dirPath);
 
-    // Write .meta.xml (identical content is left untouched, mtime preserved)
+    // Keep metadata for every entry, including entries without image payloads.
     {
         std::string meta;
         meta += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
@@ -185,14 +186,19 @@ void LwgDecoder::extractToDirectory(const Archive& archive, const std::string& d
         meta += "  </Items>\n";
         meta += "</Canvas>\n";
         writeTextFileIfChanged(dirPath + "/.meta.xml", meta);
+        const auto path = fs::path(dirPath) / ".meta.xml";
+        if (sourceTime && fs::last_write_time(path) != *sourceTime)
+            fs::last_write_time(path, *sourceTime);
     }
 
-    // Extract files (identical content is left untouched, mtime preserved)
+    // Skip identical payloads, but still synchronize extraction timestamps.
     for (const auto& entry : archive.entries) {
         if (entry.data.empty()) continue;
         std::string ext = guessExt(entry.data);
         fs::path outPath = fs::path(dirPath) / (sanitizeFilename(entry.name) + ext);
         writeFileIfChanged(outPath.string(), entry.data);
+        if (sourceTime && fs::last_write_time(outPath) != *sourceTime)
+            fs::last_write_time(outPath, *sourceTime);
     }
 }
 

@@ -206,6 +206,7 @@ if(BUILD_TESTING)
             -DTOOL=$<TARGET_FILE:liarsofttool>
             -DAUDIO_TEST=$<TARGET_FILE:wav_ogg_test>
             -DIMAGE_TEST=$<TARGET_FILE:cg_decompress_test>
+            -DGUI_TEST=$<TARGET_FILE:gui_common_test>
             -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/directory_packing_test
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/directory_packing_test.cmake)

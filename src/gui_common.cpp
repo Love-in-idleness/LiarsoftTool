@@ -145,9 +145,11 @@ std::vector<std::string> convert(const std::string& inputPath,
     } else if (ext == ".gsc") {
         if (options.gscToTsc)
             liarsoft::decompileGscToFile(inputPath, outputPath, options.encoding);
-        else
+        else {
             liarsoft::TransFile::fromGsc(
                 liarsoft::GscFile::fromFile(inputPath, options.encoding)).save(outputPath);
+            liarsoft::copyModificationTime(inputPath, outputPath);
+        }
     } else if (ext == ".tsc") {
         liarsoft::restoreGscFromTscFile(inputPath, outputPath, options.encoding);
     } else if (ext == ".txt") {
@@ -157,7 +159,7 @@ std::vector<std::string> convert(const std::string& inputPath,
             .toGsc(reference, options.encoding).save(outputPath);
     } else if (ext == ".xfl") {
         liarsoft::XflArchive::fromFile(inputPath, options.encoding)
-            .extractToDirectory(outputPath);
+            .extractToDirectory(outputPath, fs::last_write_time(inputPath));
         if (options.recursive)
             warnings = liarsoft::unpackDirectoryRecursively(
                 outputPath, options.encoding, options.gscToTsc);
@@ -165,14 +167,16 @@ std::vector<std::string> convert(const std::string& inputPath,
         const auto archive = liarsoft::LwgDecoder::decode(
             readBinary(inputPath), options.encoding);
         liarsoft::LwgDecoder::extractToDirectory(
-            archive, outputPath, options.encoding);
+            archive, outputPath, options.encoding, fs::last_write_time(inputPath));
         if (options.recursive)
             warnings = liarsoft::unpackDirectoryRecursively(
                 outputPath, options.encoding, options.gscToTsc);
     } else if (ext == ".wcg") {
         liarsoft::wcgSavePng(liarsoft::wcgDecode(readBinary(inputPath)), outputPath);
+        liarsoft::copyModificationTime(inputPath, outputPath);
     } else if (ext == ".lim") {
         liarsoft::limSaveWebp(liarsoft::limDecode(readBinary(inputPath)), outputPath);
+        liarsoft::copyModificationTime(inputPath, outputPath);
     } else if (ext == ".webp") {
         liarsoft::writeFileIfChanged(outputPath,
             liarsoft::limEncode(liarsoft::webpDecode(readBinary(inputPath))));

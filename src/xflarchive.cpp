@@ -300,10 +300,11 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
         try {
             if (lower(archivePath.extension().string()) == ".xfl") {
                 XflArchive::fromFile(archivePath.string(), encoding)
-                    .extractToDirectory(target.string());
+                    .extractToDirectory(target.string(), fs::last_write_time(archivePath));
             } else {
                 auto archive = LwgDecoder::decode(readFile(archivePath), encoding);
-                LwgDecoder::extractToDirectory(archive, target.string(), encoding);
+                LwgDecoder::extractToDirectory(archive, target.string(), encoding,
+                                               fs::last_write_time(archivePath));
             }
         } catch (const std::exception& e) {
             warnings.push_back("Skipped archive '" + archivePath.string() +
@@ -351,11 +352,14 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
                 } else {
                     auto gsc = GscFile::fromFile(source.string(), encoding);
                     TransFile::fromGsc(gsc).save(target.string());
+                    copyModificationTime(source.string(), target.string());
                 }
             } else if (ext == ".wcg") {
                 wcgSavePng(wcgDecode(readFile(source)), target.string());
+                copyModificationTime(source.string(), target.string());
             } else if (ext == ".lim") {
                 limSaveWebp(limDecode(readFile(source)), target.string());
+                copyModificationTime(source.string(), target.string());
             } else {
                 WavOggExtractor::extractToFile(source.string(), target.string());
             }
@@ -589,14 +593,17 @@ std::vector<uint8_t> XflArchive::toBytes() const {
 
 // ---- Unpack ----
 
-void XflArchive::extractToDirectory(const std::string& dirPath) const {
+void XflArchive::extractToDirectory(const std::string& dirPath,
+    std::optional<fs::file_time_type> sourceTime) const {
     for (const auto& entry : entries) checkArchiveName(entry.fileName);
     createDirectory(dirPath);
 
     for (const auto& entry : entries) {
         fs::path outPath = fs::path(dirPath) / entry.fileName;
-        // Identical content already on disk is left untouched (mtime preserved).
+        // Skip identical payloads, but still synchronize extraction timestamps.
         writeFileIfChanged(outPath.string(), entry.data);
+        if (sourceTime && fs::last_write_time(outPath) != *sourceTime)
+            fs::last_write_time(outPath, *sourceTime);
     }
 }
 
