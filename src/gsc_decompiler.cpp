@@ -156,6 +156,29 @@ void writeU32(std::vector<uint8_t>& data, size_t offset, uint32_t value) {
     data[offset + 3] = static_cast<uint8_t>(value >> 24);
 }
 
+// Index zero is reserved; only nonempty names participate in engine lookup.
+std::vector<size_t> namedEntryPositions(const std::vector<uint8_t>& trailer,
+                                      uint32_t tableSize, uint32_t nameSize) {
+    if (tableSize == 4 || (tableSize <= 4 &&
+        std::all_of(trailer.begin(), trailer.end(), [](uint8_t b) { return b == 0; })))
+        return {};
+    if (tableSize < 4 || tableSize % 4 || !nameSize ||
+        tableSize * 2ull + nameSize > trailer.size())
+        throw std::runtime_error("malformed GSC named-entry tables");
+    std::vector<size_t> result;
+    const size_t names = tableSize * 2ull;
+    for (size_t i = 4; i < tableSize; i += 4) {
+        const uint32_t offset = readU32(trailer, i);
+        if (offset >= nameSize ||
+            std::find(trailer.begin() + names + offset,
+                      trailer.begin() + names + nameSize, 0) ==
+                      trailer.begin() + names + nameSize)
+            throw std::runtime_error("invalid GSC named-entry name");
+        if (trailer[names + offset]) result.push_back(tableSize + i);
+    }
+    return result;
+}
+
 const std::unordered_map<uint16_t, std::string>& modernSchemas() {
     static const auto value = [] {
         auto r = [](char kind, size_t count) { return std::string(count, kind); };
@@ -355,11 +378,19 @@ public:
         boundaries.insert(code.size());
         std::set<size_t> targets;
         for (const auto& instruction : decoded) {
-            if (instruction.opcode >= 3 && instruction.opcode <= 5)
+            if (instruction.opcode == 200 && instruction.operands[0] >= code.size())
+                fail("insub must point inside GSC code");
+            if ((instruction.opcode >= 3 && instruction.opcode <= 5) ||
+                instruction.opcode == 200)
                 targets.insert(static_cast<size_t>(instruction.operands[0]));
             else if (instruction.opcode == 14)
                 for (size_t i = 2; i <= 6; ++i)
                     targets.insert(static_cast<size_t>(instruction.operands[i]));
+        }
+        for (const auto pos : namedEntryPositions(trailer, trailerTableSize, trailerNameSize)) {
+            const auto target = readU32(trailer, pos);
+            if (target >= code.size()) fail("named entry must point inside GSC code");
+            targets.insert(target);
         }
         std::vector<size_t> invalid;
         std::set_difference(targets.begin(), targets.end(), boundaries.begin(),
@@ -392,6 +423,7 @@ public:
         const size_t wordCount = indexC.size() / 2;
         if (offset >= wordCount) fail("data block starts outside its table");
         const uint16_t values = readU16(indexC, offset * 2);
+        if (values > 32767) fail("data-block count exceeds signed 16-bit engine limit");
         if (static_cast<uint64_t>(offset) + 1 + values > wordCount)
             fail("data block is truncated");
         std::vector<int16_t> result;
@@ -452,12 +484,14 @@ private:
                 stringBytes(static_cast<size_t>(instruction.operands[1]));
                 for (size_t i = 7; i <= 11; ++i)
                     stringBytes(static_cast<size_t>(instruction.operands[i]));
-            } else if (instruction.opcode == 15) {
-                // Only the schemas that give gosub a second operand name a
-                // subroutine by string; the early layouts take a bare script
+            } else if (instruction.opcode == 12 || instruction.opcode == 15) {
+                // Only schemas that give jump/gosub a second operand name a
+                // destination by string; early layouts take a bare script
                 // number, which is not a string reference.
                 if (instruction.operands.size() > 1)
                     stringBytes(static_cast<size_t>(instruction.operands[1]));
+            } else if (instruction.opcode == 18 && instruction.operands[1] != 0) {
+                dataBlock(static_cast<size_t>(instruction.operands[1]));
             } else if (instruction.opcode == 32) {
                 stringBytes(static_cast<size_t>(instruction.operands[5]));
             } else if (instruction.opcode == 81) {
@@ -592,7 +626,7 @@ private:
         strings = section(data, pos, header[4]);
         indexB = section(data, pos, header[5]);
         indexC = section(data, pos, header[6] * 2ull);
-        // Everything up to FileLength is the trailer: two debug tables sized by
+        // Everything up to FileLength is the trailer: two named-entry tables sized by
         // header[7] plus a names blob sized by header[8]. Compiled scripts
         // carry an empty one, but the shipped data also names real symbols
         // (e.g. "scmode", "REP001"), so it is carried into the TSC verbatim.
@@ -818,7 +852,7 @@ bool isStringOperand(uint16_t opcode, size_t index) {
 }
 
 bool isCodeTarget(uint16_t opcode, size_t index) {
-    if (opcode >= 3 && opcode <= 5) return index == 0;
+    if ((opcode >= 3 && opcode <= 5) || opcode == 200) return index == 0;
     return opcode == 14 && index >= 2 && index <= 6;
 }
 
@@ -956,6 +990,9 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                                          ": datablock needs index and count");
             const auto index = parseOperand(tokens[1].value, 'D', lineNo);
             const auto count = parseOperand(tokens[2].value, 'D', lineNo);
+            if (count > 32767)
+                throw std::runtime_error("line " + std::to_string(lineNo) +
+                                         ": data-block count exceeds signed 16-bit engine limit");
             if (index != dataBlocks.size() || tokens.size() != count + 3ull)
                 throw std::runtime_error("line " + std::to_string(lineNo) +
                                          ": non-sequential or malformed datablock");
@@ -1057,17 +1094,23 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                 value = addString(token.value);
             } else if (isCodeTarget(instruction.opcode, i)) {
                 const auto found = labels.find(token.value);
-                if (found == labels.end())
+                if (token.quoted || found == labels.end())
                     throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
                                              ": unknown label: " + token.value);
                 if (found->second > std::numeric_limits<uint32_t>::max())
                     throw std::runtime_error("GSC code is too large");
                 value = static_cast<uint32_t>(found->second);
+                if (instruction.opcode == 200 && value >= offset)
+                    throw std::runtime_error("insub must point inside GSC code");
             } else {
                 if (token.quoted)
                     throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
                                              ": numeric operand cannot be quoted");
                 value = parseOperand(token.value, kind, instruction.lineNo);
+                if (instruction.opcode == 18 && i == 1 && value != 0 &&
+                    value >= dataBlocks.size())
+                    throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
+                                             ": data block is outside its table");
             }
             if (kind == 'H' || kind == 'S') {
                 code.push_back(static_cast<uint8_t>(value));
@@ -1097,12 +1140,26 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
         data.push_back(static_cast<uint8_t>(value));
         data.push_back(static_cast<uint8_t>(value >> 8));
     }
-    // The standard CodeX compiler writes two empty four-byte debug tables
+    // The standard CodeX compiler writes two empty four-byte named-entry tables
     // followed by a one-byte names terminator; `;@gsc-trailer` replaces that
     // default with the exact bytes of the original file.
-    const std::vector<uint8_t> trailing = trailer
+    std::vector<uint8_t> trailing = trailer
         ? *trailer
         : std::vector<uint8_t>(headerSize == 36 ? 9 : 0, 0);
+    if (headerSize == 36) {
+        for (const auto pos : namedEntryPositions(trailing,
+                trailerHeader ? trailerHeader->first : 4,
+                trailerHeader ? trailerHeader->second : 1)) {
+            const auto name = "L_" + hex6(readU32(trailing, pos));
+            const auto found = labels.find(name);
+            if (found == labels.end())
+                throw std::runtime_error("missing named-entry label " + name +
+                                         "; regenerate TSC with current LiarsoftTool");
+            if (found->second >= code.size())
+                throw std::runtime_error("named entry must point inside GSC code");
+            writeU32(trailing, pos, static_cast<uint32_t>(found->second));
+        }
+    }
     const uint64_t physicalSize = headerSize + code.size() + stringIndex.size() +
                                   stringPool.size() + dataIndex.size() + data.size() +
                                   trailing.size();

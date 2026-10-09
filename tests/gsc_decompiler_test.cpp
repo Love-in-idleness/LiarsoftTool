@@ -220,8 +220,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // The trailer (two debug tables plus a names blob) and the two header words
-    // that size it must be carried into the TSC and restored verbatim.
+    // Named entries must round-trip unchanged, but relocate when code is edited.
     const auto makeEndOnlyGsc = [](uint32_t tableSize, uint32_t nameSize,
                                    const std::vector<uint8_t>& trailer) {
         std::vector<uint8_t> gsc(36, 0), code;
@@ -237,17 +236,82 @@ int main(int argc, char** argv) {
     };
     const std::vector<uint8_t> namesTrailer = {
         0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x10, 0x0b, 0x00, 0x00, 0x00, 's', 'c', 'm', 'o', 'd', 'e', 0x00};
+        0x00, 0x00, 0x00, 0x00, 0x00, 's', 'c', 'm', 'o', 'd', 'e', 0x00};
     const auto trailered = makeEndOnlyGsc(8, 8, namesTrailer);
     save(temp, trailered);
     const auto traileredListing = liarsoft::decompileGsc(temp.string());
     if (!contains(traileredListing, ";@gsc-trailer-header 8 8") ||
         !contains(traileredListing,
-                  ";@gsc-trailer 000000000100000000000000100b00000073636d6f646500") ||
+                  ";@gsc-trailer 000000000100000000000000000000000073636d6f646500") ||
+        !contains(traileredListing, ":L_000000") ||
         liarsoft::restoreGscFromTsc(traileredListing) != trailered) {
         std::cerr << "Debug tables and names were not preserved verbatim" << std::endl;
         return 1;
     }
+
+    auto movedEntry = traileredListing;
+    movedEntry.insert(movedEntry.find(":L_000000"), "*wait 1\n");
+    const auto movedGsc = liarsoft::restoreGscFromTsc(movedEntry);
+    if (readU32(movedGsc, movedGsc.size() - namesTrailer.size() + 12) != 6) {
+        std::cerr << "Named entry did not follow its label after insertion" << std::endl;
+        return 1;
+    }
+    const std::string insubSource =
+        ";@gsc-byte-format modern-36\n;@gsc-schema modern\n"
+        "*insub sub 0 0 0 0 0 0 0 0 0 0\n:sub\n*return 0\n";
+    auto insub = liarsoft::restoreGscFromTsc(insubSource);
+    save(temp, insub);
+    auto insubListing = liarsoft::decompileGsc(temp.string());
+    if (!contains(insubListing, "*insub L_00002e") ||
+        liarsoft::restoreGscFromTsc(insubListing) != insub) return 1;
+    auto invalidInsub = insub;
+    patchU32(invalidInsub, 38, 1);
+    save(temp, invalidInsub);
+    if (!contains(liarsoft::decompileGsc(temp.string()), ";@gsc-raw-v1")) return 1;
+    insubListing.insert(insubListing.find(":L_00002e"), "*wait 1\n");
+    if (readU32(liarsoft::restoreGscFromTsc(insubListing), 38) != 52) return 1;
+
+    const std::string modernHeader = ";@gsc-byte-format modern-36\n;@gsc-schema modern\n";
+    auto invalidJump = liarsoft::restoreGscFromTsc(modernHeader + "*jump 1 \"TOP2\"\n");
+    patchU32(invalidJump, 42, 0xffffffff);
+    save(temp, invalidJump);
+    if (!contains(liarsoft::decompileGsc(temp.string()), ";@gsc-raw-v1")) return 1;
+    for (const auto& invalid : {
+            modernHeader + "*data 0 1\n*end\n",
+            modernHeader + "*datablock 0 32768\n*end\n",
+            modernHeader + "*insub finish 0 0 0 0 0 0 0 0 0 0\n:finish\n",
+            traileredListing.substr(0, traileredListing.find(":L_000000")) + "*end\n"}) {
+        try {
+            liarsoft::restoreGscFromTsc(invalid);
+            std::cerr << "Unsafe code/data reference was accepted" << std::endl;
+            return 1;
+        } catch (const std::runtime_error&) {}
+    }
+    // Block index zero is the engine's no-copy sentinel, even with no blocks.
+    liarsoft::restoreGscFromTsc(modernHeader + "*data 0 0\n*end\n");
+    const auto blockGsc = liarsoft::restoreGscFromTsc(modernHeader +
+        "*datablock 0 0\n*datablock 1 2 -7 9\n*data 4 1\n*end\n");
+    save(temp, blockGsc);
+    if (liarsoft::restoreGscFromTsc(liarsoft::decompileGsc(temp.string())) != blockGsc)
+        return 1;
+    auto badBlock = blockGsc;
+    patchU32(badBlock, 42, 2);
+    save(temp, badBlock);
+    if (!contains(liarsoft::decompileGsc(temp.string()), ";@gsc-raw-v1")) return 1;
+    badBlock = blockGsc;
+    const size_t wordsAt = 36 + readU32(badBlock, 8) + readU32(badBlock, 12) +
+        readU32(badBlock, 16) + readU32(badBlock, 20);
+    patchU16(badBlock, wordsAt + 2, 0x8000);
+    save(temp, badBlock);
+    if (!contains(liarsoft::decompileGsc(temp.string()), ";@gsc-raw-v1")) return 1;
+    auto badEntry = trailered;
+    patchU32(badEntry, badEntry.size() - namesTrailer.size() + 12, 1);
+    save(temp, badEntry);
+    if (!contains(liarsoft::decompileGsc(temp.string()), ";@gsc-raw-v1")) return 1;
+    auto malformedNames = namesTrailer;
+    malformedNames.back() = 'x';
+    save(temp, makeEndOnlyGsc(8, 8, malformedNames));
+    if (!contains(liarsoft::decompileGsc(temp.string()), ";@gsc-raw-v1")) return 1;
 
     const std::vector<uint8_t> oddTrailer = {0x00, 0x00, 0x00, 0x00, 0xe0, 0x66,
                                              0xa7, 0x00, 0x00};
@@ -451,8 +515,7 @@ int main(int argc, char** argv) {
             }
             const auto original = load(item.path());
             if (headerSize == 36) {
-                // The trailer, and the two header words that size it, describe
-                // compiler-emitted data that the TSC carries verbatim.
+                // Unedited code must preserve named-entry tables exactly.
                 const auto trailerOf = [](const std::vector<uint8_t>& data) {
                     const size_t core = 36ull + readU32(data, 8) + readU32(data, 12) +
                                         readU32(data, 16) + readU32(data, 20) +
@@ -466,6 +529,28 @@ int main(int argc, char** argv) {
                     trailerOf(original) != trailerOf(rebuilt)) {
                     std::cerr << "Trailer was not preserved: " << item.path() << std::endl;
                     return 1;
+                }
+                if (readU32(original, 28) > 4) {
+                    auto edited = first;
+                    size_t insertAt = 0;
+                    while (insertAt < edited.size()) {
+                        if (edited[insertAt] == ':' || (edited[insertAt] == '*' &&
+                            edited.compare(insertAt, 10, "*datablock ") != 0)) break;
+                        insertAt = edited.find('\n', insertAt) + 1;
+                    }
+                    edited.insert(insertAt, "*wait 1\n");
+                    const auto moved = liarsoft::restoreGscFromTsc(edited, corpusEncoding);
+                    const auto oldTail = trailerOf(original), newTail = trailerOf(moved);
+                    const size_t tableSize = readU32(original, 28);
+                    for (size_t pos = 4; pos < tableSize; pos += 4) {
+                        const auto nameAt = readU32(oldTail, pos);
+                        if (oldTail[2 * tableSize + nameAt] &&
+                            readU32(newTail, tableSize + pos) !=
+                                readU32(oldTail, tableSize + pos) + 6) {
+                            std::cerr << "Edited named entry was not relocated: " << item.path() << std::endl;
+                            return 1;
+                        }
+                    }
                 }
             }
             save(temp, rebuilt);

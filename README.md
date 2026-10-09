@@ -158,14 +158,19 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 自动选择布局，并将选择写入 TSC 元数据。已识别文件的 TSC 正文由主动可编译的
 `*命令`、`*vm`、标签、`*datablock` 和字符串字面量组成，不保存原代码区或原字符串表。
 回编时会重新编码字符串，按内容去重，并重算字符串索引、偏移、代码、数据块及完整头部。
-因此生成结果保证结构和执行语义一致，但调试表、字符串编号和字节排列不保证与原文件完全
+因此目标是保持已识别指令的结构和执行语义，但字符串编号和字节排列不保证与原文件完全
 相同。28 字节格式按旧引擎规则以 16 位字数计算 Section D 的声明长度；36 字节格式在默认
-情况下生成标准空调试表和名字表终止符。
-原文件若带有非空的调试/名字表（如 `scmode`、`REP001`），反编译会写出
+情况下生成标准空入口表和名字表终止符。
+原文件若带有非空的命名入口表（如 `scmode`、`REP001`），反编译会写出
 `;@gsc-trailer <hex>`（Section D 之后的全部尾部字节）以及
 `;@gsc-trailer-header <u7> <u8>`（头部第 7、8 个字，用于确定尾部两张表的长度，仅在非
-标准值 4/1 时出现），回编时原样写回；没有这两行时按标准空调试表处理。28 字节格式没有
+标准值 4/1 时出现）。名字、保留槽和填充原样保留，入口代码地址按正文的 `L_xxxxxx`
+标签重定位；`*insub` 的首参数也使用标签，不再保留易失效的旧数字地址。
+不要删除或改名命名入口对应的生成标签；旧 TSC 缺少这些标签时须从 GSC 重新导出，
+不能静默使用旧偏移。没有这两行时按标准空入口表处理。28 字节格式没有
 尾部区域，出现该元数据会直接报错。
+数据块元素数量限于引擎的有符号 16 位范围（0–32767）；`*data` 的非零块编号必须存在，
+零编号按引擎约定表示不复制数据。
 28 字节头的字符串区长度偏小时，仅在字符串连续排列、原数据区校验失败、按真实 `00`
 结束符补足后数据表有效且尾部仅有零填充时尝试恢复；指令及引用仍须通过校验。
 成功恢复会通过 CLI/GUI/递归解包报告警告，并在 TSC 留下普通 `; warning:` 注释；
@@ -388,14 +393,19 @@ For recognized layouts, the TSC body contains active `*command`, `*vm`, label,
 `*datablock`, and quoted-string source instead of embedded code or string-table
 bytes. Recompilation re-encodes and interns strings, recalculates every index and
 offset, rebuilds code and data blocks, and writes the complete 28- or 36-byte
-container. The result is structurally and semantically equivalent; debug tables,
-string numbering, and byte layout need not be identical to the input. Legacy
+container. Recognized instructions aim to preserve structure and semantics;
+string numbering and byte layout need not be identical to the input. Legacy
 containers count Section D in 16-bit words when calculating the declared size;
-modern containers receive the standard empty debug tables and names terminator.
-Files whose trailer (debug tables plus names blob, e.g. `scmode` or `REP001`)
+modern containers receive the standard empty entry tables and names terminator.
+Files whose trailer (named-entry tables plus names blob, e.g. `scmode` or `REP001`)
 is not the standard empty one record it as `;@gsc-trailer <hex>` and, when the
 sizing header words differ from the standard 4/1, `;@gsc-trailer-header <u7> <u8>`;
-recompilation writes both back verbatim, while the 28-byte format rejects them.
+names, reserved slots and padding are preserved, while entry code offsets are
+relocated using the generated `L_xxxxxx` source labels. `*insub` also takes a
+label instead of a stale numeric address. Keep named-entry labels intact;
+regenerate older TSC missing those labels instead of retaining old offsets.
+The 28-byte format rejects trailer metadata. Data-block counts must be within
+0–32767; nonzero `*data` block references must exist (zero means no copy).
 Underreported legacy string lengths are recovered only for compact string pools
 whose original data tables are invalid, whose NUL-terminated extension leads to
 valid data tables, and whose remaining tail contains only zero padding.

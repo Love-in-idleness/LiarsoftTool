@@ -56,6 +56,16 @@ indices 3–6 hold the prompt and three answers. TSC exports them as quoted text
 and recompilation rebuilds their indices; the remaining expression operands
 are unchanged.
 
+In official Evermaiden `startup_jp.exe`, `0x404e00` looks up names from index 1
+in parallel name-offset/code-offset tables. Header word 7 sizes EACH table;
+word 8 sizes the names blob. These are runtime entry points, not disposable debug
+data. TSC emits `L_xxxxxx` labels and recompilation relocates their offsets.
+Opcode 200 (`*insub`) reads a local code offset at `0x43613a`, then calls
+`0x43dea0` → `0x405760` to set code-base plus offset; its first operand is also
+emitted as a label. Opcode 18 (`*data`) reads a signed 16-bit count (`MOVSX` at
+`0x404d6e`); counts above 32767 and invalid nonzero block references are rejected.
+Block zero means no copy. These findings are static evidence, not gameplay validation.
+
 ## Ordinary Opcodes
 
 | Decimal | Hex | TSC command / representation | Status | Sample count |
