@@ -146,7 +146,7 @@ std::vector<std::string> convert(const std::string& inputPath,
                 options.vorbisInWav, options.workers);
     } else if (ext == ".gsc") {
         if (options.gscToTsc)
-            liarsoft::decompileGscToFile(inputPath, outputPath, options.encoding);
+            warnings = liarsoft::decompileGscToFile(inputPath, outputPath, options.encoding);
         else {
             liarsoft::TransFile::fromGsc(
                 liarsoft::GscFile::fromFile(inputPath, options.encoding)).save(outputPath);

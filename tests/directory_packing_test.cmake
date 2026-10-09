@@ -440,6 +440,29 @@ foreach(name IN ITEMS nested.xfl nested/layout.xml scene.lwg scene/.meta.xml
         image.webp voice.wav voice.ogg script.gsc script.tsc)
     expect_source_time("${TEST_ROOT}/timestamps/dated.xfl" "${TEST_ROOT}/dated_unpacked/${name}")
 endforeach()
+
+file(MAKE_DIRECTORY "${TEST_ROOT}/recovery")
+file(COPY "${TEST_ROOT}/timestamps/stale.gsc" DESTINATION "${TEST_ROOT}/recovery")
+file(SHA256 "${TEST_ROOT}/recovery/stale.gsc" recovery_source_hash)
+execute_process(COMMAND "${TOOL}" --gsc-to-tsc
+    -o "${TEST_ROOT}/recovery/direct.tsc" "${TEST_ROOT}/recovery/stale.gsc"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT error MATCHES "Warning: .*Recovered legacy GSC string table length")
+    message(FATAL_ERROR "Direct GSC recovery did not report its warning: ${error}")
+endif()
+execute_process(COMMAND "${TOOL}" -R -j 4 --unpack-only --gsc-to-tsc
+    "${TEST_ROOT}/recovery" RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT error MATCHES "Warning: .*Recovered legacy GSC string table length")
+    message(FATAL_ERROR "Recursive GSC recovery did not report its warning: ${error}")
+endif()
+file(SHA256 "${TEST_ROOT}/recovery/stale.gsc" recovery_after_hash)
+file(READ "${TEST_ROOT}/recovery/stale.tsc" recovery_listing)
+if(NOT recovery_source_hash STREQUAL recovery_after_hash OR
+   recovery_listing MATCHES "gsc-raw" OR NOT recovery_listing MATCHES "Recovered text")
+    message(FATAL_ERROR "GSC recovery modified the source or failed to recover editable text")
+endif()
+expect_source_time("${TEST_ROOT}/recovery/stale.gsc" "${TEST_ROOT}/recovery/stale.tsc")
+
 foreach(pair IN ITEMS "wcg;png" "lim;webp" "wav;ogg" "gsc;txt")
     list(GET pair 0 source_ext)
     list(GET pair 1 output_ext)

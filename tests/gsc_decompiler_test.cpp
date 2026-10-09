@@ -46,7 +46,8 @@ std::string normalizeListing(const std::string& text) {
     std::istringstream input(text);
     std::string line;
     while (std::getline(input, line)) {
-        if (line.rfind("; generated from ", 0) == 0) continue;
+        if (line.rfind("; generated from ", 0) == 0 ||
+            line.rfind("; warning: ", 0) == 0) continue;
         result += line + '\n';
     }
     return result;
@@ -301,6 +302,69 @@ int main(int argc, char** argv) {
     if (!contains(legacyTxtListing, "*TXT 0 123 0 0 \"\" \"Text\" 1")) {
         std::cerr << "Legacy TXT null name was decoded as string index zero" << std::endl;
         return 1;
+    }
+
+    // Translation grew the final string but left both length header words stale.
+    const std::string recoverySource =
+        ";@gsc-byte-format legacy-28\n;@gsc-schema pre-codex\n"
+        "*datablock 0 0\n*datablock 1 2 7 -3\n"
+        "*TXT 0 123 0 0 \"\" \"^g036不用着急，慢慢来吧。\"\n*return 0\n";
+    const auto canonicalRecovery = liarsoft::restoreGscFromTsc(recoverySource, "GBK");
+    const size_t recoveryStringStart = 28 + readU32(canonicalRecovery, 8) +
+                                           readU32(canonicalRecovery, 12);
+    const auto recoveryStringSize = readU32(canonicalRecovery, 16);
+    const size_t recoveryDataStart = recoveryStringStart + recoveryStringSize;
+    auto staleRecovery = canonicalRecovery;
+    patchU32(staleRecovery, 0, readU32(staleRecovery, 0) - 2);
+    patchU32(staleRecovery, 16, recoveryStringSize - 2);
+    staleRecovery.insert(staleRecovery.end(), 10, 0);
+    save(temp, staleRecovery);
+    std::vector<std::string> recoveryWarnings;
+    const auto recovered = liarsoft::decompileGsc(temp.string(), "GBK", &recoveryWarnings);
+    if (recoveryWarnings.size() != 1 ||
+        !contains(recovered, "; warning: Recovered legacy GSC string table length from ") ||
+        !contains(recovered, "*datablock 1 2 7 -3") ||
+        !contains(recovered, "\"^g036不用着急，慢慢来吧。\"") ||
+        liarsoft::restoreGscFromTsc(recovered, "GBK") != canonicalRecovery) {
+        std::cerr << "Stale legacy string length was not safely recovered" << std::endl;
+        return 1;
+    }
+    auto editedRecovery = recovered;
+    const std::string before = "不用着急", after = "不要着急";
+    editedRecovery.replace(editedRecovery.find(before), before.size(), after);
+    const auto editedRecoveryGsc = liarsoft::restoreGscFromTsc(editedRecovery, "GBK");
+    save(temp, editedRecoveryGsc);
+    recoveryWarnings.clear();
+    if (!contains(liarsoft::decompileGsc(temp.string(), "GBK", &recoveryWarnings), after) ||
+        !recoveryWarnings.empty() || editedRecoveryGsc == canonicalRecovery) {
+        std::cerr << "Recovered TSC could not be edited and canonically rebuilt" << std::endl;
+        return 1;
+    }
+    for (int corruption = 0; corruption < 8; ++corruption) {
+        auto invalid = staleRecovery;
+        if (corruption == 0) invalid.back() = 1; // Unknown nonzero tail.
+        if (corruption == 1) invalid.resize(canonicalRecovery.size() - 1); // Short suffix.
+        if (corruption == 2) invalid[recoveryStringStart] = 'X'; // Overlapping strings.
+        if (corruption == 3) patchU32(invalid, recoveryDataStart + 4, 999); // Bad data offset.
+        if (corruption == 4) patchU16(invalid, 28, 0x0777); // Unknown instruction.
+        if (corruption == 5) patchU32(invalid, 28 + 2 + 5 * 4, 999); // Bad text reference.
+        if (corruption == 6) {
+            // A plausible old suffix makes extension into those bytes ambiguous.
+            for (size_t i = recoveryDataStart - 2; i < canonicalRecovery.size(); ++i)
+                invalid[i] = 0;
+        }
+        if (corruption == 7) {
+            for (size_t i = recoveryDataStart - 1; i < invalid.size(); ++i)
+                invalid[i] = 0x7f; // No terminator in the bounded pool.
+        }
+        save(temp, invalid);
+        recoveryWarnings.clear();
+        const auto rejected = liarsoft::decompileGsc(temp.string(), "GBK", &recoveryWarnings);
+        if (rejected.find(";@gsc-raw-v1") == std::string::npos ||
+            !recoveryWarnings.empty() || liarsoft::restoreGscFromTsc(rejected) != invalid) {
+            std::cerr << "Unsafe legacy recovery accepted corruption " << corruption << std::endl;
+            return 1;
+        }
     }
 
     // Khime jamais vu: short select (H + 11D), but TXT still has its final E.

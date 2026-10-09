@@ -379,7 +379,10 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
             try {
                 if (ext == ".gsc") {
                     if (gscToTsc) {
-                        decompileGscToFile(source.string(), target.string(), encoding);
+                        const auto recovered = decompileGscToFile(
+                            source.string(), target.string(), encoding);
+                        group.warnings.insert(group.warnings.end(),
+                                              recovered.begin(), recovered.end());
                     } else {
                         auto gsc = GscFile::fromFile(source.string(), encoding);
                         TransFile::fromGsc(gsc).save(target.string());

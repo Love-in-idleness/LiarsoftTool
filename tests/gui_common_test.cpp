@@ -313,6 +313,36 @@ int main(int argc, char** argv) {
         const auto entries = liarsoft::XflArchive::fromFile(archive.string()).entries;
         if (warnings.size() != 1 || entries.size() != 1 || entries[0].fileName != "layout.xml")
             throw std::runtime_error("Failed recursive GUI audio included the stale WAV");
+
+        const auto recoveryDirectory = directory / "recovery";
+        fs::create_directory(recoveryDirectory);
+        auto staleGsc = liarsoft::restoreGscFromTsc(
+            ";@gsc-byte-format legacy-28\n;@gsc-schema pre-codex\n"
+            "*datablock 0 0\n*TXT 0 0 0 0 \"\" \"Recovered text.\"\n*return 0\n");
+        // The ASCII fixture leaves the period and NUL outside the declared pool.
+        staleGsc[0] -= 2;
+        staleGsc[16] -= 2;
+        const auto recoveryInput = recoveryDirectory / "stale.gsc";
+        const auto recoveryOutput = recoveryDirectory / "stale.tsc";
+        liarsoft::writeFileIfChanged(recoveryInput.string(), staleGsc);
+        ConversionOptions recoveryOptions;
+        recoveryOptions.gscToTsc = true;
+        const auto recoveredWarnings = convert(
+            recoveryInput.string(), recoveryOutput.string(), recoveryOptions);
+        if (recoveredWarnings.size() != 1 ||
+            recoveredWarnings[0].find("Recovered legacy GSC") == std::string::npos ||
+            fs::last_write_time(recoveryInput) != fs::last_write_time(recoveryOutput))
+            throw std::runtime_error("GUI recovery warning or timestamp missing");
+        for (unsigned workers : {1u, 4u}) {
+            recoveryOptions.unpackOnly = true;
+            recoveryOptions.workers = workers;
+            if (convert(recoveryDirectory.string(), "", recoveryOptions) != recoveredWarnings)
+                throw std::runtime_error("Recursive recovery warning differs from direct GUI conversion");
+        }
+        if (argc == 2) {
+            const fs::path fixtures(argv[1]);
+            liarsoft::writeFileIfChanged((fixtures / "stale.gsc").string(), staleGsc);
+        }
         testParallelConversions(directory, clean, image);
     } catch (const std::exception& error) {
         fs::remove_all(directory);

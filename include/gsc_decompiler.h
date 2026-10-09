@@ -11,15 +11,16 @@ namespace liarsoft {
 /// Verified commands are emitted as TSC while unknown semantics remain
 /// offset-annotated comments.
 std::string decompileGsc(const std::string& inputPath,
-                         const std::string& encoding = "CP932");
+                         const std::string& encoding = "CP932",
+                         std::vector<std::string>* warnings = nullptr);
 
-void decompileGscToFile(const std::string& inputPath,
+/// Return warnings for recovered noncanonical input after writing the listing.
+std::vector<std::string> decompileGscToFile(const std::string& inputPath,
                         const std::string& outputPath,
                         const std::string& encoding = "CP932");
 
-/// Restore the source GSC embedded by decompileGsc(). Unchanged input is exact;
-/// edited TXT/TXA dialogue lines rebuild the modern GSC string table, and
-/// edited operands of known fixed-size commands patch the original code.
+/// Compile structured TSC, rebuilding sections, strings and lengths; raw
+/// fallback listings restore their embedded GSC unchanged.
 std::vector<uint8_t> restoreGscFromTsc(
     const std::string& tscText,
     const std::string& fallbackEncoding = "CP932");

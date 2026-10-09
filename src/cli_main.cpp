@@ -219,7 +219,7 @@ static bool processOne(const std::string& inputPath,
     if (ext == ".gsc") {
         if (gscToTsc) {
             if (out.empty()) out = replaceExtension(inputPath, ".tsc");
-            liarsoft::decompileGscToFile(inputPath, out, encoding);
+            printWarnings(liarsoft::decompileGscToFile(inputPath, out, encoding));
             std::cout << "GSC -> TSC: " << out << std::endl;
         } else {
             std::cout << "Reading GSC: " << inputPath << " (encoding: " << encoding << ")" << std::endl;

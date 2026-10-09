@@ -166,7 +166,11 @@ GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空
 `;@gsc-trailer-header <u7> <u8>`（头部第 7、8 个字，用于确定尾部两张表的长度，仅在非
 标准值 4/1 时出现），回编时原样写回；没有这两行时按标准空调试表处理。28 字节格式没有
 尾部区域，出现该元数据会直接报错。
-只有无法识别指令布局的文件才使用 `;@gsc-raw-v1` 兼容回退，并明确标注无法反编译。
+28 字节头的字符串区长度偏小时，仅在字符串连续排列、原数据区校验失败、按真实 `00`
+结束符补足后数据表有效且尾部仅有零填充时尝试恢复；指令及引用仍须通过校验。
+成功恢复会通过 CLI/GUI/递归解包报告警告，并在 TSC 留下普通 `; warning:` 注释；
+回编将重新计算正确长度，不保留过时头部及多余零填充。无法可靠恢复或识别指令布局的
+文件使用 `;@gsc-raw-v1` 兼容回退，并明确标注无法反编译。
 TSC 正文始终是 UTF-8，且**不再记录**字符串编码：`--gsc-to-tsc` 的 `-e` 决定按何种编码
 解读原 GSC，`tsc → gsc` 的 `-e` 决定写出何种编码的 GSC。因此把日文 TSC 翻译成中文后，
 回编时用 `-e gbk` 即可得到中文版引擎需要的 GBK 文件；忘记指定编码时（默认 CP932），
@@ -392,7 +396,13 @@ Files whose trailer (debug tables plus names blob, e.g. `scmode` or `REP001`)
 is not the standard empty one record it as `;@gsc-trailer <hex>` and, when the
 sizing header words differ from the standard 4/1, `;@gsc-trailer-header <u7> <u8>`;
 recompilation writes both back verbatim, while the 28-byte format rejects them.
-Files with unknown
+Underreported legacy string lengths are recovered only for compact string pools
+whose original data tables are invalid, whose NUL-terminated extension leads to
+valid data tables, and whose remaining tail contains only zero padding.
+Instructions and references must still validate. Recovery reports a warning in
+the CLI, GUI and recursive unpacker and leaves an ordinary `; warning:` comment
+in TSC. Recompilation normalizes lengths and redundant zero padding instead of
+preserving the stale header. Unrecoverable files and unknown
 instruction layouts retain the `;@gsc-raw-v1` fallback and are explicitly marked
 unavailable for decompilation. Older structured TSC files are unsupported and
 must be regenerated from their original GSC files. The TSC body is always UTF-8

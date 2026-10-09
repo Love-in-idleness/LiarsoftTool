@@ -404,6 +404,7 @@ public:
 
     fs::path path;
     std::vector<uint8_t> code;
+    std::string recoveryWarning;
 
     /// Bytes between the end of Section D and FileLength (modern headers only).
     std::vector<uint8_t> trailer;
@@ -495,6 +496,48 @@ private:
         instructionSchema = bestSchema;
     }
 
+    size_t recoverLegacyStringSize(const std::vector<uint8_t>& data, size_t start,
+                                  const std::vector<uint8_t>& declaration,
+                                  const std::vector<uint32_t>& header) const {
+        const uint64_t suffixSize = header[5] + header[6] * 2ull;
+        if (header[5] < 4 || header[5] % 4 || !header[6] ||
+            suffixSize > data.size() - start)
+            fail("unterminated legacy string (recovery has no valid data-table boundary)");
+        const auto validBlocksAt = [&](size_t pos) {
+            if (suffixSize > data.size() - pos) return false;
+            for (size_t i = 0; i < header[5]; i += 4) {
+                const uint32_t offset = readU32(data, pos + i);
+                if (offset >= header[6] ||
+                    offset + 1ull + readU16(data, pos + header[5] + offset * 2ull) > header[6])
+                    return false;
+            }
+            return true;
+        };
+        // shortcut: recover only a compact pool with an invalid old suffix and
+        // zero-only padding; other layouts need independent boundary evidence.
+        if (validBlocksAt(start + header[4]))
+            fail("unterminated legacy string (ambiguous data-table boundary)");
+        std::set<uint32_t> offsets;
+        for (size_t i = 0; i < declaration.size(); i += 4)
+            offsets.insert(readU32(declaration, i));
+        const size_t limit = data.size() - static_cast<size_t>(suffixSize);
+        size_t end = start;
+        for (const auto offset : offsets) {
+            if (offset >= header[4] || offset != end - start)
+                fail("unterminated legacy string (noncompact string table)");
+            const auto terminator = std::find(data.begin() + end, data.begin() + limit, 0);
+            if (terminator == data.begin() + limit)
+                fail("unterminated legacy string (no bounded terminator)");
+            end = static_cast<size_t>(terminator - data.begin()) + 1;
+        }
+        if (end <= start + header[4] || !validBlocksAt(end) ||
+            readU32(data, end) != 0 || readU16(data, end + header[5]) != 0 ||
+            !std::all_of(data.begin() + end + static_cast<size_t>(suffixSize), data.end(),
+                         [](uint8_t value) { return value == 0; }))
+            fail("unterminated legacy string (invalid recovered data tables or trailing bytes)");
+        return end - start;
+    }
+
     void parseLegacy(const std::vector<uint8_t>& data) {
         std::vector<uint32_t> header;
         for (size_t i = 0; i < 7; ++i) header.push_back(readU32(data, i * 4));
@@ -505,7 +548,23 @@ private:
         size_t pos = 28;
         code = section(data, pos, header[2]);
         const auto declaration = section(data, pos, header[3]);
-        const auto stringData = section(data, pos, header[4]);
+        const size_t stringStart = pos;
+        auto stringData = section(data, pos, header[4]);
+        bool terminated = true;
+        for (size_t i = 0; i < declaration.size(); i += 4) {
+            const uint32_t start = readU32(declaration, i);
+            if (start >= stringData.size()) fail("malformed legacy string offset");
+            if (std::find(stringData.begin() + start, stringData.end(), 0) == stringData.end())
+                terminated = false;
+        }
+        if (!terminated) {
+            const auto size = recoverLegacyStringSize(data, stringStart, declaration, header);
+            pos = stringStart;
+            stringData = section(data, pos, size);
+            recoveryWarning = "Recovered legacy GSC string table length from " +
+                std::to_string(header[4]) + " to " + std::to_string(size) +
+                " bytes; recompilation normalizes section lengths and zero padding";
+        }
         for (size_t i = 0; i < declaration.size(); i += 4) {
             const uint32_t start = readU32(declaration, i);
             if (start >= stringData.size()) fail("malformed legacy string offset");
@@ -1078,7 +1137,8 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
 } // namespace
 
 static std::string decompileListing(const std::string& inputPath,
-                                    const std::string& encoding) {
+                                    const std::string& encoding,
+                                    std::vector<std::string>* warnings) {
     const ParsedGsc gsc(inputPath);
     const auto instructions = gsc.instructions();
     const auto labels = gsc.jumpTargets();
@@ -1089,6 +1149,8 @@ static std::string decompileListing(const std::string& inputPath,
             schemaName(gsc.schema()),
         "; generated from " + gsc.path.filename().string(),
     };
+    if (!gsc.recoveryWarning.empty())
+        lines.push_back("; warning: " + gsc.recoveryWarning);
     if (gsc.headerSize() == 36) {
         static const std::vector<uint8_t> emptyTrailer(9, 0);
         if (gsc.trailerTableSize != 4 || gsc.trailerNameSize != 1) {
@@ -1120,13 +1182,16 @@ static std::string decompileListing(const std::string& inputPath,
     }
     std::ostringstream output;
     for (const auto& line : lines) output << line << '\n';
+    if (warnings && !gsc.recoveryWarning.empty())
+        warnings->push_back(inputPath + ": " + gsc.recoveryWarning);
     return output.str();
 }
 
-std::string decompileGsc(const std::string& inputPath, const std::string& encoding) {
+std::string decompileGsc(const std::string& inputPath, const std::string& encoding,
+                         std::vector<std::string>* warnings) {
     const auto raw = readFile(inputPath);
     try {
-        return decompileListing(inputPath, encoding);
+        return decompileListing(inputPath, encoding, warnings);
     } catch (const std::exception& e) {
         std::string message = e.what();
         std::replace(message.begin(), message.end(), '\n', ' ');
@@ -1200,13 +1265,15 @@ std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText,
     return result;
 }
 
-void decompileGscToFile(const std::string& inputPath,
+std::vector<std::string> decompileGscToFile(const std::string& inputPath,
                         const std::string& outputPath,
                         const std::string& encoding) {
-    const auto output = decompileGsc(inputPath, encoding);
+    std::vector<std::string> warnings;
+    const auto output = decompileGsc(inputPath, encoding, &warnings);
     writeFileIfChanged(outputPath,
         reinterpret_cast<const uint8_t*>(output.data()), output.size());
     copyModificationTime(inputPath, outputPath);
+    return warnings;
 }
 
 void restoreGscFromTscFile(const std::string& inputPath,
