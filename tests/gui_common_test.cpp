@@ -169,6 +169,8 @@ int main(int argc, char** argv) {
         fs::last_write_time(original, fs::file_time_type::clock::now() - std::chrono::hours(48));
         const auto originalTime = fs::last_write_time(original);
         const ConversionOptions options;
+        if (options.encoding != "CP932")
+            throw std::runtime_error("Default GUI encoding differs from CLI CP932");
         convert(original.string(), webp.string(), options);
         const auto time = fs::last_write_time(webp);
         if (time != originalTime)
