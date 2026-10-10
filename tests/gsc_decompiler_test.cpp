@@ -368,6 +368,21 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    const std::string voiceRefsSource =
+        ";@gsc-byte-format legacy-28\n;@gsc-schema early\n"
+        "*datablock 0 0\n*voice @6201 0 0 0\n*voice @@6202 999 0 0\n"
+        "*voice 31001 1 0 0\n*return 0\n";
+    const auto voiceRefs = liarsoft::restoreGscFromTsc(voiceRefsSource);
+    save(temp, voiceRefs);
+    const auto voiceRefsListing = liarsoft::decompileGsc(temp.string());
+    if (!contains(voiceRefsListing, "*voice @6201 0 0 0") ||
+        !contains(voiceRefsListing, "*voice @@6202 999 0 0") ||
+        !contains(voiceRefsListing, "*voice 31001 1 0 0") ||
+        liarsoft::restoreGscFromTsc(voiceRefsListing) != voiceRefs) {
+        std::cerr << "Legacy voice references were mistaken for literal IDs" << std::endl;
+        return 1;
+    }
+
     // Translation grew the final string but left both length header words stale.
     const std::string recoverySource =
         ";@gsc-byte-format legacy-28\n;@gsc-schema pre-codex\n"

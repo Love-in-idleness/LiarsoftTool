@@ -403,8 +403,13 @@ public:
         uint64_t result = 0;
         for (const auto& instruction : instructions()) {
             for (size_t i = 0; i < instruction.kinds.size(); ++i) {
-                if (instruction.kinds[i] == 'E')
-                    result += static_cast<uint32_t>(instruction.operands[i]) >> 16;
+                if (instruction.kinds[i] == 'E') {
+                    const auto value = static_cast<uint32_t>(instruction.operands[i]);
+                    const auto depth = value >> 16;
+                    // Valid register indirection is not evidence of a wrong schema.
+                    if (depth > 0x7fff || (depth && (value & 0x8000)))
+                        result += depth;
+                }
             }
         }
         return result;
