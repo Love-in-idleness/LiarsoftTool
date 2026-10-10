@@ -96,7 +96,9 @@ static void testParallelConversions(const std::filesystem::path& directory,
             // Recreate the same destination so warnings and paths can compare exactly.
             fs::remove_all(root);
             fs::last_write_time(packed, sourceTime);
-            archive.extractToDirectory(root.string(), sourceTime);
+            // Compare stored precision, not the finer clock used to request it.
+            const auto extractionTime = fs::last_write_time(packed);
+            archive.extractToDirectory(root.string(), extractionTime);
             for (bool tscOutput : {false, true}) {
                 const auto unpackWarnings = unpackDirectoryRecursively(
                     root.string(), "CP932", tscOutput, workers);
@@ -109,7 +111,7 @@ static void testParallelConversions(const std::filesystem::path& directory,
             std::map<std::string, std::vector<uint8_t>> actualFiles;
             for (const auto& entry : fs::recursive_directory_iterator(root)) {
                 if (!entry.is_regular_file()) continue;
-                if (fs::last_write_time(entry.path()) != sourceTime)
+                if (fs::last_write_time(entry.path()) != extractionTime)
                     throw std::runtime_error("Parallel extraction changed timestamp inheritance");
                 actualFiles.emplace(entry.path().lexically_relative(root).string(), readBytes(entry.path()));
             }
@@ -117,7 +119,7 @@ static void testParallelConversions(const std::filesystem::path& directory,
             else if (actualFiles != expectedFiles)
                 throw std::runtime_error("Parallel extraction changed resource contents or filenames");
             // Repeated conversion must also reuse upper-case targets from the index.
-            if (!fs::exists(root / "FALLBACK.GSC") || fs::exists(root / "fallback.gsc") ||
+            if (!fs::exists(root / "FALLBACK.GSC") || actualFiles.count("fallback.gsc") ||
                 !fs::exists(root / "PHOTO.wcg") || !fs::exists(root / "nested/scene/background.webp"))
                 throw std::runtime_error("Case-insensitive lookup or nested ordering changed");
         }
