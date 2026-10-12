@@ -26,15 +26,6 @@ static std::string normalized(const fs::path& path) {
     return fs::absolute(path).lexically_normal().string();
 }
 
-static fs::path metaFile(const fs::path& directory) {
-    for (const auto& entry : fs::directory_iterator(directory)) {
-        if (!entry.is_symlink() && entry.is_regular_file() &&
-            lower(entry.path().filename().string()) == ".meta.xml")
-            return entry.path();
-    }
-    return {};
-}
-
 static std::string encodeName(const std::string& utf8, const std::string& enc) {
     return convertEncoding(utf8, "UTF-8", enc);
 }
@@ -288,7 +279,7 @@ static MetaInfo parseMetaXml(const std::string& filePath) {
 std::vector<uint8_t> LwgPacker::pack(
     const std::string& dirPath, const std::string& encoding,
     const std::set<std::string>& excludedPaths) {
-    const auto metaPath = metaFile(dirPath);
+    const auto metaPath = findLwgMetadata(dirPath);
     if (metaPath.empty())
         throw std::runtime_error("No .meta.xml found in directory. "
                                  "Extract LWG first to generate one.");

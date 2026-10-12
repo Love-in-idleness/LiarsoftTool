@@ -40,7 +40,7 @@ bool isPackableFile(const std::string& path) {
     return std::find(extensions.begin(), extensions.end(), ext) != extensions.end();
 }
 
-static fs::path metaFile(const fs::path& directory) {
+fs::path findLwgMetadata(const fs::path& directory) {
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (!entry.is_symlink() && entry.is_regular_file() &&
             lower(entry.path().filename().string()) == ".meta.xml")
@@ -50,7 +50,7 @@ static fs::path metaFile(const fs::path& directory) {
 }
 
 bool isLwgDirectory(const std::string& path) {
-    return fs::is_directory(path) && !metaFile(path).empty();
+    return fs::is_directory(path) && !findLwgMetadata(path).empty();
 }
 
 bool matchesOperationMode(const std::string& path, bool packOnly,

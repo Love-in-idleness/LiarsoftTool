@@ -121,7 +121,15 @@ int main(int argc, char** argv) {
             };
             const auto controlDirectory=directory/"controls";
             LwgDecoder::extractToDirectory(controls,controlDirectory.string(),"CP932");
+            const auto metadata = findLwgMetadata(controlDirectory);
+            require(metadata.filename() == ".meta.xml" && isLwgDirectory(controlDirectory.string()),
+                    "LWG detection and packing disagree about metadata");
+            const auto uppercaseMetadata = controlDirectory / ".META.XML";
+            std::filesystem::rename(metadata, uppercaseMetadata);
+            require(findLwgMetadata(controlDirectory) == uppercaseMetadata &&
+                    isLwgDirectory(controlDirectory.string()), "Mixed-case LWG metadata not found");
             const auto packedControls=LwgPacker::pack(controlDirectory.string(),"CP932");
+            std::filesystem::rename(uppercaseMetadata, metadata);
             const auto restored=LwgDecoder::decode(packedControls,"CP932");
             const size_t dataSizeField=24+get32(packedControls,20);
             require(get32(packedControls,dataSizeField)==4 &&

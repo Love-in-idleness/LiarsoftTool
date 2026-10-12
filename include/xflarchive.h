@@ -19,6 +19,9 @@ bool isPackableFile(const std::string& path);
 /// Whether a directory contains a .meta.xml file (case-insensitive).
 bool isLwgDirectory(const std::string& path);
 
+/// Find regular, non-symlink LWG metadata, or return an empty path.
+std::filesystem::path findLwgMetadata(const std::filesystem::path& directory);
+
 /// Whether an input belongs to the selected packing/unpacking direction.
 /// Enabling both filters intentionally matches no input.
 bool matchesOperationMode(const std::string& path, bool packOnly,
