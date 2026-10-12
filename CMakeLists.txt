@@ -73,8 +73,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     )
 endif()
 
-# Common source files (shared between CLI and GUI)
-set(COMMON_SOURCES
+# Compile the conversion core once for the CLI, GUI and test executables.
+add_library(liarsofttool_core STATIC
     src/bigendian.cpp
     src/encoding.cpp
     src/fileio.cpp
@@ -91,17 +91,15 @@ set(COMMON_SOURCES
     src/stb_impl.cpp
     src/stb_image_impl.cpp
 )
+target_link_libraries(liarsofttool_core PUBLIC WebP::webp Vorbis::file Threads::Threads)
+if(NOT WIN32)
+    target_link_libraries(liarsofttool_core PUBLIC Iconv::Iconv)
+endif()
 
 # ---- CLI target ----
-add_executable(liarsofttool
-    src/cli_main.cpp
-    ${COMMON_SOURCES}
-)
-if(NOT WIN32)
-    target_link_libraries(liarsofttool PRIVATE Iconv::Iconv)
-else()
+add_executable(liarsofttool src/cli_main.cpp)
+if(WIN32)
     target_sources(liarsofttool PRIVATE ${RESOURCE_OBJ})
-    target_link_options(liarsofttool PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
 # ---- GUI target ----
@@ -111,21 +109,18 @@ if(WIN32)
         src/gui_main.cpp
         src/gui_win32.cpp
         src/gui_common.cpp
-        ${COMMON_SOURCES}
     )
     target_link_libraries(liarsofttool-gui PRIVATE comctl32 comdlg32 ole32)
     target_sources(liarsofttool-gui PRIVATE ${RESOURCE_OBJ})
-    target_link_options(liarsofttool-gui PRIVATE -static-libgcc -static-libstdc++)
 elseif(GTKMM_FOUND)
     # Linux: use GTKmm GUI
     add_executable(liarsofttool-gui
         src/gui_main.cpp
         src/gui.cpp
         src/gui_common.cpp
-        ${COMMON_SOURCES}
     )
     target_include_directories(liarsofttool-gui PRIVATE ${GTKMM_INCLUDE_DIRS})
-    target_link_libraries(liarsofttool-gui PRIVATE ${GTKMM_LIBRARIES} Iconv::Iconv)
+    target_link_libraries(liarsofttool-gui PRIVATE ${GTKMM_LIBRARIES})
     target_compile_options(liarsofttool-gui PRIVATE ${GTKMM_CFLAGS_OTHER})
     message(STATUS "GTK GUI: enabled (liarsofttool-gui)")
 else()
@@ -145,61 +140,26 @@ if(BUILD_TESTING)
     if(NOT VORBISENC_LIBRARY)
         message(FATAL_ERROR "libvorbisenc is required to generate audio test inputs")
     endif()
-    add_executable(encoding_test tests/encoding_test.cpp src/encoding.cpp)
-    if(NOT WIN32)
-        target_link_libraries(encoding_test PRIVATE Iconv::Iconv)
-    else()
-        target_link_options(encoding_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    add_executable(encoding_test tests/encoding_test.cpp)
     add_test(NAME encoding COMMAND encoding_test)
 
-    add_executable(wav_ogg_test
-        tests/wav_ogg_test.cpp src/wav_ogg.cpp src/fileio.cpp)
-    if(WIN32)
-        target_link_options(wav_ogg_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    add_executable(wav_ogg_test tests/wav_ogg_test.cpp)
     add_test(NAME wav_ogg COMMAND wav_ogg_test)
 
-    add_executable(exe_patch_test
-        tests/exe_patch_test.cpp src/exe_patch.cpp src/fileio.cpp)
-    if(WIN32)
-        target_link_options(exe_patch_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    add_executable(exe_patch_test tests/exe_patch_test.cpp)
     add_test(NAME exe_patch COMMAND exe_patch_test)
 
-    add_executable(gsc_decompiler_test
-        tests/gsc_decompiler_test.cpp src/gsc_decompiler.cpp
-        src/encoding.cpp src/fileio.cpp)
-    if(NOT WIN32)
-        target_link_libraries(gsc_decompiler_test PRIVATE Iconv::Iconv)
-    else()
-        target_link_options(gsc_decompiler_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    add_executable(gsc_decompiler_test tests/gsc_decompiler_test.cpp)
     add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
 
     add_executable(gui_common_test
-        tests/gui_common_test.cpp src/gui_common.cpp ${COMMON_SOURCES})
-    if(NOT WIN32)
-        target_link_libraries(gui_common_test PRIVATE Iconv::Iconv)
-    else()
-        target_link_options(gui_common_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+        tests/gui_common_test.cpp src/gui_common.cpp)
     add_test(NAME gui_common COMMAND gui_common_test)
 
-    add_executable(archive_test tests/archive_test.cpp ${COMMON_SOURCES})
-    if(NOT WIN32)
-        target_link_libraries(archive_test PRIVATE Iconv::Iconv)
-    else()
-        target_link_options(archive_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    add_executable(archive_test tests/archive_test.cpp)
     add_test(NAME archive COMMAND archive_test ${CMAKE_CURRENT_BINARY_DIR}/archive_test_data)
 
-    add_executable(cg_decompress_test
-        tests/cg_decompress_test.cpp src/cg_decompress.cpp src/wcg_decoder.cpp
-        src/lim_decoder.cpp src/fileio.cpp src/stb_impl.cpp)
-    if(WIN32)
-        target_link_options(cg_decompress_test PRIVATE -static-libgcc -static-libstdc++)
-    endif()
+    add_executable(cg_decompress_test tests/cg_decompress_test.cpp)
     add_test(NAME cg_decompress COMMAND cg_decompress_test)
 
     add_test(NAME directory_packing
@@ -213,15 +173,13 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/directory_packing_test.cmake)
 endif()
 
-foreach(target liarsofttool liarsofttool-gui gui_common_test archive_test cg_decompress_test)
+foreach(target liarsofttool liarsofttool-gui encoding_test wav_ogg_test exe_patch_test
+               gsc_decompiler_test gui_common_test archive_test cg_decompress_test)
     if(TARGET ${target})
-        target_link_libraries(${target} PRIVATE WebP::webp Threads::Threads)
-    endif()
-endforeach()
-
-foreach(target liarsofttool liarsofttool-gui wav_ogg_test gui_common_test archive_test)
-    if(TARGET ${target})
-        target_link_libraries(${target} PRIVATE Vorbis::file)
+        target_link_libraries(${target} PRIVATE liarsofttool_core)
+        if(WIN32)
+            target_link_options(${target} PRIVATE -static-libgcc -static-libstdc++)
+        endif()
     endif()
 endforeach()
 if(BUILD_TESTING)
