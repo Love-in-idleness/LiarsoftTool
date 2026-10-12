@@ -21,7 +21,7 @@
 - 使用本机配置的 `liarsofttool_build`；已有构建目录先检查 `CMakeCache.txt` 的源码目录与生成器，不擅自切换生成器。
 - 首次配置：`cmake -S <源码目录> -B <构建目录> -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON`。
 - 代码修改后：`cmake --build <构建目录> -j2`、`ctest --test-dir <构建目录> --output-on-failure`、`git diff --check`。
-- 单项调试可用 `ctest --test-dir <构建目录> -R <测试名> --output-on-failure`。当前测试名：`encoding`、`gscfile`、`wav_ogg`、`exe_patch`、`gsc_decompiler`、`gui_common`、`archive`、`cg_decompress`、`directory_packing`；GUI 构建还提供 `gui_smoke`（Linux 需 xvfb-run）。
+- 单项调试可用 `ctest --test-dir <构建目录> -R <测试名> --output-on-failure`。当前测试名：`encoding`、`gscfile`、`fileio`、`wav_ogg`、`exe_patch`、`gsc_decompiler`、`gui_common`、`archive`、`cg_decompress`、`directory_packing`；GUI 构建还提供 `gui_smoke`（Linux 需 xvfb-run）。
 - 公共转换改动检查 CLI 和可用的 GUI 目标。Windows/交叉编译仅在任务涉及该平台或用户要求时执行；编译成功不等于 GUI 交互或原引擎行为已验证。
 - 纯文档/路径配置改动只检查文档、路径、配置格式和 diff，不要求重建全部目标。
 - GSC/TSC 输出格式变化必须检查 rscript2renpy 的解析与生成入口，使用工作副本完成转换，再运行相关生成器测试和 Ren'Py lint；两仓库均修复及验证后再完成任务。

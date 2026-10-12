@@ -122,7 +122,9 @@ int main(int argc, char** argv) {
             const auto controlDirectory=directory/"controls";
             LwgDecoder::extractToDirectory(controls,controlDirectory.string(),"CP932");
             const auto metadata = findLwgMetadata(controlDirectory);
-            require(metadata.filename() == ".meta.xml" && isLwgDirectory(controlDirectory.string()),
+            require(!metadata.empty() &&
+                    std::filesystem::equivalent(metadata, controlDirectory / ".meta.xml") &&
+                    isLwgDirectory(controlDirectory.string()),
                     "LWG detection and packing disagree about metadata");
             const auto uppercaseMetadata = controlDirectory / ".META.XML";
             // A case-only rename can be a no-op on Windows/Wine.
@@ -132,7 +134,8 @@ int main(int argc, char** argv) {
             require(findLwgMetadata(controlDirectory) == uppercaseMetadata &&
                     isLwgDirectory(controlDirectory.string()), "Mixed-case LWG metadata not found");
             const auto packedControls=LwgPacker::pack(controlDirectory.string(),"CP932");
-            std::filesystem::rename(uppercaseMetadata, metadata);
+            std::filesystem::rename(uppercaseMetadata, temporaryMetadata);
+            std::filesystem::rename(temporaryMetadata, controlDirectory / ".meta.xml");
             const auto restored=LwgDecoder::decode(packedControls,"CP932");
             const size_t dataSizeField=24+get32(packedControls,20);
             require(get32(packedControls,dataSizeField)==4 &&

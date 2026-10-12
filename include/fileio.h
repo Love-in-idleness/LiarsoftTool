@@ -19,7 +19,8 @@ std::vector<uint8_t> readStream(std::ifstream& stream);
 /// byte-identical, it is left completely untouched so its modification time
 /// is preserved. Returns true when the file was written, false when it was
 /// skipped as unchanged. Throws std::runtime_error when the file cannot be
-/// written.
+/// written. Installs a complete, closed temporary file from the target directory;
+/// failure preserves the old target, but is not a whole-conversion transaction.
 bool writeFileIfChanged(const std::string& path, const uint8_t* data, size_t size);
 
 /// Convenience overload for byte buffers.

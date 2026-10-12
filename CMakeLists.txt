@@ -149,6 +149,14 @@ if(BUILD_TESTING)
     add_executable(gscfile_test tests/gscfile_test.cpp)
     add_test(NAME gscfile COMMAND gscfile_test)
 
+    add_executable(fileio_test tests/fileio_test.cpp)
+    add_test(NAME fileio COMMAND fileio_test)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_library(fileio_faults SHARED tests/fileio_faults.cpp)
+        target_link_libraries(fileio_faults PRIVATE ${CMAKE_DL_LIBS})
+        set_tests_properties(fileio PROPERTIES
+            ENVIRONMENT "LD_PRELOAD=$<TARGET_FILE:fileio_faults>")
+    endif()
     add_executable(wav_ogg_test tests/wav_ogg_test.cpp)
     add_test(NAME wav_ogg COMMAND wav_ogg_test)
 
@@ -195,7 +203,7 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/directory_packing_test.cmake)
 endif()
 
-foreach(target liarsofttool liarsofttool-gui encoding_test gscfile_test wav_ogg_test exe_patch_test
+foreach(target liarsofttool liarsofttool-gui encoding_test gscfile_test fileio_test wav_ogg_test exe_patch_test
                gsc_decompiler_test gui_common_test gui_smoke_test archive_test cg_decompress_test)
     if(TARGET ${target})
         target_link_libraries(${target} PRIVATE liarsofttool_core)

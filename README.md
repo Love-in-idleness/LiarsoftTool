@@ -27,6 +27,11 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 
 ### 速查表
 
+转换文件采用目标目录内独占临时文件，完整写入并成功关闭后才替换旧文件；
+写入或替换失败会保留旧内容并清理临时文件。只读目标仍拒绝覆盖；同内容不重写，
+解包后的来源时间戳规则不变。这不是整批／整封包事务，不承诺断电、网络文件系统
+或并发写同一目标时的事务安全；替换不保留旧文件的硬链接关联。
+
 | 需求 | 命令 |
 |------|------|
 | 提取脚本原文 | `liarsofttool -e gbk scenario.gsc` |

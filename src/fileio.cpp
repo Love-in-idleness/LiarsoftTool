@@ -1,11 +1,28 @@
 #include "fileio.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <filesystem>
 #include <limits>
 #include <stdexcept>
+#include <system_error>
+#include <fcntl.h>
+#include <sys/stat.h>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace liarsoft {
 
@@ -66,6 +83,90 @@ bool fileMatches(const std::string& path, const uint8_t* data, size_t size) {
     return true;
 }
 
+void installFile(const std::string& path, const uint8_t* data, size_t size) {
+    namespace fs = std::filesystem;
+    fs::path target(path);
+    // Follow existing symlinks like the previous stream writer.
+    if (fs::is_symlink(fs::symlink_status(target))) target = fs::canonical(target);
+    const auto status = fs::status(target);
+    if (fs::exists(status)) {
+        if (!fs::is_regular_file(status) ||
+            (status.permissions() & (fs::perms::owner_write | fs::perms::group_write |
+                                     fs::perms::others_write)) == fs::perms::none)
+            throw std::runtime_error("Cannot write file: " + path);
+        // Replacement must not bypass the target's existing write permissions/ACL.
+#ifdef _WIN32
+        const auto probe = CreateFileW(target.c_str(), GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (probe == INVALID_HANDLE_VALUE)
+            throw std::system_error(GetLastError(), std::system_category(), "Cannot write: " + path);
+        if (!CloseHandle(probe))
+            throw std::system_error(GetLastError(), std::system_category(), "Cannot close: " + path);
+#else
+        const int probe = ::open(target.c_str(), O_WRONLY);
+        if (probe < 0)
+            throw std::system_error(errno, std::generic_category(), "Cannot write: " + path);
+        if (::close(probe) != 0)
+            throw std::system_error(errno, std::generic_category(), "Cannot close: " + path);
+#endif
+    }
+    static std::atomic<uint64_t> sequence{0};
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    fs::path temporary;
+    int fd = -1;
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        temporary = target.parent_path() / (".liarsoft-" + std::to_string(nonce) +
+                    "-" + std::to_string(sequence++) + ".tmp");
+#ifdef _WIN32
+        fd = _wopen(temporary.c_str(), _O_WRONLY | _O_CREAT | _O_EXCL | _O_BINARY,
+                    _S_IREAD | _S_IWRITE);
+#else
+        fd = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0666);
+#endif
+        if (fd >= 0) break;
+        if (errno != EEXIST)
+            throw std::system_error(errno, std::generic_category(), "Cannot create temporary file for: " + path);
+    }
+    if (fd < 0) throw std::runtime_error("Cannot create temporary file for: " + path);
+    FILE* output = nullptr;
+    try {
+#ifdef _WIN32
+        output = _fdopen(fd, "wb");
+#else
+        output = fdopen(fd, "wb");
+#endif
+        if (!output) throw std::system_error(errno, std::generic_category(), "Cannot open temporary stream: " + path);
+        fd = -1; // The stream owns the descriptor.
+        if ((size && std::fwrite(data, 1, size, output) != size) || std::fflush(output) != 0)
+            throw std::system_error(errno, std::generic_category(), "Failed to write: " + path);
+        const auto closed = std::fclose(output);
+        output = nullptr;
+        if (closed != 0)
+            throw std::system_error(errno, std::generic_category(), "Failed to close: " + path);
+        if (fs::exists(status)) fs::permissions(temporary, status.permissions());
+#ifdef _WIN32
+        // Same-volume replacement only: never fall back to copy/delete.
+        if (!MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING))
+            throw std::system_error(GetLastError(), std::system_category(), "Failed to replace: " + path);
+#else
+        fs::rename(temporary, target);
+#endif
+    } catch (...) {
+        if (output) std::fclose(output);
+        if (fd >= 0) {
+#ifdef _WIN32
+            _close(fd);
+#else
+            ::close(fd);
+#endif
+        }
+        std::error_code ignored;
+        fs::remove(temporary, ignored);
+        throw;
+    }
+}
+
 } // namespace
 
 bool writeFileIfChanged(const std::string& path, const uint8_t* data, size_t size) {
@@ -73,13 +174,7 @@ bool writeFileIfChanged(const std::string& path, const uint8_t* data, size_t siz
     // modification time does not change.
     if (fileMatches(path, data, size)) return false;
 
-    std::ofstream out(path, std::ios::binary);
-    if (!out) throw std::runtime_error("Cannot write file: " + path);
-    if (size > 0) {
-        out.write(reinterpret_cast<const char*>(data),
-                  static_cast<std::streamsize>(size));
-        if (!out) throw std::runtime_error("Failed to write file: " + path);
-    }
+    installFile(path, data, size);
     return true;
 }
 
@@ -106,15 +201,7 @@ bool writeTextFileIfChanged(const std::string& path, const std::string& text) {
     native = text;
 #endif
 
-    if (fileMatches(path, reinterpret_cast<const uint8_t*>(native.data()),
-                    native.size()))
-        return false;
-
-    std::ofstream out(path); // text mode, matching the original writers
-    if (!out) throw std::runtime_error("Cannot write file: " + path);
-    out << text;
-    if (!out) throw std::runtime_error("Failed to write file: " + path);
-    return true;
+    return writeFileIfChanged(path, reinterpret_cast<const uint8_t*>(native.data()), native.size());
 }
 
 } // namespace liarsoft
