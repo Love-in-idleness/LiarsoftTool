@@ -1,4 +1,6 @@
 #include "fileio.h"
+#include <algorithm>
+#include <array>
 #include <cstring>
 #include <fstream>
 #include <filesystem>
@@ -41,12 +43,19 @@ bool fileMatches(const std::string& path, const uint8_t* data, size_t size) {
     std::streamoff fileSize = in.tellg();
     if (fileSize < 0 || static_cast<uint64_t>(fileSize) != size) return false;
     in.seekg(0, std::ios::beg);
+    if (!in) return false;
 
-    std::vector<uint8_t> existing(size);
-    in.read(reinterpret_cast<char*>(existing.data()),
-            static_cast<std::streamsize>(size));
-    if (in.gcount() != static_cast<std::streamsize>(size)) return false;
-    return std::memcmp(existing.data(), data, size) == 0;
+    // Avoid allocating a second full-size buffer when comparing large archives.
+    std::array<uint8_t, 64 * 1024> buffer;
+    for (size_t offset = 0; offset < size;) {
+        const auto count = std::min(buffer.size(), size - offset);
+        in.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(count));
+        if (in.gcount() != static_cast<std::streamsize>(count) ||
+            std::memcmp(buffer.data(), data + offset, count) != 0)
+            return false;
+        offset += count;
+    }
+    return true;
 }
 
 } // namespace

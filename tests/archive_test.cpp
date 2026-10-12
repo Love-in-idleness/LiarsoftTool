@@ -2,6 +2,7 @@
 #include "xflarchive.h"
 #include "fileio.h"
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -86,8 +87,29 @@ int main(int argc, char** argv) {
             require(readFile(binaryPath) == binary, "Binary file reader changed bytes");
             writeFileIfChanged(binaryPath.string(), Bytes{});
             require(readFile(binaryPath).empty(), "Empty binary file rejected");
+            require(!writeFileIfChanged(binaryPath.string(), Bytes{}),
+                    "Identical empty file rewritten");
             rejects([&]{readFile(directory / "missing.dat");}, "Missing file accepted");
             rejects([&]{readFile(directory);}, "Directory accepted as binary file");
+            for (const size_t size : {65535u, 65536u, 65537u, 131073u}) {
+                Bytes data(size, 0xa5);
+                writeFileIfChanged(binaryPath.string(), data);
+                std::filesystem::last_write_time(binaryPath,
+                    std::filesystem::file_time_type::clock::now() - std::chrono::hours(24));
+                const auto originalTime = std::filesystem::last_write_time(binaryPath);
+                require(!writeFileIfChanged(binaryPath.string(), data),
+                        "Identical file rewritten across comparison block boundary");
+                require(std::filesystem::last_write_time(binaryPath) == originalTime,
+                        "Identical file comparison changed modification time");
+                for (const size_t changed : {size_t{0}, size / 2, size - 1}) {
+                    data[changed] ^= 1;
+                    require(writeFileIfChanged(binaryPath.string(), data),
+                            "Changed byte missed across comparison block boundary");
+                    require(readFile(binaryPath) == data, "Changed file not written correctly");
+                    require(!writeFileIfChanged(binaryPath.string(), data),
+                            "Updated file rewritten as different");
+                }
+            }
             LwgDecoder::Archive controls;
             controls.width=850; controls.height=26;
             controls.entries={
