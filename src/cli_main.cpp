@@ -4,10 +4,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <cstring>
-#include <algorithm>
 #include <filesystem>
-#include <memory>
 #include <charconv>
 
 namespace fs = std::filesystem;
@@ -273,8 +270,6 @@ int main(int argc, char* argv[]) {
             }
             // else: out stays empty → auto-derived
 
-            if (allFiles.size() > 1)
-                std::cout << "\n[" << (fi + 1) << "/" << allFiles.size() << "] ";
             if (!processOne(f, out, encoding, referencePath, recursive,
                             unpackOnly, gscToTsc, vorbisInWav, workers))
                 ++errors;
