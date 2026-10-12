@@ -65,9 +65,8 @@ GscFile GscFile::fromBytes(const std::vector<uint8_t>& bytes, const std::string&
     const auto declaration = reader.readBytes(gsc.stringDeclarationLength);
     const auto definition = reader.readBytes(gsc.stringDefinitionLength);
     BigEndianReader offsets(declaration);
-    if (offsets.readInt32() != 0 || definition.front() != 0)
-        throw std::runtime_error("Invalid GSC empty-string sentinel");
-    // Index zero is reserved. Other indices may share a string's byte offset.
+    // TXT excludes index zero, but the pool need not start with an empty string.
+    bool reserved = true;
     while (offsets.remaining()) {
         const int32_t start = offsets.readInt32();
         if (start < 0 || static_cast<size_t>(start) >= definition.size())
@@ -76,6 +75,10 @@ GscFile GscFile::fromBytes(const std::vector<uint8_t>& bytes, const std::string&
         const auto end = std::find(first, definition.end(), 0);
         if (end == definition.end())
             throw std::runtime_error("GSC string is not NUL-terminated");
+        if (reserved) {
+            reserved = false;
+            continue;
+        }
         gsc.stringLengths.push_back(static_cast<int32_t>(end - definition.begin() + 1));
         gsc.strings.push_back(decodeFromBytes({first, end}, enc));
     }

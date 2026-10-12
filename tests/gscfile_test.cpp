@@ -54,9 +54,9 @@ int main() {
         shortStream.clear();
         rejects([&] { GscFile::fromStream(shortStream, "CP932"); });
         require(GscFile::fromFile(file.string(), "CP932").toBytes() == original, "Checked file read mismatch");
-        for (size_t length = 0; length < 20; ++length)
+        for (size_t length = 0; length < original.size(); ++length)
             rejects([&] { GscFile::fromBytes({original.begin(), original.begin() + length}, "CP932"); });
-        for (size_t field : {4u, 8u, 12u, 16u}) {
+        for (size_t field : {0u, 4u, 8u, 12u, 16u}) {
             for (int32_t value : {-1, std::numeric_limits<int32_t>::max()}) {
                 auto bad = original;
                 write_int32_be(bad.data(), field, value);
@@ -76,6 +76,15 @@ int main() {
         write_int32_be(shared.data(), index + 8, 1);
         require(GscFile::fromBytes(shared, "CP932").strings ==
                 std::vector<std::string>({"Name", "Name"}), "Shared string offsets were rejected");
+        auto nonemptyZero = original;
+        nonemptyZero[index + gsc.stringDeclarationLength] = 'X';
+        require(GscFile::fromBytes(nonemptyZero, "CP932").strings == gsc.strings,
+                "A nonempty index-zero string was rejected");
+        write_int32_be(nonemptyZero.data(), index, 1);
+        require(GscFile::fromBytes(nonemptyZero, "CP932").strings == gsc.strings,
+                "A valid reserved offset was rejected");
+        write_int32_be(nonemptyZero.data(), index, -1);
+        rejects([&] { GscFile::fromBytes(nonemptyZero, "CP932"); });
         for (const auto* format : {"modern-36", "legacy-28"}) {
             const auto empty = restoreGscFromTsc(std::string(";@gsc-byte-format ") + format +
                 "\n;@gsc-schema early\n*end\n");
