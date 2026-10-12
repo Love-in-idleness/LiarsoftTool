@@ -47,6 +47,11 @@ int main() {
             setenv("LIARSOFT_TEST_IO_FAILURE", fault, 1);
             reject([&] { liarsoft::writeFileIfChanged(target.string(), next); });
             unsetenv("LIARSOFT_TEST_IO_FAILURE");
+            if (std::string(fault) == "write") {
+                const auto privateTemporary = std::getenv("LIARSOFT_TEST_PRIVATE_TEMP");
+                require(privateTemporary && std::string(privateTemporary) == "1",
+                        "Private content exposed in temporary file");
+            }
             require(liarsoft::readFile(target) == old &&
                     fs::last_write_time(target) == timestamp, "Failed write damaged old target");
             for (const auto& entry : fs::directory_iterator(root))

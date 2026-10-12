@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
+#include <sys/stat.h>
 
 // Test-only libc faults; the production writer has no injection API.
 static bool fail(const char* operation) {
@@ -13,7 +14,12 @@ static bool fail(const char* operation) {
 }
 extern "C" int fflush(FILE* file) {
     const auto real = reinterpret_cast<int(*)(FILE*)>(dlsym(RTLD_NEXT, "fflush"));
-    return fail("write") ? EOF : real(file);
+    if (!fail("write")) return real(file);
+    struct stat status{};
+    setenv("LIARSOFT_TEST_PRIVATE_TEMP",
+        fstat(fileno(file), &status) == 0 && (status.st_mode & 0777) == 0600 ? "1" : "0", 1);
+    errno = EIO;
+    return EOF;
 }
 extern "C" int fclose(FILE* file) {
     const auto real = reinterpret_cast<int(*)(FILE*)>(dlsym(RTLD_NEXT, "fclose"));

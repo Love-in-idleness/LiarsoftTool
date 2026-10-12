@@ -131,6 +131,8 @@ void installFile(const std::string& path, const uint8_t* data, size_t size) {
     if (fd < 0) throw std::runtime_error("Cannot create temporary file for: " + path);
     FILE* output = nullptr;
     try {
+        // Apply existing permissions before any content reaches the temporary file.
+        if (fs::exists(status)) fs::permissions(temporary, status.permissions());
 #ifdef _WIN32
         output = _fdopen(fd, "wb");
 #else
@@ -144,7 +146,6 @@ void installFile(const std::string& path, const uint8_t* data, size_t size) {
         output = nullptr;
         if (closed != 0)
             throw std::system_error(errno, std::generic_category(), "Failed to close: " + path);
-        if (fs::exists(status)) fs::permissions(temporary, status.permissions());
 #ifdef _WIN32
         // Same-volume replacement only: never fall back to copy/delete.
         if (!MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING))
