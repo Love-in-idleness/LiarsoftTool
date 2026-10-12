@@ -174,7 +174,7 @@ int main(int argc, char** argv) {
 
     if (!extension("/parent.with.dot/file").empty() ||
         replaceExtension("/parent.with.dot/file", ".gsc") !=
-            (fs::path("/parent.with.dot") / "file.gsc").string())
+            fs::path("/parent.with.dot/file.gsc").string())
         throw std::runtime_error("Parent directory was mistaken for an extension");
     assert(extension("VOICE.WAV") == ".wav");
     assert(replaceExtension("scene.gsc", ".tsc") == "scene.tsc");

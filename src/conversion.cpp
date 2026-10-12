@@ -39,7 +39,8 @@ std::string guessOutput(const std::string& inputPath,
                         bool gscToTsc,
                         const std::string& encoding) {
     const std::string ext = extension(inputPath);
-    fs::path input = fs::path(inputPath).lexically_normal();
+    fs::path input(inputPath);
+    if (fs::is_directory(input)) input = fs::absolute(input).lexically_normal();
     if (input.filename().empty()) input = input.parent_path();
     const fs::path base = outputDirectory.empty()
         ? input.parent_path() : fs::path(outputDirectory);
