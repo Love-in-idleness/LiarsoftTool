@@ -57,6 +57,9 @@ image decoding/encoding, script extraction/injection, and audio extraction.
 
 **依赖：** CMake ≥ 3.10, GCC ≥ 9（C++17 + `<filesystem>`）, libiconv、libwebp、libvorbis/libogg 开发库（Debian/Ubuntu：`libwebp-dev libvorbis-dev libogg-dev`）
 
+Windows/Linux 共用 GTKmm 3 图形界面，默认启用；Debian/Ubuntu 还需 `pkg-config libgtkmm-3.0-dev`。
+只编译命令行时添加 `-DBUILD_GUI=OFF`，不需要 GTKmm 或 pkg-config。
+
 ```bash
 cd LiarsoftTool
 mkdir build && cd build
@@ -64,7 +67,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 # CLI 版本
 sudo cp liarsofttool /usr/local/bin/
-# GUI 版本（Linux 需 GTKmm 3，Windows 使用原生 Win32，无需 GTK）
+# GUI 版本（Windows/Linux 均使用 GTKmm 3）
 # 直接运行 build/liarsofttool-gui 或双击 EXE
 ```
 
@@ -72,13 +75,21 @@ sudo cp liarsofttool /usr/local/bin/
 
 ```bash
 # 在 MSYS2 UCRT64 终端中
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp,libvorbis,libogg}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg}
 cd LiarsoftTool
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
 make -j$(nproc)
 # 产出 liarsofttool.exe 和 liarsofttool-gui.exe
+# 从仓库根目录制作可分发目录（目标目录必须不存在）
+cd ..
+bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
+# 双击 windows-bundle/bin/liarsofttool-gui.exe；分发整个目录，不只分发 EXE
 ```
+
+打包脚本递归收集 DLL 依赖及 GTK 图标、字体配置、图像加载模块和许可证，生成
+GLib schemas 与可重定位的图像加载缓存。用户无需安装 MSYS2；不要混用 UCRT64
+与 MINGW64 的编译器、库和运行时。CLI-only 构建不使用此 GUI 打包脚本。
 
 #### 从 Linux 交叉编译 Windows 版
 
@@ -89,15 +100,21 @@ make -j$(nproc)
 或指定 `OGG_INCLUDE_DIR`、`VORBIS_INCLUDE_DIR`、`OGG_LIBRARY`、`VORBIS_LIBRARY`、`VORBISFILE_LIBRARY`。
 启用测试时还需 `VORBISENC_LIBRARY`（仅用于生成测试音频）。动态构建需附带相应 DLL。
 若链接动态库，运行时须随程序提供对应的 WebP DLL；静态链接则无需该 DLL。
+GUI 还需同一 MinGW 目标的 GTKmm 3 全套开发依赖；用 `PKG_CONFIG_LIBDIR` 指向
+目标库的 `.pc` 目录、`PKG_CONFIG_SYSROOT_DIR` 设置 sysroot，避免误链接 Linux GTK。
+下例仅构建 CLI；准备好目标 GTKmm 后，去掉 `-DBUILD_GUI=OFF` 才会生成 GUI。
+GUI 使用 MSYS2 库时还须使用 POSIX 线程模型的 MinGW 编译器（例如
+`x86_64-w64-mingw32-g++-posix`）；不能混用 win32 线程模型的 C++ ABI。
 
 ```bash
 sudo apt install g++-mingw-w64-x86-64
 mkdir build/win && cd build/win
 cmake -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_GUI=OFF \
       -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
       -DCMAKE_SYSTEM_NAME=Windows ../..
 make -j$(nproc)
-# 产出 liarsofttool.exe 和 liarsofttool-gui.exe
+# 产出 liarsofttool.exe
 ```
 
 ### GUI 图形界面
@@ -109,7 +126,9 @@ make -j$(nproc)
 - 显示输入路径、输出路径、转换类型、状态四列
 - 批量转换带进度条，后台多线程不阻塞界面
 - 警告与错误提示提供“Copy details”一键复制，包含完整诊断信息及输入/输出路径，方便反馈问题
-- Linux 使用 GTK3，Windows 使用原生 Win32 API；libwebp 动态构建需附带对应 DLL
+- Windows/Linux 使用同一 GTKmm 3 界面；Windows 需随包提供 GTK 运行库和资源
+- 转换期间禁止修改队列和关闭窗口，完成后恢复操作，避免后台任务访问已销毁的控件
+- Windows 文件路径仍受转换核心的系统代码页限制；不能无损表示的路径会报错，请移至 ASCII 路径。界面的 UTF-8 与脚本编码选择互不影响
 
 ### 命令行参数
 
@@ -281,6 +300,10 @@ XFL/LWG 不保存条目的原始修改时间，解出的所有文件（含 `.met
 
 **Requirements:** CMake ≥ 3.10, GCC ≥ 9 (C++17 + `<filesystem>`), libiconv, libwebp and libvorbis/libogg development files (`libwebp-dev libvorbis-dev libogg-dev` on Debian/Ubuntu)
 
+Windows and Linux share one GTKmm 3 GUI, enabled by default; Debian/Ubuntu also
+need `pkg-config libgtkmm-3.0-dev`. Use `-DBUILD_GUI=OFF` for CLI-only builds,
+which need neither GTKmm nor pkg-config.
+
 ```bash
 cd LiarsoftTool
 mkdir build && cd build
@@ -288,7 +311,7 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j$(nproc)
 # CLI version
 sudo cp liarsofttool /usr/local/bin/
-# GUI version (Linux: GTKmm 3 required; Windows: native Win32, no GTK needed)
+# GUI version (GTKmm 3 on both Windows and Linux)
 # Run build/liarsofttool-gui directly or double-click the EXE
 ```
 
@@ -296,13 +319,22 @@ sudo cp liarsofttool /usr/local/bin/
 
 ```bash
 # In MSYS2 UCRT64 terminal
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,libwebp,libvorbis,libogg}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg}
 cd LiarsoftTool
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
 make -j$(nproc)
 # Produces liarsofttool.exe and liarsofttool-gui.exe
+# From the repository root, create a distributable folder (must not exist yet)
+cd ..
+bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
+# Launch windows-bundle/bin/liarsofttool-gui.exe; distribute the whole folder
 ```
+
+The bundler recursively collects DLL dependencies, GTK icons, font configuration,
+image loaders and licenses, then generates GLib schemas and a relocatable loader
+cache. Users need no MSYS2 installation. Do not mix UCRT64 and MINGW64 compilers,
+libraries or runtimes. This GUI bundler is not used for CLI-only builds.
 
 #### Cross-compile Windows from Linux
 
@@ -314,15 +346,22 @@ to their installation prefix, or provide `OGG_INCLUDE_DIR`, `VORBIS_INCLUDE_DIR`
 `OGG_LIBRARY`, `VORBIS_LIBRARY`, and `VORBISFILE_LIBRARY`.
 Tests also need `VORBISENC_LIBRARY` to generate test audio. Dynamic builds must ship the audio DLLs.
 Dynamic builds must ship the corresponding WebP DLL; static builds need no WebP DLL.
+GUI cross-builds also need the complete matching MinGW GTKmm 3 development stack.
+Set `PKG_CONFIG_LIBDIR` to target `.pc` directories and `PKG_CONFIG_SYSROOT_DIR` to
+the sysroot; never link host Linux GTK libraries. The example below builds only
+the CLI; remove `-DBUILD_GUI=OFF` once target GTKmm dependencies are available.
+With MSYS2 GUI libraries, use the POSIX-thread MinGW compiler (e.g.
+`x86_64-w64-mingw32-g++-posix`), not the incompatible win32-thread C++ ABI.
 
 ```bash
 sudo apt install g++-mingw-w64-x86-64
 mkdir build/win && cd build/win
 cmake -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_GUI=OFF \
       -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
       -DCMAKE_SYSTEM_NAME=Windows ../..
 make -j$(nproc)
-# Produces liarsofttool.exe and liarsofttool-gui.exe
+# Produces liarsofttool.exe
 ```
 
 ### GUI
@@ -334,7 +373,9 @@ Run `liarsofttool-gui` or double-click the executable:
 - Four-column list: Input Path, Output Path, Type, Status
 - Batch conversion with progress bar; background threading keeps UI responsive
 - Warning/error dialogs offer **Copy details**, copying the complete diagnostics and input/output paths for bug reports
-- Linux: GTK3 backend. Windows: native Win32 API; dynamic libwebp builds need its DLL
+- Windows/Linux use the same GTKmm 3 frontend; Windows distributions must include GTK runtime libraries and resources
+- Queue editing and window closing are disabled until conversion finishes, keeping background tasks away from destroyed widgets
+- Windows paths must be representable in the conversion core's system code page; otherwise they fail explicitly. Move such files to an ASCII path. UI UTF-8 handling does not change the selected script encoding
 
 ### CLI Options
 
@@ -519,6 +560,7 @@ Third-party code:
 - [stb_image](https://github.com/nothings/stb) (public domain) — PNG read/write
 - [libwebp](https://chromium.googlesource.com/webm/libwebp/) (BSD) — lossless WebP read/write
 - [libogg/libvorbis](https://xiph.org/vorbis/) (BSD) — Vorbis decoding; libvorbisenc generates test audio only
+- [GTK/GTKmm](https://www.gtk.org/) (LGPL) — shared desktop GUI; Windows bundles include dependency license notices under `share/licenses`
 - CG decompression algorithm from [arc_unpacker](https://github.com/vn-tools/arc_unpacker) (GPLv3)
 
 Audio library notices: [libogg/libvorbis licenses](docs/THIRD_PARTY_AUDIO_LICENSES.md).

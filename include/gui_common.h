@@ -24,6 +24,10 @@ struct ConversionDiagnostic {
 
 std::string formatDiagnostics(const std::vector<ConversionDiagnostic>& diagnostics);
 
+// GTK uses UTF-8; the Windows conversion core still uses system-code-page paths.
+std::string nativePathFromUtf8(const std::string& path);
+std::string nativeTextToUtf8(const std::string& text);
+
 std::string extension(const std::string& path);
 std::string replaceExtension(const std::string& path,
                              const std::string& newExtension);

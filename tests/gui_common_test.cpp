@@ -14,11 +14,45 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 static std::vector<uint8_t> readBytes(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) throw std::runtime_error("Cannot read test output: " + path.string());
     return {(std::istreambuf_iterator<char>(in)), {}};
+}
+
+static void testGuiPaths() {
+    using namespace liarsoft::gui;
+    for (const auto& path : {std::string("C:/game with spaces/scene.tsc"), std::string()}) {
+        if (nativeTextToUtf8(nativePathFromUtf8(path)) != path)
+            throw std::runtime_error("GUI ASCII path conversion changed the filename");
+    }
+#ifdef _WIN32
+    for (const auto* unicode : {u8"C:/café/scene.tsc", u8"C:/日本語/scene.tsc",
+                               u8"C:/中文/scene.tsc", u8"C:/😀/scene.tsc"}) {
+        std::string native;
+        try { native = nativePathFromUtf8(unicode); }
+        catch (const std::runtime_error&) {
+            if (GetACP() == CP_UTF8)
+                throw std::runtime_error("UTF-8 Windows system code page rejected a Unicode path");
+            continue;
+        }
+        if (nativeTextToUtf8(native) != unicode)
+            throw std::runtime_error("GUI path conversion silently substituted a character");
+    }
+    bool rejected = false;
+    try { nativePathFromUtf8(std::string("bad\xff.tsc")); }
+    catch (const std::runtime_error&) { rejected = true; }
+    if (!rejected) throw std::runtime_error("GUI accepted an invalid UTF-8 path");
+#else
+    const auto unicode = u8"/日本語/中文/😀/scene.tsc";
+    if (nativePathFromUtf8(unicode) != unicode || nativeTextToUtf8(unicode) != unicode)
+        throw std::runtime_error("Linux GUI unexpectedly recoded UTF-8 paths");
+#endif
 }
 
 static void testParallelConversions(const std::filesystem::path& directory,
@@ -131,6 +165,7 @@ static void testParallelConversions(const std::filesystem::path& directory,
 }
 
 int main(int argc, char** argv) {
+    testGuiPaths();
     using namespace liarsoft::gui;
     namespace fs = std::filesystem;
 

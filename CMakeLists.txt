@@ -43,11 +43,21 @@ if(NOT WIN32)
     find_package(Iconv REQUIRED)
 endif()
 
-# Find GTKmm for the Linux GUI
-if(NOT WIN32)
-    find_package(PkgConfig)
-    if(PKG_CONFIG_FOUND)
-        pkg_check_modules(GTKMM gtkmm-3.0)
+# Both desktop platforms use the same GTKmm frontend; CLI-only builds need no GTK.
+option(BUILD_GUI "Build the GTKmm 3 GUI" ON)
+if(BUILD_GUI)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTKMM REQUIRED IMPORTED_TARGET gtkmm-3.0)
+    if(MINGW)
+        include(CheckCXXSourceCompiles)
+        check_cxx_source_compiles("#include <bits/gthr.h>
+            #ifdef GCC_GTHR_WIN32_H
+            #error MSYS2 GTKmm requires the POSIX-thread C++ ABI
+            #endif
+            int main() { return 0; }" GTKMM_COMPILER_ABI_COMPATIBLE)
+        if(NOT GTKMM_COMPILER_ABI_COMPATIBLE)
+            message(FATAL_ERROR "Use a POSIX-thread MinGW compiler for GTKmm (e.g. g++-posix), or set BUILD_GUI=OFF")
+        endif()
     endif()
 endif()
 
@@ -59,7 +69,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     # Find windres (prefixed with cross-compiler triplet, e.g. x86_64-w64-mingw32-windres)
     get_filename_component(_MINGW_DIR ${CMAKE_CXX_COMPILER} DIRECTORY)
     get_filename_component(_MINGW_CXX ${CMAKE_CXX_COMPILER} NAME)
-    string(REGEX REPLACE "-g\\+\\+$" "" _MINGW_PFX "${_MINGW_CXX}")
+    string(REGEX REPLACE "-g\\+\\+(-posix|-win32)?$" "" _MINGW_PFX "${_MINGW_CXX}")
     find_program(WINDRES NAMES ${_MINGW_PFX}-windres windres
         HINTS ${_MINGW_DIR}
         REQUIRED)
@@ -103,34 +113,26 @@ if(WIN32)
 endif()
 
 # ---- GUI target ----
-if(WIN32)
-    # Windows: use native Win32 GUI (no extra deps)
-    add_executable(liarsofttool-gui WIN32
-        src/gui_main.cpp
-        src/gui_win32.cpp
-        src/gui_common.cpp
-    )
-    target_link_libraries(liarsofttool-gui PRIVATE comctl32 comdlg32 ole32)
-    target_sources(liarsofttool-gui PRIVATE ${RESOURCE_OBJ})
-elseif(GTKMM_FOUND)
-    # Linux: use GTKmm GUI
+if(BUILD_GUI)
     add_executable(liarsofttool-gui
         src/gui_main.cpp
         src/gui.cpp
         src/gui_common.cpp
     )
-    target_include_directories(liarsofttool-gui PRIVATE ${GTKMM_INCLUDE_DIRS})
-    target_link_libraries(liarsofttool-gui PRIVATE ${GTKMM_LIBRARIES})
-    target_compile_options(liarsofttool-gui PRIVATE ${GTKMM_CFLAGS_OTHER})
+    target_link_libraries(liarsofttool-gui PRIVATE PkgConfig::GTKMM)
+    if(WIN32)
+        set_target_properties(liarsofttool-gui PROPERTIES WIN32_EXECUTABLE TRUE)
+        target_sources(liarsofttool-gui PRIVATE ${RESOURCE_OBJ})
+    endif()
     message(STATUS "GTK GUI: enabled (liarsofttool-gui)")
 else()
-    message(STATUS "GUI: disabled (no GTKmm on Linux, Win32 API on Windows)")
+    message(STATUS "GUI: disabled (BUILD_GUI=OFF)")
 endif()
 
 # Install
 install(TARGETS liarsofttool DESTINATION bin)
 install(FILES docs/THIRD_PARTY_AUDIO_LICENSES.md DESTINATION share/doc/LiarsoftTool)
-if(WIN32 OR GTKMM_FOUND)
+if(BUILD_GUI)
     install(TARGETS liarsofttool-gui DESTINATION bin)
 endif()
 
@@ -156,6 +158,22 @@ if(BUILD_TESTING)
         tests/gui_common_test.cpp src/gui_common.cpp)
     add_test(NAME gui_common COMMAND gui_common_test)
 
+    if(BUILD_GUI)
+        add_executable(gui_smoke_test tests/gui_smoke_test.cpp src/gui_common.cpp)
+        target_link_libraries(gui_smoke_test PRIVATE PkgConfig::GTKMM)
+        if(WIN32)
+            add_test(NAME gui_smoke COMMAND gui_smoke_test)
+        else()
+            find_program(XVFB_RUN xvfb-run)
+            if(XVFB_RUN)
+                add_test(NAME gui_smoke COMMAND ${XVFB_RUN} -a $<TARGET_FILE:gui_smoke_test>)
+            endif()
+        endif()
+        if(TEST gui_smoke)
+            set_tests_properties(gui_smoke PROPERTIES TIMEOUT 30)
+        endif()
+    endif()
+
     add_executable(archive_test tests/archive_test.cpp)
     add_test(NAME archive COMMAND archive_test ${CMAKE_CURRENT_BINARY_DIR}/archive_test_data)
 
@@ -174,10 +192,11 @@ if(BUILD_TESTING)
 endif()
 
 foreach(target liarsofttool liarsofttool-gui encoding_test wav_ogg_test exe_patch_test
-               gsc_decompiler_test gui_common_test archive_test cg_decompress_test)
+               gsc_decompiler_test gui_common_test gui_smoke_test archive_test cg_decompress_test)
     if(TARGET ${target})
         target_link_libraries(${target} PRIVATE liarsofttool_core)
-        if(WIN32)
+        # GTKmm DLLs share the C++ runtime with the GUI.
+        if(WIN32 AND NOT target STREQUAL "liarsofttool-gui" AND NOT target STREQUAL "gui_smoke_test")
             target_link_options(${target} PRIVATE -static-libgcc -static-libstdc++)
         endif()
     endif()

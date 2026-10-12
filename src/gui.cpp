@@ -1,6 +1,8 @@
 #include "gui.h"
 #include <gtkmm.h>
 #include <iostream>
+#include <functional>
+#include <mutex>
 #include <thread>
 #include <utility>
 
@@ -32,6 +34,53 @@ static Gtk::Button* g_convertBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
 static Gtk::Window* g_window = nullptr;
+static Gtk::Box* g_mainBox = nullptr;
+static bool g_busy = false;
+static std::thread g_worker;
+
+// Only the main thread touches GTK; Dispatcher is safe to emit from the worker.
+struct GuiUpdates {
+    Glib::Dispatcher dispatcher;
+    std::mutex mutex;
+    std::vector<std::function<void()>> pending;
+
+    void post(std::function<void()> update) {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            pending.push_back(std::move(update));
+        }
+        dispatcher.emit();
+    }
+
+    void drain() {
+        std::vector<std::function<void()>> updates;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            updates.swap(pending);
+        }
+        for (auto& update : updates) update();
+    }
+};
+static GuiUpdates* g_updates = nullptr;
+
+static bool onClose(GdkEventAny*) {
+    if (g_busy) g_statusLabel->set_text("Please wait for conversion to finish before closing.");
+    return g_busy;
+}
+
+static std::string corePath(const Glib::ustring& path) {
+    return liarsoft::gui::nativePathFromUtf8(path.raw());
+}
+
+static Glib::ustring displayText(const std::string& text) {
+    return liarsoft::gui::nativeTextToUtf8(text);
+}
+
+static void showInputError(const std::exception& error) {
+    Gtk::MessageDialog dialog(*g_window, displayText(error.what()), false,
+                              Gtk::MESSAGE_ERROR, Gtk::BUTTONS_CLOSE, true);
+    dialog.run();
+}
 
 static void showDiagnostics(const std::string& report, bool hasErrors) {
     Gtk::Dialog dialog(hasErrors ? "Completed with errors" : "Completed with warnings",
@@ -42,7 +91,7 @@ static void showDiagnostics(const std::string& report, bool hasErrors) {
     Gtk::TextView text;
     text.set_editable(false);
     text.set_wrap_mode(Gtk::WRAP_WORD_CHAR);
-    text.get_buffer()->set_text(report);
+    text.get_buffer()->set_text(displayText(report));
     scroll.add(text);
     dialog.get_content_area()->pack_start(scroll);
     auto* copy = dialog.add_button("Copy details", 1);
@@ -50,7 +99,7 @@ static void showDiagnostics(const std::string& report, bool hasErrors) {
     dialog.show_all_children();
     while (dialog.run() == 1) {
         auto clipboard = Gtk::Clipboard::get();
-        clipboard->set_text(report);
+        clipboard->set_text(displayText(report));
         clipboard->store();
         copy->set_label("Copied! Copy again");
     }
@@ -64,18 +113,23 @@ struct ConversionJob {
 
 // ---- Add files to the list ----
 static void addFiles(const std::vector<std::string>& paths, const std::string& outDir) {
+    if (g_busy) return;
     const bool gscToTsc = !g_gscToTxtCheck || !g_gscToTxtCheck->get_active();
     const std::string encoding = g_encodingCombo ?
         g_encodingCombo->get_active_id() : "CP932";
     for (const auto& p : paths) {
-        if (!liarsoft::gui::isSupported(p)) continue;
-        auto row = *(g_store->append());
-        row[g_columns.inputPath]  = p;
-        row[g_columns.outputPath] = liarsoft::gui::guessOutput(
-            p, outDir, gscToTsc, encoding);
-        row[g_columns.fileType]   = liarsoft::gui::guessType(
-            p, gscToTsc, encoding);
-        row[g_columns.status]     = "Ready";
+        try {
+            const std::string input = liarsoft::gui::nativePathFromUtf8(p);
+            if (!liarsoft::gui::isSupported(input)) continue;
+            const auto output = liarsoft::gui::guessOutput(
+                input, liarsoft::gui::nativePathFromUtf8(outDir), gscToTsc, encoding);
+            auto row = *(g_store->append());
+            row[g_columns.inputPath]  = p;
+            row[g_columns.outputPath] = displayText(output);
+            row[g_columns.fileType]   = liarsoft::gui::guessType(
+                input, gscToTsc, encoding);
+            row[g_columns.status]     = "Ready";
+        } catch (const std::exception& error) { showInputError(error); }
     }
 }
 
@@ -97,33 +151,30 @@ static void convertAll(std::vector<ConversionJob> jobs,
         const std::string& out = job.outputPath;
         const auto& rowPath = job.rowPath;
         int processingNumber = done + 1;
-        if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly,
-                                            recursive)) {
-            done++;
-            Glib::signal_idle().connect_once([rowPath, done, total]() {
-                auto row = g_store->get_iter(rowPath);
-                if (row) (*row)[g_columns.status] = "SKIPPED";
-                g_progress->set_fraction(static_cast<double>(done) / total);
-                g_statusLabel->set_text(
-                    Glib::ustring::format("Done ", done, " of ", total));
-            });
-            continue;
-        }
-
-        Glib::signal_idle().connect_once([rowPath, done, total, processingNumber]() {
-            auto row = g_store->get_iter(rowPath);
-            if (row) (*row)[g_columns.status] = "Processing...";
-            double frac = static_cast<double>(done) / total;
-            g_progress->set_fraction(frac);
-            g_statusLabel->set_text(
-                Glib::ustring::format("Processing ", processingNumber, " of ", total));
-        });
-
-        // Process this file
-        std::vector<std::string> warnings;
-
         try {
-            warnings = liarsoft::gui::convert(in, out, options);
+            if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly,
+                                                recursive)) {
+                done++;
+                g_updates->post([rowPath, done, total]() {
+                    auto row = g_store->get_iter(rowPath);
+                    if (row) (*row)[g_columns.status] = "SKIPPED";
+                    g_progress->set_fraction(static_cast<double>(done) / total);
+                    g_statusLabel->set_text(
+                        Glib::ustring::format("Done ", done, " of ", total));
+                });
+                continue;
+            }
+
+            g_updates->post([rowPath, done, total, processingNumber]() {
+                auto row = g_store->get_iter(rowPath);
+                if (row) (*row)[g_columns.status] = "Processing...";
+                double frac = static_cast<double>(done) / total;
+                g_progress->set_fraction(frac);
+                g_statusLabel->set_text(
+                    Glib::ustring::format("Processing ", processingNumber, " of ", total));
+            });
+
+            const auto warnings = liarsoft::gui::convert(in, out, options);
 
             for (const auto& warning : warnings)
                 std::cerr << "Warning: " << warning << std::endl;
@@ -134,7 +185,7 @@ static void convertAll(std::vector<ConversionJob> jobs,
                 ? "OK" : "WARN (" + std::to_string(warnings.size()) + ")";
             std::string detail = warnings.empty() ? "" : warnings.front();
             done++;
-            Glib::signal_idle().connect_once([rowPath, done, total, rowStatus, detail]() {
+            g_updates->post([rowPath, done, total, rowStatus, detail]() {
                 auto row = g_store->get_iter(rowPath);
                 if (row) (*row)[g_columns.status] = rowStatus;
                 double frac = static_cast<double>(done) / total;
@@ -143,16 +194,16 @@ static void convertAll(std::vector<ConversionJob> jobs,
                     g_statusLabel->set_text(
                         Glib::ustring::format("Done ", done, " of ", total));
                 else
-                    g_statusLabel->set_text("Warning: " + detail);
+                    g_statusLabel->set_text(displayText("Warning: " + detail));
             });
         } catch (const std::exception& e) {
             done++;
             std::string err = e.what();
             hasErrors = true;
             diagnostics.push_back({true, in, out, err});
-            Glib::signal_idle().connect_once([rowPath, done, total, err]() {
+            g_updates->post([rowPath, done, total, err]() {
                 auto row = g_store->get_iter(rowPath);
-                if (row) (*row)[g_columns.status] = "FAILED: " + err;
+                if (row) (*row)[g_columns.status] = displayText("FAILED: " + err);
                 double frac = static_cast<double>(done) / total;
                 g_progress->set_fraction(frac);
                 g_statusLabel->set_text(
@@ -162,7 +213,10 @@ static void convertAll(std::vector<ConversionJob> jobs,
     }
 
     const std::string report = liarsoft::gui::formatDiagnostics(diagnostics);
-    Glib::signal_idle().connect_once([totalWarnings, hasErrors, report]() {
+    g_updates->post([totalWarnings, hasErrors, report]() {
+        g_worker.join();
+        g_busy = false;
+        g_mainBox->set_sensitive(true);
         g_progress->set_fraction(1.0);
         g_statusLabel->set_text(hasErrors ? "Completed with errors." : totalWarnings == 0
             ? "All done."
@@ -174,18 +228,21 @@ static void convertAll(std::vector<ConversionJob> jobs,
 
 // ---- Update output paths when output dir changes ----
 static void updateOutputPaths() {
-    std::string outDir = g_outDirEntry->get_text();
-    const bool gscToTsc = !g_gscToTxtCheck || !g_gscToTxtCheck->get_active();
-    const std::string encoding = g_encodingCombo ?
-        g_encodingCombo->get_active_id() : "CP932";
-    for (auto& child : g_store->children()) {
-        const std::string input = static_cast<std::string>(
-            static_cast<Glib::ustring>(child[g_columns.inputPath]));
-        child[g_columns.outputPath] = liarsoft::gui::guessOutput(
-            input, outDir, gscToTsc, encoding);
-        child[g_columns.fileType] = liarsoft::gui::guessType(
-            input, gscToTsc, encoding);
-    }
+    if (g_busy) return;
+    try {
+        std::string outDir = corePath(g_outDirEntry->get_text());
+        const bool gscToTsc = !g_gscToTxtCheck || !g_gscToTxtCheck->get_active();
+        const std::string encoding = g_encodingCombo ?
+            g_encodingCombo->get_active_id() : "CP932";
+        for (auto& child : g_store->children()) {
+            const std::string input = corePath(
+                static_cast<Glib::ustring>(child[g_columns.inputPath]));
+            child[g_columns.outputPath] = displayText(liarsoft::gui::guessOutput(
+                input, outDir, gscToTsc, encoding));
+            child[g_columns.fileType] = liarsoft::gui::guessType(
+                input, gscToTsc, encoding);
+        }
+    } catch (const std::exception& error) { showInputError(error); }
 }
 
 // ---- File chooser dialog ----
@@ -249,20 +306,28 @@ static void onChooseRef(Gtk::Window* parent) {
 
 // ---- Drag & drop handler ----
 static void onDragDataReceived(
-    const Glib::RefPtr<Gdk::DragContext>&, int, int,
-    const Gtk::SelectionData& sel, guint, guint) {
+    const Glib::RefPtr<Gdk::DragContext>& context, int, int,
+    const Gtk::SelectionData& sel, guint, guint time) {
+    if (g_busy) { context->drag_finish(false, false, time); return; }
     auto uris = sel.get_uris();
     std::vector<std::string> paths;
-    for (const auto& uri : uris) {
-        auto path = Glib::filename_from_uri(uri);
-        paths.push_back(path);
+    try {
+        for (const auto& uri : uris) {
+            auto path = Glib::filename_from_uri(uri);
+            paths.push_back(path);
+        }
+        std::string outDir = g_outDirEntry->get_text();
+        addFiles(paths, outDir);
+        context->drag_finish(true, false, time);
+    } catch (const std::exception& error) {
+        context->drag_finish(false, false, time);
+        showInputError(error);
     }
-    std::string outDir = g_outDirEntry->get_text();
-    addFiles(paths, outDir);
 }
 
 // ---- Clear list ----
 static void onClear() {
+    if (g_busy) return;
     g_store->clear();
     g_progress->set_fraction(0.0);
     g_statusLabel->set_text("Ready.");
@@ -270,6 +335,7 @@ static void onClear() {
 
 // ---- Remove selected ----
 static void onRemoveSelected(Gtk::TreeView* treeView) {
+    if (g_busy) return;
     auto sel = treeView->get_selection();
     if (auto it = sel->get_selected()) {
         g_store->erase(it);
@@ -278,15 +344,21 @@ static void onRemoveSelected(Gtk::TreeView* treeView) {
 
 // ---- Main GUI entry point ----
 int runGui(int argc, char* argv[]) {
-    auto app = Gtk::Application::create(argc, argv, "io.github.liarsofttool");
+    auto app = Gtk::Application::create(argc, argv, "io.github.liarsofttool",
+                                        Gio::APPLICATION_NON_UNIQUE);
+    GuiUpdates updates;
+    g_updates = &updates;
+    updates.dispatcher.connect(sigc::mem_fun(updates, &GuiUpdates::drain));
 
     Gtk::Window window;
     g_window = &window;
     window.set_title("LiarsoftTool");
     window.set_default_size(800, 500);
+    window.signal_delete_event().connect(sigc::ptr_fun(&onClose));
 
     // ---- Layout ----
     auto mainBox = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL, 4));
+    g_mainBox = mainBox;
     mainBox->property_margin() = 8;
 
     // --- Top bar ---
@@ -395,26 +467,34 @@ int runGui(int argc, char* argv[]) {
     g_convertBtn = Gtk::manage(new Gtk::Button("Convert All"));
     g_convertBtn->set_sensitive(false);
     g_convertBtn->signal_clicked().connect([&]() {
-        std::string enc = g_encodingCombo->get_active_id();
-        std::string ref = g_refEntry->get_text();
-        bool recursive = g_recursiveCheck->get_active();
-        bool packOnly = g_packOnlyCheck->get_active();
-        bool unpackOnly = g_unpackOnlyCheck->get_active();
-        bool gscToTsc = !g_gscToTxtCheck->get_active();
-        bool vorbisInWav = g_vorbisInWavCheck->get_active();
-        g_workersSpin->update();
-        const unsigned workers = g_workersSpin->get_value_as_int();
-        std::vector<ConversionJob> jobs;
-        for (const auto& child : g_store->children()) {
-            jobs.push_back({
-                static_cast<Glib::ustring>(child[g_columns.inputPath]),
-                static_cast<Glib::ustring>(child[g_columns.outputPath]),
-                g_store->get_path(child)});
+        if (g_busy) return;
+        try {
+            std::string enc = g_encodingCombo->get_active_id();
+            std::string ref = corePath(g_refEntry->get_text());
+            bool recursive = g_recursiveCheck->get_active();
+            bool packOnly = g_packOnlyCheck->get_active();
+            bool unpackOnly = g_unpackOnlyCheck->get_active();
+            bool gscToTsc = !g_gscToTxtCheck->get_active();
+            bool vorbisInWav = g_vorbisInWavCheck->get_active();
+            g_workersSpin->update();
+            const unsigned workers = g_workersSpin->get_value_as_int();
+            std::vector<ConversionJob> jobs;
+            for (const auto& child : g_store->children()) {
+                jobs.push_back({
+                    corePath(static_cast<Glib::ustring>(child[g_columns.inputPath])),
+                    corePath(static_cast<Glib::ustring>(child[g_columns.outputPath])),
+                    g_store->get_path(child)});
+            }
+            if (jobs.empty()) return;
+            g_busy = true;
+            mainBox->set_sensitive(false);
+            g_worker = std::thread(convertAll, std::move(jobs), enc, ref, recursive,
+                                  packOnly, unpackOnly, gscToTsc, vorbisInWav, workers);
+        } catch (const std::exception& error) {
+            g_busy = false;
+            mainBox->set_sensitive(true);
+            showInputError(error);
         }
-        g_convertBtn->set_sensitive(false);
-        std::thread t(convertAll, std::move(jobs), enc, ref, recursive,
-                      packOnly, unpackOnly, gscToTsc, vorbisInWav, workers);
-        t.detach();
     });
 
     bottomBar->pack_start(*addBtn, false, false);
@@ -447,5 +527,6 @@ int runGui(int argc, char* argv[]) {
     window.show_all();
 
     app->run(window);
+    if (g_worker.joinable()) g_worker.join();
     return 0;
 }
