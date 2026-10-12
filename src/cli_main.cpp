@@ -1,15 +1,6 @@
-#include "gscfile.h"
-#include "gsc_decompiler.h"
-#include "transfile.h"
-#include "xflarchive.h"
-#include "wcg_decoder.h"
-#include "lim_decoder.h"
-#include "lwg_decoder.h"
-#include "wav_ogg.h"
-#include "exe_patch.h"
+#include "conversion.h"
 #include "encoding.h"
-#include "fileio.h"
-#include "stb_image.h"
+#include "xflarchive.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -69,20 +60,6 @@ static void printUsage(const char* prog) {
               << "  " << prog << " 0*.png                  # batch convert all matching PNGs\n"
               << "  " << prog << " -e gbk ./extracted_dir\n"
               << std::endl;
-}
-
-static std::string getExtension(const std::string& path) {
-    auto pos = path.rfind('.');
-    if (pos == std::string::npos) return "";
-    std::string ext = path.substr(pos);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    return ext;
-}
-
-static std::string replaceExtension(const std::string& path, const std::string& newExt) {
-    auto pos = path.rfind('.');
-    if (pos == std::string::npos) return path + newExt;
-    return path.substr(0, pos) + newExt;
 }
 
 static std::string normalizeEncoding(const std::string& enc) {
@@ -158,168 +135,27 @@ static bool processOne(const std::string& inputPath,
                        bool recursive, bool unpackOnly, bool gscToTsc,
                        bool vorbisInWav, unsigned workers)
 {
-    auto printWarnings = [](const std::vector<std::string>& warnings) {
-        for (const auto& warning : warnings)
-            std::cerr << "Warning: " << warning << std::endl;
-    };
-    // Resolve absolute path
-    std::error_code ec;
-    std::string resolved = fs::absolute(inputPath, ec).string();
-    if (ec) resolved = inputPath;
-
-    // ---- Directory → XFL or LWG ----
-    if (fs::is_directory(resolved)) {
-        // Strip trailing slash for clean extension appending
-        while (!resolved.empty() && (resolved.back() == '/' || resolved.back() == '\\'))
-            resolved.pop_back();
-
-        if (unpackOnly) {
-            std::cout << "Recursively unpacking directory: " << resolved
-                      << " (encoding: " << encoding << ")" << std::endl;
-            printWarnings(liarsoft::unpackDirectoryRecursively(
-                resolved, encoding, gscToTsc, workers));
-            return true;
-        }
-
-        bool hasMeta = liarsoft::isLwgDirectory(resolved);
-        std::string out = outputPath;
-        if (hasMeta) {
-            std::cout << "Packing directory to LWG: " << resolved
-                      << " (encoding: " << encoding << ")" << std::endl;
-            if (out.empty()) out = resolved + ".lwg";
-        } else {
-            std::cout << "Packing directory to XFL: " << resolved
-                      << " (encoding: " << encoding << ")" << std::endl;
-            if (out.empty()) out = resolved + ".xfl";
-        }
-        auto warnings = liarsoft::packDirectoryToFile(resolved, out, encoding,
-                                                       recursive, vorbisInWav, workers);
-        printWarnings(warnings);
-        std::cout << "Packed to: " << out << std::endl;
-        return true;
-    }
-
-    std::string ext = getExtension(inputPath);
-    std::string out = outputPath;
-
-    if (ext == ".gsc") {
-        if (gscToTsc) {
-            if (out.empty()) out = replaceExtension(inputPath, ".tsc");
-            printWarnings(liarsoft::decompileGscToFile(inputPath, out, encoding));
-            std::cout << "GSC -> TSC: " << out << std::endl;
-        } else {
-            std::cout << "Reading GSC: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
-            auto gsc = liarsoft::GscFile::fromFile(inputPath, encoding);
-            auto trans = liarsoft::TransFile::fromGsc(gsc);
-            if (out.empty()) out = replaceExtension(inputPath, ".txt");
-            trans.save(out);
-            liarsoft::copyModificationTime(inputPath, out);
-            std::cout << "Extracted " << trans.strings.size() << " strings to: " << out << std::endl;
-        }
-
-    } else if (ext == ".tsc") {
-        if (out.empty()) out = replaceExtension(inputPath, ".gsc");
-        liarsoft::restoreGscFromTscFile(inputPath, out, encoding);
-        std::cout << "Built GSC from TSC: " << out << std::endl;
-
-    } else if (ext == ".txt") {
-        std::string ref = referencePath;
-        if (ref.empty()) ref = replaceExtension(inputPath, ".gsc");
-        std::cout << "Reading TXT: " << inputPath << std::endl;
-        std::cout << "Using reference GSC: " << ref << " (encoding: " << encoding << ")" << std::endl;
-        auto trans = liarsoft::TransFile::fromFile(inputPath);
-        auto gsc = trans.toGsc(ref, encoding);
-        if (out.empty()) out = replaceExtension(inputPath, ".gsc");
-        gsc.save(out);
-        std::cout << "Packed " << trans.strings.size() << " strings to: " << out << std::endl;
-
-    } else if (ext == ".xfl") {
-        std::cout << "Reading XFL: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
-        auto archive = liarsoft::XflArchive::fromFile(inputPath, encoding);
-        if (out.empty()) out = replaceExtension(inputPath, "");
-        archive.extractToDirectory(out, fs::last_write_time(inputPath));
-        if (recursive)
-            printWarnings(liarsoft::unpackDirectoryRecursively(
-                out, encoding, gscToTsc, workers));
-        std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
-
-    } else if (ext == ".lwg") {
-        std::cout << "Reading LWG: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
-        auto raw = liarsoft::readFile(inputPath);
-        auto archive = liarsoft::LwgDecoder::decode(raw, encoding);
-        if (out.empty()) out = replaceExtension(inputPath, "");
-        liarsoft::LwgDecoder::extractToDirectory(archive, out, encoding,
-                                                fs::last_write_time(inputPath));
-        if (recursive)
-            printWarnings(liarsoft::unpackDirectoryRecursively(
-                out, encoding, gscToTsc, workers));
-        std::cout << "Extracted " << archive.entries.size() << " files to: " << out << std::endl;
-
-    } else if (ext == ".wav") {
-        std::cout << "Processing WAV: " << inputPath << std::endl;
-        if (out.empty()) out = replaceExtension(inputPath, ".ogg");
-        if (liarsoft::WavOggExtractor::extractToFile(inputPath, out))
-            std::cout << "Extracted OGG to: " << out << std::endl;
-        else
-            std::cout << "Standard PCM WAV retained unchanged: " << inputPath << std::endl;
-
-    } else if (ext == ".ogg") {
-        std::cout << (vorbisInWav ? "Wrapping Vorbis in WAV: " : "Decoding OGG to PCM WAV: ")
-                  << inputPath << std::endl;
-        if (out.empty()) out = replaceExtension(inputPath, ".wav");
-        liarsoft::WavOggExtractor::convertToFile(inputPath, out, vorbisInWav);
-        std::cout << "Saved WAV to: " << out << std::endl;
-
-    } else if (ext == ".wcg") {
-        std::cout << "Converting WCG: " << inputPath << std::endl;
-        auto img = liarsoft::wcgDecode(liarsoft::readFile(inputPath));
-        if (out.empty()) out = replaceExtension(inputPath, ".png");
-        liarsoft::wcgSavePng(img, out);
-        liarsoft::copyModificationTime(inputPath, out);
-        std::cout << "Saved " << img.width << "x" << img.height << " PNG to: " << out << std::endl;
-
-    } else if (ext == ".lim") {
-        std::cout << "Converting LIM: " << inputPath << std::endl;
-        auto img = liarsoft::limDecode(liarsoft::readFile(inputPath));
-        if (out.empty()) out = replaceExtension(inputPath, ".webp");
-        liarsoft::limSaveWebp(img, out);
-        liarsoft::copyModificationTime(inputPath, out);
-        std::cout << "Saved " << img.width << "x" << img.height << " WebP to: " << out << std::endl;
-
-    } else if (ext == ".webp") {
-        std::cout << "Converting WebP: " << inputPath << std::endl;
-        auto img = liarsoft::webpDecode(liarsoft::readFile(inputPath));
-        if (out.empty()) out = replaceExtension(inputPath, ".lim");
-        liarsoft::writeFileIfChanged(out, liarsoft::limEncode(img));
-        std::cout << "Saved " << img.width << "x" << img.height << " LIM to: " << out << std::endl;
-
-    } else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
-        std::cout << "Converting to WCG: " << inputPath << std::endl;
-        int w, h, ch;
-        std::unique_ptr<unsigned char, decltype(&stbi_image_free)> px(
-            stbi_load(inputPath.c_str(), &w, &h, &ch, 4), stbi_image_free);
-        if (!px) throw std::runtime_error("Failed to load image: " + inputPath);
-        auto wcgData = liarsoft::wcgEncode(px.get(), static_cast<uint32_t>(w), static_cast<uint32_t>(h));
-        if (out.empty()) out = replaceExtension(inputPath, ".wcg");
-        liarsoft::writeFileIfChanged(out, wcgData);
-        std::cout << "Saved " << w << "x" << h << " WCG to: " << out << std::endl;
-
-    } else if (ext == ".exe") {
-        std::cout << "Converting EXE charset to " << encoding << ": "
-                  << inputPath << std::endl;
-        if (out.empty()) {
-            out = (encoding == "GBK") ? replaceExtension(inputPath, ".gbk.exe") :
-                  (encoding == "CP1251") ? replaceExtension(inputPath, ".cp1251.exe") :
-                                           replaceExtension(inputPath, ".sjis.exe");
-        }
-        liarsoft::exeConvertFile(inputPath, out, encoding);
-        std::cout << "Saved patched EXE to: " << out << std::endl;
-
-    } else {
-        std::cerr << "Error: unsupported file extension '" << ext
+    if (!liarsoft::conversion::isSupported(inputPath)) {
+        std::cerr << "Error: unsupported file extension '"
+                  << liarsoft::conversion::extension(inputPath)
                   << "' for: " << inputPath << std::endl;
         return false;
     }
+    const auto out = outputPath.empty()
+        ? liarsoft::conversion::guessOutput(inputPath, "", gscToTsc, encoding)
+        : outputPath;
+    const liarsoft::conversion::ConversionOptions options{
+        encoding, referencePath, recursive, gscToTsc, unpackOnly, vorbisInWav, workers};
+    const auto result = liarsoft::conversion::convert(inputPath, out, options);
+    for (const auto& warning : result.warnings)
+        std::cerr << "Warning: " << warning << std::endl;
+    const auto operation = fs::is_directory(inputPath) && unpackOnly
+        ? "DIR -> recursive unpack"
+        : liarsoft::conversion::guessType(inputPath, gscToTsc, encoding);
+    std::cout << operation << ": " << inputPath << " -> "
+              << (result.retainedPcm || (fs::is_directory(inputPath) && unpackOnly)
+                  ? inputPath : out)
+              << (result.retainedPcm ? " (PCM retained unchanged)" : "") << std::endl;
     return true;
 }
 
@@ -396,8 +232,8 @@ int main(int argc, char* argv[]) {
     if (inputs.size() == 2 && explicitOutput.empty()) {
         // Backward compat: "tool in out" — if the two args have different extensions,
         // treat the second as output; otherwise both are inputs.
-        std::string e1 = getExtension(inputs[0]);
-        std::string e2 = getExtension(inputs[1]);
+        std::string e1 = liarsoft::conversion::extension(inputs[0]);
+        std::string e2 = liarsoft::conversion::extension(inputs[1]);
         if (!e1.empty() && !e2.empty() && e1 != e2) {
             outputPath = inputs[1];
             allFiles = globPattern(inputs[0]);
@@ -432,12 +268,8 @@ int main(int argc, char* argv[]) {
                 out = outputPath;  // explicit output for single file
             } else if (!outputPath.empty() && allFiles.size() > 1) {
                 // Output path is a directory for batch mode
-                fs::path name = fs::path(f).filename();
-                if (gscToTsc && getExtension(name.string()) == ".gsc")
-                    name.replace_extension(".tsc");
-                else if (getExtension(name.string()) == ".tsc")
-                    name.replace_extension(".gsc");
-                out = (fs::path(outputPath) / name).string();
+                out = liarsoft::conversion::guessOutput(
+                    f, outputPath, gscToTsc, encoding);
             }
             // else: out stays empty → auto-derived
 

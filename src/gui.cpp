@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "gui_common.h"
+#include "conversion.h"
 #include "xflarchive.h"
 
 // ---- Column record for the file list ----
@@ -120,13 +121,13 @@ static void addFiles(const std::vector<std::string>& paths, const std::string& o
     for (const auto& p : paths) {
         try {
             const std::string input = liarsoft::gui::nativePathFromUtf8(p);
-            if (!liarsoft::gui::isSupported(input)) continue;
-            const auto output = liarsoft::gui::guessOutput(
+            if (!liarsoft::conversion::isSupported(input)) continue;
+            const auto output = liarsoft::conversion::guessOutput(
                 input, liarsoft::gui::nativePathFromUtf8(outDir), gscToTsc, encoding);
             auto row = *(g_store->append());
             row[g_columns.inputPath]  = p;
             row[g_columns.outputPath] = displayText(output);
-            row[g_columns.fileType]   = liarsoft::gui::guessType(
+            row[g_columns.fileType]   = liarsoft::conversion::guessType(
                 input, gscToTsc, encoding);
             row[g_columns.status]     = "Ready";
         } catch (const std::exception& error) { showInputError(error); }
@@ -143,7 +144,7 @@ static void convertAll(std::vector<ConversionJob> jobs,
     int totalWarnings = 0;
     bool hasErrors = false;
     std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
-    const liarsoft::gui::ConversionOptions options{
+    const liarsoft::conversion::ConversionOptions options{
         encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav, workers};
 
     for (const auto& job : jobs) {
@@ -174,7 +175,8 @@ static void convertAll(std::vector<ConversionJob> jobs,
                     Glib::ustring::format("Processing ", processingNumber, " of ", total));
             });
 
-            const auto warnings = liarsoft::gui::convert(in, out, options);
+            const auto result = liarsoft::conversion::convert(in, out, options);
+            const auto& warnings = result.warnings;
 
             for (const auto& warning : warnings)
                 std::cerr << "Warning: " << warning << std::endl;
@@ -182,7 +184,7 @@ static void convertAll(std::vector<ConversionJob> jobs,
             for (const auto& warning : warnings)
                 diagnostics.push_back({false, in, out, warning});
             std::string rowStatus = warnings.empty()
-                ? "OK" : "WARN (" + std::to_string(warnings.size()) + ")";
+                ? (result.retainedPcm ? "OK (PCM retained)" : "OK") : "WARN (" + std::to_string(warnings.size()) + ")";
             std::string detail = warnings.empty() ? "" : warnings.front();
             done++;
             g_updates->post([rowPath, done, total, rowStatus, detail]() {
@@ -237,9 +239,9 @@ static void updateOutputPaths() {
         for (auto& child : g_store->children()) {
             const std::string input = corePath(
                 static_cast<Glib::ustring>(child[g_columns.inputPath]));
-            child[g_columns.outputPath] = displayText(liarsoft::gui::guessOutput(
+            child[g_columns.outputPath] = displayText(liarsoft::conversion::guessOutput(
                 input, outDir, gscToTsc, encoding));
-            child[g_columns.fileType] = liarsoft::gui::guessType(
+            child[g_columns.fileType] = liarsoft::conversion::guessType(
                 input, gscToTsc, encoding);
         }
     } catch (const std::exception& error) { showInputError(error); }

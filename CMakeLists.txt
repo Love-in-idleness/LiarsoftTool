@@ -85,6 +85,7 @@ endif()
 
 # Compile the conversion core once for the CLI, GUI and test executables.
 add_library(liarsofttool_core STATIC
+    src/conversion.cpp
     src/bigendian.cpp
     src/encoding.cpp
     src/fileio.cpp

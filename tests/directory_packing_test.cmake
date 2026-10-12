@@ -439,7 +439,18 @@ foreach(name IN ITEMS nested.xfl nested/layout.xml scene.lwg scene/.meta.xml
         scene/background.lim scene/background.webp image.wcg image.png image.lim
         image.webp voice.wav voice.ogg script.gsc script.tsc)
     expect_source_time("${TEST_ROOT}/timestamps/dated.xfl" "${TEST_ROOT}/dated_unpacked/${name}")
+    file(SHA256 "${TEST_ROOT}/timestamps/expected/${name}" shared_hash)
+    file(SHA256 "${TEST_ROOT}/dated_unpacked/${name}" cli_hash)
+    if(NOT shared_hash STREQUAL cli_hash)
+        message(FATAL_ERROR "CLI/shared conversion outputs differ: ${name}")
+    endif()
 endforeach()
+
+execute_process(COMMAND "${TOOL}" "${TEST_ROOT}/convert/badref.wav"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(result OR NOT output MATCHES "PCM retained unchanged")
+    message(FATAL_ERROR "CLI did not report PCM retention: ${output} ${error}")
+endif()
 
 file(MAKE_DIRECTORY "${TEST_ROOT}/recovery")
 file(COPY "${TEST_ROOT}/timestamps/stale.gsc" DESTINATION "${TEST_ROOT}/recovery")

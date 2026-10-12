@@ -5,16 +5,6 @@
 
 namespace liarsoft::gui {
 
-struct ConversionOptions {
-    std::string encoding = "CP932";
-    std::string referencePath;
-    bool recursive = false;
-    bool gscToTsc = false;
-    bool unpackOnly = false;
-    bool vorbisInWav = false;
-    unsigned workers = 0;
-};
-
 struct ConversionDiagnostic {
     bool error = false;
     std::string inputPath;
@@ -27,21 +17,5 @@ std::string formatDiagnostics(const std::vector<ConversionDiagnostic>& diagnosti
 // GTK uses UTF-8; the Windows conversion core still uses system-code-page paths.
 std::string nativePathFromUtf8(const std::string& path);
 std::string nativeTextToUtf8(const std::string& text);
-
-std::string extension(const std::string& path);
-std::string replaceExtension(const std::string& path,
-                             const std::string& newExtension);
-std::string guessOutput(const std::string& inputPath,
-                        const std::string& outputDirectory,
-                        bool gscToTsc,
-                        const std::string& encoding);
-std::string guessType(const std::string& path,
-                      bool gscToTsc,
-                      const std::string& encoding);
-bool isSupported(const std::string& path);
-
-std::vector<std::string> convert(const std::string& inputPath,
-                                 const std::string& outputPath,
-                                 const ConversionOptions& options);
 
 } // namespace liarsoft::gui

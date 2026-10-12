@@ -1,4 +1,5 @@
 #include "gui_common.h"
+#include "conversion.h"
 #include "xflarchive.h"
 #include "lim_decoder.h"
 #include "fileio.h"
@@ -27,6 +28,7 @@ static std::vector<uint8_t> readBytes(const std::filesystem::path& path) {
 
 static void testGuiPaths() {
     using namespace liarsoft::gui;
+using namespace liarsoft::conversion;
     for (const auto& path : {std::string("C:/game with spaces/scene.tsc"), std::string()}) {
         if (nativeTextToUtf8(nativePathFromUtf8(path)) != path)
             throw std::runtime_error("GUI ASCII path conversion changed the filename");
@@ -167,8 +169,13 @@ static void testParallelConversions(const std::filesystem::path& directory,
 int main(int argc, char** argv) {
     testGuiPaths();
     using namespace liarsoft::gui;
+    using namespace liarsoft::conversion;
     namespace fs = std::filesystem;
 
+    if (!extension("/parent.with.dot/file").empty() ||
+        replaceExtension("/parent.with.dot/file", ".gsc") !=
+            (fs::path("/parent.with.dot") / "file.gsc").string())
+        throw std::runtime_error("Parent directory was mistaken for an extension");
     assert(extension("VOICE.WAV") == ".wav");
     assert(replaceExtension("scene.gsc", ".tsc") == "scene.tsc");
     assert(guessOutput("/game/scene.gsc", "/out", true, "CP932") ==
@@ -308,7 +315,7 @@ int main(int argc, char** argv) {
         for (int pass = 0; pass < 2; ++pass) {
             fs::last_write_time(datedPath, originalTime + std::chrono::hours(pass));
             const auto expected = fs::last_write_time(datedPath);
-            if (!convert(datedPath.string(), output.string(), unpack).empty())
+            if (!convert(datedPath.string(), output.string(), unpack).warnings.empty())
                 throw std::runtime_error("Dated archive unpacking failed");
             for (const auto* name : {"nested.xfl", "nested/layout.xml", "scene.lwg",
                      "scene/.meta.xml", "scene/background.lim", "scene/background.webp",
@@ -327,7 +334,8 @@ int main(int argc, char** argv) {
         if (fs::last_write_time(directory / "scene_direct/.meta.xml") != fs::last_write_time(datedPath))
             throw std::runtime_error("Direct LWG extraction timestamp mismatch");
         const auto staleOggTime = fs::last_write_time(ogg);
-        convert(wav.string(), ogg.string(), options); // PCM: no extraction, leave the old Ogg alone.
+        if (!convert(wav.string(), ogg.string(), options).retainedPcm)
+            throw std::runtime_error("PCM retention was not reported");
         if (fs::last_write_time(ogg) != staleOggTime)
             throw std::runtime_error("Retained PCM retimed an unrelated Ogg");
         if (argc == 2) {
@@ -335,6 +343,13 @@ int main(int argc, char** argv) {
             fs::create_directories(fixtures);
             fs::copy_file(datedPath, fixtures / "dated.xfl", fs::copy_options::overwrite_existing);
             liarsoft::copyModificationTime(datedPath.string(), (fixtures / "dated.xfl").string());
+            for (const auto& entry : fs::recursive_directory_iterator(output)) {
+                if (!entry.is_regular_file()) continue;
+                const auto expected = fixtures / "expected" / fs::relative(entry.path(), output);
+                fs::create_directories(expected.parent_path());
+                fs::copy_file(entry.path(), expected, fs::copy_options::overwrite_existing);
+                liarsoft::copyModificationTime(entry.path().string(), expected.string());
+            }
         }
 
         const auto audioDirectory = directory / "audio";
@@ -348,7 +363,7 @@ int main(int argc, char** argv) {
         recursive.recursive = true;
         recursive.workers = 4;
         const auto archive = directory / "audio.xfl";
-        auto warnings = convert(audioDirectory.string(), archive.string(), recursive);
+        auto warnings = convert(audioDirectory.string(), archive.string(), recursive).warnings;
         const auto entries = liarsoft::XflArchive::fromFile(archive.string()).entries;
         if (warnings.size() != 1 || entries.size() != 1 || entries[0].fileName != "layout.xml")
             throw std::runtime_error("Failed recursive GUI audio included the stale WAV");
@@ -367,7 +382,7 @@ int main(int argc, char** argv) {
         ConversionOptions recoveryOptions;
         recoveryOptions.gscToTsc = true;
         const auto recoveredWarnings = convert(
-            recoveryInput.string(), recoveryOutput.string(), recoveryOptions);
+            recoveryInput.string(), recoveryOutput.string(), recoveryOptions).warnings;
         if (recoveredWarnings.size() != 1 ||
             recoveredWarnings[0].find("Recovered legacy GSC") == std::string::npos ||
             fs::last_write_time(recoveryInput) != fs::last_write_time(recoveryOutput))
@@ -375,7 +390,7 @@ int main(int argc, char** argv) {
         for (unsigned workers : {1u, 4u}) {
             recoveryOptions.unpackOnly = true;
             recoveryOptions.workers = workers;
-            if (convert(recoveryDirectory.string(), "", recoveryOptions) != recoveredWarnings)
+            if (convert(recoveryDirectory.string(), "", recoveryOptions).warnings != recoveredWarnings)
                 throw std::runtime_error("Recursive recovery warning differs from direct GUI conversion");
         }
         if (argc == 2) {
