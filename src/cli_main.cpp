@@ -11,7 +11,6 @@
 #include "fileio.h"
 #include "stb_image.h"
 #include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
 #include <cstring>
@@ -19,7 +18,6 @@
 #include <filesystem>
 #include <memory>
 #include <charconv>
-#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -204,18 +202,6 @@ static bool processOne(const std::string& inputPath,
     std::string ext = getExtension(inputPath);
     std::string out = outputPath;
 
-    // Helper: read entire file
-    auto readFile = [](const std::string& path) -> std::vector<uint8_t> {
-        std::ifstream in(path, std::ios::binary);
-        if (!in) throw std::runtime_error("Cannot open: " + path);
-        in.seekg(0, std::ios::end);
-        size_t sz = in.tellg();
-        in.seekg(0, std::ios::beg);
-        std::vector<uint8_t> data(sz);
-        in.read(reinterpret_cast<char*>(data.data()), sz);
-        return data;
-    };
-
     if (ext == ".gsc") {
         if (gscToTsc) {
             if (out.empty()) out = replaceExtension(inputPath, ".tsc");
@@ -259,7 +245,7 @@ static bool processOne(const std::string& inputPath,
 
     } else if (ext == ".lwg") {
         std::cout << "Reading LWG: " << inputPath << " (encoding: " << encoding << ")" << std::endl;
-        auto raw = readFile(inputPath);
+        auto raw = liarsoft::readFile(inputPath);
         auto archive = liarsoft::LwgDecoder::decode(raw, encoding);
         if (out.empty()) out = replaceExtension(inputPath, "");
         liarsoft::LwgDecoder::extractToDirectory(archive, out, encoding,
@@ -286,7 +272,7 @@ static bool processOne(const std::string& inputPath,
 
     } else if (ext == ".wcg") {
         std::cout << "Converting WCG: " << inputPath << std::endl;
-        auto img = liarsoft::wcgDecode(readFile(inputPath));
+        auto img = liarsoft::wcgDecode(liarsoft::readFile(inputPath));
         if (out.empty()) out = replaceExtension(inputPath, ".png");
         liarsoft::wcgSavePng(img, out);
         liarsoft::copyModificationTime(inputPath, out);
@@ -294,7 +280,7 @@ static bool processOne(const std::string& inputPath,
 
     } else if (ext == ".lim") {
         std::cout << "Converting LIM: " << inputPath << std::endl;
-        auto img = liarsoft::limDecode(readFile(inputPath));
+        auto img = liarsoft::limDecode(liarsoft::readFile(inputPath));
         if (out.empty()) out = replaceExtension(inputPath, ".webp");
         liarsoft::limSaveWebp(img, out);
         liarsoft::copyModificationTime(inputPath, out);
@@ -302,7 +288,7 @@ static bool processOne(const std::string& inputPath,
 
     } else if (ext == ".webp") {
         std::cout << "Converting WebP: " << inputPath << std::endl;
-        auto img = liarsoft::webpDecode(readFile(inputPath));
+        auto img = liarsoft::webpDecode(liarsoft::readFile(inputPath));
         if (out.empty()) out = replaceExtension(inputPath, ".lim");
         liarsoft::writeFileIfChanged(out, liarsoft::limEncode(img));
         std::cout << "Saved " << img.width << "x" << img.height << " LIM to: " << out << std::endl;

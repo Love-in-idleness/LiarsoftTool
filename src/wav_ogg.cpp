@@ -1,6 +1,5 @@
 #include "wav_ogg.h"
 #include "fileio.h"
-#include <fstream>
 #include <limits>
 #include <stdexcept>
 #include <cstring>
@@ -246,19 +245,6 @@ std::vector<uint8_t> wavHeader(uint16_t tag, uint16_t channels, uint32_t rate) {
     }
     std::memcpy(out.data() + out.size() - 8, "data", 4);
     return out;
-}
-
-std::vector<uint8_t> readFile(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) throw std::runtime_error("Cannot open: " + path);
-    in.seekg(0, std::ios::end);
-    std::streamoff size = in.tellg();
-    if (size < 0) throw std::runtime_error("Cannot read size: " + path);
-    in.seekg(0, std::ios::beg);
-    std::vector<uint8_t> data(static_cast<size_t>(size));
-    in.read(reinterpret_cast<char*>(data.data()), size);
-    if (in.gcount() != size) throw std::runtime_error("Cannot read: " + path);
-    return data;
 }
 
 } // namespace

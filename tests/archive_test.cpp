@@ -1,5 +1,6 @@
 #include "lwg_decoder.h"
 #include "xflarchive.h"
+#include "fileio.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -79,6 +80,14 @@ int main(int argc, char** argv) {
         if(argc==2) {
             const std::filesystem::path directory(argv[1]);
             std::filesystem::create_directories(directory);
+            const auto binaryPath = directory / "binary.dat";
+            const Bytes binary{0, 255, 13, 10, 0, 128};
+            writeFileIfChanged(binaryPath.string(), binary);
+            require(readFile(binaryPath) == binary, "Binary file reader changed bytes");
+            writeFileIfChanged(binaryPath.string(), Bytes{});
+            require(readFile(binaryPath).empty(), "Empty binary file rejected");
+            rejects([&]{readFile(directory / "missing.dat");}, "Missing file accepted");
+            rejects([&]{readFile(directory);}, "Directory accepted as binary file");
             LwgDecoder::Archive controls;
             controls.width=850; controls.height=26;
             controls.entries={

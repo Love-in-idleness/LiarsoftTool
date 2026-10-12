@@ -73,18 +73,6 @@ static std::string normalized(const fs::path& path) {
     return fs::absolute(path).lexically_normal().string();
 }
 
-static std::vector<uint8_t> readFile(const fs::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) throw std::runtime_error("Cannot open: " + path.string());
-    in.seekg(0, std::ios::end);
-    size_t size = in.tellg();
-    in.seekg(0, std::ios::beg);
-    std::vector<uint8_t> data(size);
-    in.read(reinterpret_cast<char*>(data.data()), size);
-    if (!in && size != 0) throw std::runtime_error("Cannot read: " + path.string());
-    return data;
-}
-
 struct ConversionGroup {
     std::vector<fs::path> sources;
     std::map<std::string, fs::path> files;
@@ -451,16 +439,7 @@ static void checkArchiveName(const std::string& name) {
 // ---- Factory methods ----
 
 XflArchive XflArchive::fromFile(const std::string& path, const std::string& enc) {
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream) {
-        throw std::runtime_error("Cannot open file: " + path);
-    }
-    stream.seekg(0, std::ios::end);
-    size_t size = stream.tellg();
-    stream.seekg(0, std::ios::beg);
-    std::vector<uint8_t> bytes(size);
-    stream.read(reinterpret_cast<char*>(bytes.data()), size);
-    return fromBytes(bytes, enc);
+    return fromBytes(readFile(path), enc);
 }
 
 XflArchive XflArchive::fromBytes(const std::vector<uint8_t>& data, const std::string& enc) {
@@ -545,15 +524,7 @@ void XflArchive::addDirectory(const std::string& dirPath) {
         entry.fileName = file.string();
 
         fs::path fullPath = fs::path(dirPath) / file;
-        std::ifstream in(fullPath, std::ios::binary);
-        if (!in) {
-            throw std::runtime_error("Cannot read file: " + fullPath.string());
-        }
-        in.seekg(0, std::ios::end);
-        size_t sz = in.tellg();
-        in.seekg(0, std::ios::beg);
-        entry.data.resize(sz);
-        in.read(reinterpret_cast<char*>(entry.data.data()), sz);
+        entry.data = readFile(fullPath);
 
         entries.push_back(std::move(entry));
     }

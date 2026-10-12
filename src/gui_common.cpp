@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
-#include <fstream>
 #include <memory>
 #include <stdexcept>
 
@@ -115,19 +114,6 @@ bool isSupported(const std::string& path) {
            ext == ".jpeg" || ext == ".bmp" || ext == ".webp" || fs::is_directory(path);
 }
 
-static std::vector<uint8_t> readBinary(const std::string& path) {
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream) throw std::runtime_error("Failed to open " + path);
-    stream.seekg(0, std::ios::end);
-    const auto size = stream.tellg();
-    if (size < 0) throw std::runtime_error("Failed to read " + path);
-    stream.seekg(0, std::ios::beg);
-    std::vector<uint8_t> data(static_cast<size_t>(size));
-    if (!data.empty() && !stream.read(reinterpret_cast<char*>(data.data()), size))
-        throw std::runtime_error("Failed to read " + path);
-    return data;
-}
-
 std::vector<std::string> convert(const std::string& inputPath,
                                  const std::string& outputPath,
                                  const ConversionOptions& options) {
@@ -167,21 +153,21 @@ std::vector<std::string> convert(const std::string& inputPath,
                 outputPath, options.encoding, options.gscToTsc, options.workers);
     } else if (ext == ".lwg") {
         const auto archive = liarsoft::LwgDecoder::decode(
-            readBinary(inputPath), options.encoding);
+            liarsoft::readFile(inputPath), options.encoding);
         liarsoft::LwgDecoder::extractToDirectory(
             archive, outputPath, options.encoding, fs::last_write_time(inputPath));
         if (options.recursive)
             warnings = liarsoft::unpackDirectoryRecursively(
                 outputPath, options.encoding, options.gscToTsc, options.workers);
     } else if (ext == ".wcg") {
-        liarsoft::wcgSavePng(liarsoft::wcgDecode(readBinary(inputPath)), outputPath);
+        liarsoft::wcgSavePng(liarsoft::wcgDecode(liarsoft::readFile(inputPath)), outputPath);
         liarsoft::copyModificationTime(inputPath, outputPath);
     } else if (ext == ".lim") {
-        liarsoft::limSaveWebp(liarsoft::limDecode(readBinary(inputPath)), outputPath);
+        liarsoft::limSaveWebp(liarsoft::limDecode(liarsoft::readFile(inputPath)), outputPath);
         liarsoft::copyModificationTime(inputPath, outputPath);
     } else if (ext == ".webp") {
         liarsoft::writeFileIfChanged(outputPath,
-            liarsoft::limEncode(liarsoft::webpDecode(readBinary(inputPath))));
+            liarsoft::limEncode(liarsoft::webpDecode(liarsoft::readFile(inputPath))));
     } else if (ext == ".wav") {
         liarsoft::WavOggExtractor::extractToFile(inputPath, outputPath);
     } else if (ext == ".ogg") {

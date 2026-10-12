@@ -7,7 +7,6 @@
 #include <cctype>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <iomanip>
 #include <initializer_list>
 #include <limits>
@@ -45,19 +44,6 @@ uint32_t readU32(const std::vector<uint8_t>& data, size_t offset) {
            (static_cast<uint32_t>(data[offset + 1]) << 8) |
            (static_cast<uint32_t>(data[offset + 2]) << 16) |
            (static_cast<uint32_t>(data[offset + 3]) << 24);
-}
-
-std::vector<uint8_t> readFile(const std::string& path) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) throw std::runtime_error("Cannot open: " + path);
-    input.seekg(0, std::ios::end);
-    const std::streamoff size = input.tellg();
-    if (size < 0) throw std::runtime_error("Cannot read size: " + path);
-    input.seekg(0, std::ios::beg);
-    std::vector<uint8_t> data(static_cast<size_t>(size));
-    input.read(reinterpret_cast<char*>(data.data()), size);
-    if (input.gcount() != size) throw std::runtime_error("Cannot read: " + path);
-    return data;
 }
 
 constexpr const char* RAW_HEADER = ";@gsc-raw-v1 ";

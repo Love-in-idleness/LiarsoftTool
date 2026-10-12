@@ -347,13 +347,7 @@ std::vector<uint8_t> LwgPacker::pack(
         }
 
         if (file != files.end()) {
-            std::ifstream in(*file, std::ios::binary);
-            if (!in) throw std::runtime_error("Cannot read file: " + file->string());
-            in.seekg(0, std::ios::end);
-            size_t sz = in.tellg();
-            in.seekg(0, std::ios::beg);
-            pe.data.resize(sz);
-            in.read(reinterpret_cast<char*>(pe.data.data()), sz);
+            pe.data = readFile(*file);
         } else {
             // Entry with no file - possibly a string entry, still include with empty data
             pe.data.clear();

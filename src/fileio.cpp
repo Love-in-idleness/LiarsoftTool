@@ -2,9 +2,26 @@
 #include <cstring>
 #include <fstream>
 #include <filesystem>
+#include <limits>
 #include <stdexcept>
 
 namespace liarsoft {
+
+std::vector<uint8_t> readFile(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in) throw std::runtime_error("Cannot open: " + path.string());
+    const std::streamoff size = in.tellg();
+    if (size < 0 || static_cast<uintmax_t>(size) > std::numeric_limits<size_t>::max() ||
+        static_cast<uintmax_t>(size) > std::numeric_limits<std::streamsize>::max())
+        throw std::runtime_error("Cannot read size: " + path.string());
+    in.seekg(0, std::ios::beg);
+    if (!in) throw std::runtime_error("Cannot read: " + path.string());
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    if (!data.empty() && !in.read(reinterpret_cast<char*>(data.data()),
+                                  static_cast<std::streamsize>(size)))
+        throw std::runtime_error("Cannot read: " + path.string());
+    return data;
+}
 
 void copyModificationTime(const std::string& source, const std::string& output) {
     const auto time = std::filesystem::last_write_time(source);

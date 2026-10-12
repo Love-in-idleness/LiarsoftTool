@@ -1,7 +1,6 @@
 #include "exe_patch.h"
 #include "fileio.h"
 #include <array>
-#include <fstream>
 #include <stdexcept>
 #include <cstring>
 #include <initializer_list>
@@ -324,19 +323,7 @@ std::vector<uint8_t> exeConvertEncoding(const std::vector<uint8_t>& data,
 
 void exeConvertFile(const std::string& inputPath, const std::string& outputPath,
                     const std::string& encoding) {
-    std::ifstream in(inputPath, std::ios::binary);
-    if (!in) throw std::runtime_error("Cannot open: " + inputPath);
-    in.seekg(0, std::ios::end);
-    const std::streamoff end = in.tellg();
-    if (end < 0) throw std::runtime_error("Cannot read: " + inputPath);
-    const size_t sz = static_cast<size_t>(end);
-    in.seekg(0, std::ios::beg);
-    std::vector<uint8_t> data(sz);
-    if (sz > 0) {
-        in.read(reinterpret_cast<char*>(data.data()),
-                static_cast<std::streamsize>(sz));
-        if (!in) throw std::runtime_error("Cannot read: " + inputPath);
-    }
+    const auto data = readFile(inputPath);
 
     // These are Win32 font charset values, not code-page identifiers:
     // SHIFTJIS_CHARSET=0x80, GB2312_CHARSET=0x86, RUSSIAN_CHARSET=0xCC.
