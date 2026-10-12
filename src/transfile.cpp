@@ -16,10 +16,8 @@ TransFile TransFile::fromGsc(const GscFile& gsc) {
 }
 
 TransFile TransFile::fromFile(const std::string& path) {
-    std::ifstream stream(path);
-    if (!stream) {
-        throw std::runtime_error("Cannot open file: " + path);
-    }
+    const auto bytes = readFile(path);
+    std::istringstream stream(std::string(bytes.begin(), bytes.end()));
 
     TransFile trans;
 

@@ -82,9 +82,6 @@ public:
 
 private:
     GscFile() = default;
-
-    /// Calculate the actual string definition length (sum of encoded byte counts + null terminators).
-    int32_t calcStringDefinitionLength() const;
 };
 
 } // namespace liarsoft

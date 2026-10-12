@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@ namespace liarsoft {
 
 /// Read a complete binary file. Throws std::runtime_error on open, size or read errors.
 std::vector<uint8_t> readFile(const std::filesystem::path& path);
+std::vector<uint8_t> readStream(std::ifstream& stream);
 
 /// Write `data` to `path`, but only when the file does not exist yet or its
 /// current content differs from `data`. When the existing file is

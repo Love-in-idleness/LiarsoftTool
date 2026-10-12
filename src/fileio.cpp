@@ -12,16 +12,24 @@ namespace liarsoft {
 std::vector<uint8_t> readFile(const std::filesystem::path& path) {
     std::ifstream in(path, std::ios::binary | std::ios::ate);
     if (!in) throw std::runtime_error("Cannot open: " + path.string());
+    try { return readStream(in); }
+    catch (const std::runtime_error& error) {
+        throw std::runtime_error(path.string() + ": " + error.what());
+    }
+}
+
+std::vector<uint8_t> readStream(std::ifstream& in) {
+    in.seekg(0, std::ios::end);
     const std::streamoff size = in.tellg();
     if (size < 0 || static_cast<uintmax_t>(size) > std::numeric_limits<size_t>::max() ||
         static_cast<uintmax_t>(size) > std::numeric_limits<std::streamsize>::max())
-        throw std::runtime_error("Cannot read size: " + path.string());
+        throw std::runtime_error("Cannot read file size");
     in.seekg(0, std::ios::beg);
-    if (!in) throw std::runtime_error("Cannot read: " + path.string());
+    if (!in) throw std::runtime_error("Cannot seek file");
     std::vector<uint8_t> data(static_cast<size_t>(size));
     if (!data.empty() && !in.read(reinterpret_cast<char*>(data.data()),
                                   static_cast<std::streamsize>(size)))
-        throw std::runtime_error("Cannot read: " + path.string());
+        throw std::runtime_error("Failed to read entire file");
     return data;
 }
 

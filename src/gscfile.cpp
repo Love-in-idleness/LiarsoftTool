@@ -1,9 +1,7 @@
 #include "gscfile.h"
 #include "encoding.h"
 #include "fileio.h"
-#include <cerrno>
-#include <cstring>
-#include <iostream>
+#include <limits>
 
 namespace liarsoft {
 
@@ -11,7 +9,9 @@ namespace liarsoft {
 static std::vector<uint8_t> encodeToBytes(const std::string& str,
                                           const std::string& encoding) {
     // Convert from UTF-8 (internal) to target encoding
-    std::string encoded = convertEncoding(str, "UTF-8", encoding);
+    if (str.find('\0') != std::string::npos)
+        throw std::runtime_error("GSC string contains a NUL character");
+    std::string encoded = convertEncoding(str, "UTF-8", encoding, true);
     return std::vector<uint8_t>(encoded.begin(), encoded.end());
 }
 
@@ -24,11 +24,7 @@ static std::string decodeFromBytes(const std::vector<uint8_t>& bytes,
 // ---- GscFile implementation ----
 
 GscFile GscFile::fromFile(const std::string& path, const std::string& enc) {
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream) {
-        throw std::runtime_error("Cannot open file: " + path);
-    }
-    return fromStream(stream, enc);
+    return fromBytes(readFile(path), enc);
 }
 
 GscFile GscFile::fromBytes(const std::vector<uint8_t>& bytes, const std::string& enc) {
@@ -43,6 +39,17 @@ GscFile GscFile::fromBytes(const std::vector<uint8_t>& bytes, const std::string&
     gsc.stringDeclarationLength = reader.readInt32();
     gsc.stringDefinitionLength  = reader.readInt32();
 
+    if (gsc.headerLength < 20 || gsc.headerLength > 36 || gsc.headerLength % 4 ||
+        gsc.commandLength < 0 || gsc.stringDeclarationLength < 4 ||
+        gsc.stringDeclarationLength % 4 || gsc.stringDefinitionLength < 1 ||
+        gsc.fileLength < gsc.headerLength ||
+        static_cast<uint64_t>(gsc.fileLength) > bytes.size())
+        throw std::runtime_error("Invalid GSC header or section length");
+    const uint64_t sectionsEnd = uint64_t(gsc.headerLength) + gsc.commandLength +
+        gsc.stringDeclarationLength + gsc.stringDefinitionLength;
+    if (sectionsEnd > bytes.size())
+        throw std::runtime_error("GSC sections extend beyond the input file");
+
     // Read remaining header int32s based on headerLength
     // Standard header is 36 bytes (9 fields). Non-standard may be 28 (7 fields) or other.
     int totalHeaderFields = gsc.headerLength / 4;
@@ -55,36 +62,22 @@ GscFile GscFile::fromBytes(const std::vector<uint8_t>& bytes, const std::string&
     // -- COMMAND SECTION
     gsc.commandSection = reader.readBytes(gsc.commandLength);
 
-    // -- STRING DECLARATION
-    reader.readBytes(8); // skip first 8 bytes
-
-    int stringCount = gsc.stringDeclarationLength / 4 - 2 + 1;
-    if (stringCount < 0) stringCount = 0;
-
-    gsc.stringLengths.resize(stringCount);
-    for (int i = 0; i < stringCount - 1; ++i) {
-        gsc.stringLengths[i] = reader.readInt32();
-    }
-    if (stringCount > 0) {
-        gsc.stringLengths[stringCount - 1] = gsc.stringDefinitionLength;
-    }
-
-    reader.readByte(); // skip 0 byte
-
-    // -- STRINGS
-    gsc.strings.resize(stringCount);
-    int read = 1; // cumulative bytes read (the initial 1 from the C# code)
-    for (int i = 0; i < stringCount; ++i) {
-        int toRead = gsc.stringLengths[i];
-        int byteCount = toRead - read - 1; // minus trailing null
-        if (byteCount < 0) byteCount = 0;
-
-        std::vector<uint8_t> strBytes = reader.readBytes(byteCount);
-        reader.readByte(); // trailing 0
-
-        // Decode from the specified encoding to UTF-8 (internal)
-        gsc.strings[i] = decodeFromBytes(strBytes, enc);
-        read = toRead;
+    const auto declaration = reader.readBytes(gsc.stringDeclarationLength);
+    const auto definition = reader.readBytes(gsc.stringDefinitionLength);
+    BigEndianReader offsets(declaration);
+    if (offsets.readInt32() != 0 || definition.front() != 0)
+        throw std::runtime_error("Invalid GSC empty-string sentinel");
+    // Index zero is reserved. Other indices may share a string's byte offset.
+    while (offsets.remaining()) {
+        const int32_t start = offsets.readInt32();
+        if (start < 0 || static_cast<size_t>(start) >= definition.size())
+            throw std::runtime_error("GSC string offset is outside its section");
+        const auto first = definition.begin() + start;
+        const auto end = std::find(first, definition.end(), 0);
+        if (end == definition.end())
+            throw std::runtime_error("GSC string is not NUL-terminated");
+        gsc.stringLengths.push_back(static_cast<int32_t>(end - definition.begin() + 1));
+        gsc.strings.push_back(decodeFromBytes({first, end}, enc));
     }
 
     // -- END SEQUENCE (remaining bytes)
@@ -94,29 +87,7 @@ GscFile GscFile::fromBytes(const std::vector<uint8_t>& bytes, const std::string&
 }
 
 GscFile GscFile::fromStream(std::ifstream& stream, const std::string& enc) {
-    // Read entire file into memory
-    stream.seekg(0, std::ios::end);
-    size_t size = stream.tellg();
-    stream.seekg(0, std::ios::beg);
-
-    std::vector<uint8_t> bytes(size);
-    stream.read(reinterpret_cast<char*>(bytes.data()), size);
-
-    if (stream.gcount() != static_cast<std::streamsize>(size)) {
-        throw std::runtime_error("Failed to read entire file");
-    }
-
-    return fromBytes(bytes, enc);
-}
-
-int32_t GscFile::calcStringDefinitionLength() const {
-    int32_t len = 1;
-    for (const auto& str : strings) {
-        // Convert from internal UTF-8 to the target encoding to get byte count
-        auto encoded = encodeToBytes(str, encoding);
-        len += static_cast<int32_t>(encoded.size()) + 1; // +1 for null terminator
-    }
-    return len;
+    return fromBytes(readStream(stream), enc);
 }
 
 void GscFile::save(const std::string& path) const {
@@ -126,14 +97,29 @@ void GscFile::save(const std::string& path) const {
 std::vector<uint8_t> GscFile::toBytes() const {
     BigEndianWriter writer;
 
-    int32_t calcStrDefLen = calcStringDefinitionLength();
+    const auto maximum = static_cast<uint64_t>(std::numeric_limits<int32_t>::max());
+    if (headerLength < 20 || headerLength > 36 || headerLength % 4 ||
+        strings.size() > maximum / 4 - 1 || commandSection.size() > maximum)
+        throw std::runtime_error("Invalid or oversized GSC sections");
+    uint64_t definitionLength = 1;
+    std::vector<std::vector<uint8_t>> encodedStrings;
+    for (const auto& str : strings) {
+        encodedStrings.push_back(encodeToBytes(str, encoding));
+        definitionLength += encodedStrings.back().size() + 1ull;
+        if (definitionLength > maximum)
+            throw std::runtime_error("GSC string section is too large");
+    }
+    const int32_t declarationLength = static_cast<int32_t>((strings.size() + 1) * 4);
+    if (uint64_t(headerLength) + commandSection.size() + declarationLength +
+            definitionLength + endSequence.size() > maximum)
+        throw std::runtime_error("GSC file is too large");
 
     // -- HEADER (will patch fileLength later)
     writer.writeInt32(0); // placeholder for FileLength
     writer.writeInt32(headerLength);
-    writer.writeInt32(commandLength);
-    writer.writeInt32(stringDeclarationLength);
-    writer.writeInt32(calcStrDefLen);
+    writer.writeInt32(static_cast<int32_t>(commandSection.size()));
+    writer.writeInt32(declarationLength);
+    writer.writeInt32(static_cast<int32_t>(definitionLength));
     // Write remaining header fields only if original header had them
     int totalFields = headerLength / 4;
     if (totalFields > 5) writer.writeInt32(unknown1);
@@ -146,20 +132,16 @@ std::vector<uint8_t> GscFile::toBytes() const {
 
     // -- STRING DECLARATION
     writer.writeInt32(0);
-    writer.writeInt32(1);
-
     int bytes = 1;
-    for (size_t i = 0; i < strings.size() - 1; ++i) {
-        auto encoded = encodeToBytes(strings[i], encoding);
-        bytes += static_cast<int>(encoded.size()) + 1;
+    for (const auto& encoded : encodedStrings) {
         writer.writeInt32(bytes);
+        bytes += static_cast<int>(encoded.size()) + 1;
     }
 
     writer.writeByte(0);
 
     // -- STRINGS
-    for (const auto& str : strings) {
-        auto encoded = encodeToBytes(str, encoding);
+    for (const auto& encoded : encodedStrings) {
         writer.writeBytes(encoded);
         writer.writeByte(0); // null terminator
     }

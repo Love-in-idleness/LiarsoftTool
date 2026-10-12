@@ -13,10 +13,10 @@ namespace liarsoft {
 /// Read a little-endian int32 from a byte buffer at the given offset.
 /// (Despite the "BE" suffix, GSC files use little-endian byte order.)
 inline int32_t read_int32_be(const uint8_t* buf, size_t offset) {
-    return (static_cast<int32_t>(buf[offset])) |
-           (static_cast<int32_t>(buf[offset + 1]) << 8) |
-           (static_cast<int32_t>(buf[offset + 2]) << 16) |
-           (static_cast<int32_t>(buf[offset + 3]) << 24);
+    return static_cast<int32_t>(static_cast<uint32_t>(buf[offset]) |
+           (static_cast<uint32_t>(buf[offset + 1]) << 8) |
+           (static_cast<uint32_t>(buf[offset + 2]) << 16) |
+           (static_cast<uint32_t>(buf[offset + 3]) << 24));
 }
 
 /// Write a little-endian int32 to a byte buffer at the given offset.
@@ -34,7 +34,7 @@ public:
         : data_(data), pos_(0) {}
 
     int32_t readInt32() {
-        if (pos_ + 4 > data_.size())
+        if (remaining() < 4)
             throw std::runtime_error("BigEndianReader: unexpected EOF");
         int32_t v = read_int32_be(data_.data(), pos_);
         pos_ += 4;
@@ -42,7 +42,7 @@ public:
     }
 
     std::vector<uint8_t> readBytes(size_t count) {
-        if (pos_ + count > data_.size())
+        if (count > remaining())
             throw std::runtime_error("BigEndianReader: unexpected EOF");
         auto begin = data_.begin() + static_cast<ptrdiff_t>(pos_);
         auto end = begin + static_cast<ptrdiff_t>(count);
@@ -98,7 +98,7 @@ public:
 
     /// Replace int32 at given offset (for patching file length at position 0).
     void patchInt32(size_t offset, int32_t value) {
-        if (offset + 4 > data_.size())
+        if (offset > data_.size() || data_.size() - offset < 4)
             throw std::runtime_error("BigEndianWriter: patch out of bounds");
         write_int32_be(data_.data(), offset, value);
     }
