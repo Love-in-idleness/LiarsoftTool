@@ -1,4 +1,9 @@
-# CannonBall 引擎与工具实现核对
+# 开发参考：CannonBall 资源与引擎
+
+[返回文档目录](README.md)
+
+LIM、归档和编码处理的原程序依据。日常操作见 [主说明](../README.md)。
+以下保留样本与静态分析记录，结论只适用于标明的构建。
 
 日期：2026-10-04。范围是资源转换、封包和编码，不是实现一个新的游戏引擎。
 
@@ -6,7 +11,7 @@
 `df4b5b6dffc7002370d0772869baaba551b08fca970e92609ca64b08174f89ba`。
 本文地址均为原 PE 的虚拟地址。原程序未启动，游戏资源未改写。
 
-## 本轮发现并修复的缺陷
+## 格式与处理规则
 
 | 项目 | 原程序证据或复现 | 修复 |
 | --- | --- | --- |
@@ -26,8 +31,7 @@ Windows 参数要求见微软的
 和 [MultiByteToWideChar](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar)。
 这是接口约束缺陷，不据此认定它就是某个已有 Windows 用户故障的唯一原因。
 
-本轮代码提交：`5a85da0`（LIM）、`38fc38a`（归档）、`0df5531`（Windows 编码）。
-前一轮音频核对及修复见 [音频报告](AUDIO_PROCESSING_AUDIT.md)。
+此前音频核对及修复见 [音频报告](AUDIO_PROCESSING_AUDIT.md)。
 
 ## 尚未实现或覆盖不完整的功能
 
@@ -47,18 +51,3 @@ Windows 参数要求见微软的
 
 建议优先做**项目级资源依赖检查**，再做 MSK 可编辑往返及 LIM 原布局保留。
 高层 TSC 编译器工作量大，现有结构化 TSC 已能编辑和重编译，不必先实现全部原始语言。
-
-## 验证与未验证项
-
-- 2,955 个 CannonBall LIM 全部解码；其中两个 RGB565 样本与独立的原引擎颜色/透明键规则
-  逐像素比对，覆盖 455 个透明键像素。Alpha-only 等布局另有合成回归样本。
-- 归档批量验证：19 个 XFL、196 个 LWG，失败 0；XFL 重打包后条目名字和数据一致。
-  批量测试跳过 7 个超过 64 MiB 的归档，不能称为所有大归档均已验证。
-- Linux CTest 全部 8 项通过。LIM 和归档边界测试通过 ASan/UBSan；归档测试中仅相关
-  解析/编码源码启用检测器，不等于全仓库都做了 sanitizer 验证。
-- Windows CLI/GUI 交叉编译成功，LIM、归档、编码测试在隔离 Wine 环境通过。
-  编码测试增加 UTF-8 多语言/emoji、GBK、CP1251、非法 UTF-8 和不可表示字符案例。
-- 未在原游戏中验收画面、播放和归档查找；未在真实 Windows 上运行。视觉、听感及游戏内
-  效果仍需使用者确认。测试资源和临时对照程序没有进入仓库，没有 push 或发布 release。
-
-日常回归：`cmake --build build -j 4`，再执行 `ctest --test-dir build --output-on-failure`。

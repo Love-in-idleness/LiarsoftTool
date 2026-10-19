@@ -1,35 +1,42 @@
 # 项目工作约定
 
-## 开始工作与本机配置
+## 开始工作
 
-- 使用 `rg` 搜索源码，先检查 `git status --short`，保留已有修改及未跟踪资源。
-- 阅读 `README.md` 与 `CMakeLists.txt`；GSC/TSC 改动参考 `docs/GSC_OPCODE_REFERENCE.md`，音频改动参考 `docs/AUDIO_PROCESSING_AUDIT.md`。
-- 两仓库本机路径集中在 `/home/idleness/Source/rscript2renpy/local.paths.toml`，不另维护一份。格式及读取方式见该仓库的 `local.paths.example.toml`、`docs/LOCAL_WORKFLOW.md`。先检查路径存在与用途，其他机器按其实际 checkout 定位配置。
-- 本项目的 `.codex/config.toml` 保存跨仓库和 Ren'Py 输出目录权限。文件保存不代表当前聊天已加载新权限，以实际权限上下文为准。
+- 先检查 Git 状态，保留已有改动；使用 `rg` 搜索。
+- 阅读 README、CMakeLists.txt 和相关模块；TSC 参考 `docs/GSC_OPCODE_REFERENCE.md`。
+- 本机路径共用相邻 rscript2renpy 仓库的 `local.paths.toml`，不硬编码维护者路径。
 
-## 实现与资源边界
+## 实现边界
 
-- 本工具负责 XFL/LWG、GSC/TSC、WCG/LIM、WAV/OGG 和 EXE 处理；Ren'Py lowering、运行时与移植界面放在 rscript2renpy。
-- 公共转换逻辑放在 `src/`、`include/`；CLI 与 Windows/Linux 共用的 GTKmm GUI 通过公共逻辑保持行为一致，不另维护平台专属界面。
-- 原版游戏与补丁保留只读副本；转换、递归处理及往返测试使用指定工作副本或临时目录，确认输出位置，避免默认同名输出改写原件。
-- 保留 `test/`、`CodeXRScript/`、`res_ft/`、`ubai/` 等本机资源，不清理或提交它们。测试产物只写入构建目录或临时目录。
-- 不凭空补全 opcode、DLL 或二进制语义；记录文件哈希、布局、地址和调用证据，明确标注未确认部分。静态分析不等于引擎运行验证。
-- 维持现有编码、元数据和失败处理约定；错误应明确报告，不能悄悄替换无法编码的文本或把失败项的旧产物收入封包。
+- 本仓库负责归档、GSC/TSC、编码、图像、音频和 EXE；Ren'Py 代码放在 rscript2renpy。
+- CLI 和 Windows/Linux GTKmm GUI 调用公共转换模块，不另写一套转换路径。
+- 未知格式和引擎行为从原文件与 EXE 验证，不猜 opcode 或像素算法。
+- 原件只读，转换与往返测试使用副本或临时目录。
+- 保留 `test/`、`CodeXRScript/`、`res_ft/`、`ubai/` 等本机资料，不清理或提交素材。
+- 维持输入检查、严格编码、警告和失败产物排除规则，不能以简化代码为由移除保护。
 
-## 构建与验证
+## 文档写法
 
-- 使用本机配置的 `liarsofttool_build`；已有构建目录先检查 `CMakeCache.txt` 的源码目录与生成器，不擅自切换生成器。
-- 首次配置：`cmake -S <源码目录> -B <构建目录> -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON`。
-- 代码修改后：`cmake --build <构建目录> -j2`、`ctest --test-dir <构建目录> --output-on-failure`、`git diff --check`。
-- 单项调试可用 `ctest --test-dir <构建目录> -R <测试名> --output-on-failure`。当前测试名：`encoding`、`gscfile`、`fileio`、`wav_ogg`、`exe_patch`、`gsc_decompiler`、`gui_common`、`archive`、`cg_decompress`、`directory_packing`；GUI 构建还提供 `gui_smoke`（Linux 需 xvfb-run）。
-- 公共转换改动检查 CLI 和可用的 GUI 目标。Windows/交叉编译仅在任务涉及该平台或用户要求时执行；编译成功不等于 GUI 交互或原引擎行为已验证。
-- 纯文档/路径配置改动只检查文档、路径、配置格式和 diff，不要求重建全部目标。
-- GSC/TSC 输出格式变化必须检查 rscript2renpy 的解析与生成入口，使用工作副本完成转换，再运行相关生成器测试和 Ren'Py lint；两仓库均修复及验证后再完成任务。
-- 原游戏画面、音频、路线及实际游玩由用户验证，分开报告自动测试与实际运行证据，注明未运行检查和既有失败。
+- README 面向用户，先写用途、操作步骤与常用命令。
+- 中文以用户的改写为准，英文同步信息和结构。
+- 不把解析器内部字段、旧数据迁移分支、错误处理实现、测试流水账和提交记录当使用说明。
+- 仅保留会影响用户操作的提示，例如编码选择、备份、版本要求和未支持的功能。
+- opcode 表和逆向依据放在开发参考，保留哈希、地址、参数表及未确认项。
+- 检查参数、命令和本地链接。许可证原文和版权声明不得删改含义。
+
+## 验证
+
+- 使用已配置构建目录，先核对 CMakeCache 的源码路径和生成器，不切换既有生成器。
+- 代码修改后执行 `cmake --build build -j2`、`ctest --test-dir build --output-on-failure`
+  与 `git diff --check`；实际路径以本机配置为准。
+- 公共转换改动检查 CLI 和可用的 GUI。涉及 Windows 时再进行交叉编译与 Wine 回归。
+- GSC/TSC 或资源输出变化时同时检查 rscript2renpy 的消费、生成和 lint。
+- 纯文档修改只检查文档、链接及参数，不要求重建或运行游戏。
+- 自动测试、静态分析、游戏内验证分别报告，不将编译成功写成兼容性已验证。
 
 ## Git 与权限
 
-- 每项独立任务实现并验证后及时本地提交，只暂存任务文件，不混入已有修改。
-- 未明确要求不推送，不创建 tag、发布包或 GitHub Release；若用户明确要求发布，再执行构建、打包与远端核验。
-- 新分支默认使用 `codex/` 前缀，优先复用合适的 checkout。
-- 管理员权限操作先说明目的及具体命令并获得授权，不绕过目录权限。使用构建目录中的工具，不因 README 有安装示例而自动执行 `sudo` 或全局安装。
+- 独立任务验证后本地提交，只包含当前任务文件；用户要求暂不提交时照做。
+- 未明确要求不推送、不创建 tag 或 Release、不提高版本号。
+- 新分支使用 `codex/` 前缀，优先复用当前 checkout。
+- 管理员操作先确认，不全局安装构建产物，不绕过目录权限。

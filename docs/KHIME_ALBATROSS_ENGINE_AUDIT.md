@@ -1,24 +1,29 @@
-# 腐り姫 / 信天翁航海録 引擎核对
+# 开发参考：Khime / Albatross 资源
+
+[返回文档目录](README.md)
+
+字体、归档、图像与音频处理的原程序依据。日常操作见 [主说明](../README.md)。
+以下保留样本与静态分析记录，结论只适用于标明的构建。
 
 核对日期：2026-10-04。仅静态分析程序并读取原资源，未运行原游戏、未修改原文件。
-所有转换测试产物写入临时目录；此次不推送、不发布。
+所有转换测试产物写入临时目录。
 
 ## 文件身份
 
 | 文件 | SHA-256 | PE 资源 FileVersion |
 | --- | --- | --- |
-| `/home/idleness/Games/KhimeKusaritop/KhimeDL.exe` | `2dfc7b78d32867716ab0406ccbf176b55a76faea1cb9c40feac25c90775222fe` | `1, 8, 5, 0` |
-| `/home/idleness/Games/Albatross/信天翁航海録.exe` | `f04c9729c0f60269f6ffdc63ea71c587a2431c501ade698e374978050fd156c4` | `1, 9, 0, 0` |
+| `KhimeKusaritop/KhimeDL.exe` | `2dfc7b78d32867716ab0406ccbf176b55a76faea1cb9c40feac25c90775222fe` | `1, 8, 5, 0` |
+| `Albatross/信天翁航海録.exe` | `f04c9729c0f60269f6ffdc63ea71c587a2431c501ade698e374978050fd156c4` | `1, 9, 0, 0` |
 
 两者均为 PE32/i386，映像基址 `0x400000`。下文地址是虚拟地址，不是文件偏移。
-资源版本号不是游戏发布日期；同目录的中文补丁 EXE 不在本次核对范围。
+资源版本号不是游戏发布日期；同目录的中文补丁 EXE 不在分析时核对范围。
 
 《信天翁航海録》的 `.text`（`0x72000` 字节）及 `.rdata`（`0xb000` 字节）
 与 `res_ft/exe/kagerou.exe` 逐字节相同，节地址也相同。
-上一轮的[霞外籠逗留記引擎核对](JEANNE_KAGEROU_ENGINE_AUDIT.md)中涉及的
+此前的[霞外籠逗留記引擎核对](JEANNE_KAGEROU_ENGINE_AUDIT.md)中涉及的
 字体、禁则、图像通道、音频读取代码因此同样适用；这不表示两游戏资源或脚本相同。
 
-## 腐り姫的两处字体 charset 漏改：已修复
+## Khime 字体字符集
 
 `KhimeDL.exe` 共有 11 处直接通过 IAT 调用 `CreateFontA`（IAT：`0x46302c`）。
 此前转换只覆盖其中 9 处，其余两处仍保留日文字体 charset `0x80`。
@@ -70,21 +75,8 @@ WCG 签名检查在 `0x42f474`，通道分派在 `0x42f520–0x42f5a2`：
 | 正确识别为无需转换的 PCM WAV | 0 | 140 |
 | 上述资源转换失败 | 0 | 0 |
 
-信天翁含 `</Layer set>` 等图层名；上一轮 XML 转义修复已覆盖，
+信天翁含 `</Layer set>` 等图层名；此前 XML 转义修复已覆盖，
 原名、空条目、坐标、Flag、顺序及载荷均能保留。
 抽查 `KhimeKusaritop/voice.xfl/0001.wav` 与 `Albatross/voice.xfl/0015.wav`，
 由当前 CLI 提取的 Ogg 均经 FFmpeg 完整解码成功。
 容器检查不是游戏内播放时长、听感或 ACM 驱动兼容性的验收。
-
-## 脚本与验证边界
-
-- 腐り姫 341 个、信天翁 91 个 GSC 均完成 GSC→TSC→GSC→TSC，
-  全部结构化指令文本一致，无完整 `gsc-raw` 回退。
-  其中原始/回编 GSC 逐字节一致分别为 98、27 个；其余存在字符串池去重/重编号。
-  不把文本往返一致当作原引擎实际执行证明，也不据此宣称未知 opcode 已全部定名。
-- Linux CLI / GTK GUI 重建，8 项 CTest 通过；Windows CLI / GUI 交叉编译成功，
-  EXE 补丁回归在隔离 Wine 环境通过。
-- EXE 补丁回归通过 ASan/UBSan，包括新形状的完整匹配、截断、近似但不匹配的
-  调用形状、三种 charset 往返及文件级识别。
-- 本次仅修改 EXE 补丁机器码识别，没有改变 TSC、XML 或音频的输出契约。
-  未同步生成 Ren'Py 工程、未制作 APK；画面、声音和真实游戏流程仍由用户验收。

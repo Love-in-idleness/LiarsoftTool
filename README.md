@@ -1,571 +1,263 @@
-# LiarsoftTool &nbsp; [中文](#中文) | [English](#english)
+# LiarsoftTool · [中文](#中文) | [English](#english)
 
-http://www.codex.jp
-![alt text](image.png)
-
-A comprehensive toolkit for visual novels powered by the **Codex RScript** engine,
-developed by circles including **CodeX**, **Liar-soft (骗子社)**, **rail-soft**, and
-**スタジオ奪トランス (Studio Ubai Trans)**. Handles archive packing/unpacking,
-image decoding/encoding, script extraction/injection, and audio extraction.
-
-针对 **CodeX**, **Liar-soft（骗子社）**、**rail-soft**、**スタジオ奪トランス**
-等社团使用 **Codex RScript** 引擎开发的视觉小说/文字游戏的综合资源处理工具。支持封包解包、图像编解码、脚本提取/注入、音频提取。
-
-本项目负责从用户合法持有的游戏中解包并转换 XFL/LWG、GSC、WCG/LIM
-和封装 WAV 等原始资源。若要把处理后的 CodeX RScript 游戏迁移到 Ren'Py，
-请配合 [rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy)；
-`rscript2renpy` 的资源预处理流程依赖本工具。
-
-**References / 参考项目：**
-- [RaiLTools](https://github.com/EusthEnoptEron/RaiLTools) — original C# reverse-engineering (GSC/XFL/LWG/WCG)
-- [arc_unpacker](https://github.com/vn-tools/arc_unpacker) — C++ port of CG decompression (WCG/LIM)
-- [GARbro](https://github.com/crskycode/GARbro) — WCG encoder reference implementation
-
----
+![LiarsoftTool](image.png)
 
 ## 中文
 
-### 速查表
+LiarsoftTool 用于处理 CodeX RScript 引擎游戏的资源，支持封包解包、图像转换、
+脚本提取与回写、音频转换，适用于 Liar-soft、raiL-soft 等社团的作品。
 
-转换文件采用目标目录内独占临时文件，完整写入并成功关闭后才替换旧文件；
-写入或替换失败会保留旧内容并清理临时文件。只读目标仍拒绝覆盖；同内容不重写，
-解包后的来源时间戳规则不变。这不是整批／整封包事务，不承诺断电、网络文件系统
-或并发写同一目标时的事务安全；替换不保留旧文件的硬链接关联。
+若要将游戏移植到 Ren'Py，请配合
+[rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy) 使用。
+
+### 开始使用
+
+Windows 用户解压完整发行包后运行 `bin/liarsofttool-gui.exe`，不要只复制 EXE。
+Linux 用户运行 `liarsofttool-gui`；命令行程序为 `liarsofttool`。
+
+先复制一份游戏资源再操作。生成文件默认写在输入文件旁，重建可能覆盖同名文件。
+
+图形界面的操作顺序：
+
+1. 添加文件或文件夹，也可以直接拖入窗口。
+2. 选择资源编码。日文通常用 CP932，中文补丁通常用 GBK。
+3. 按需选择递归、仅封包或仅解包，检查列表中的输出路径。
+4. 开始转换。遇到问题时，用 “Copy details” 复制完整提示。
+
+GUI 默认将 GSC 转成 TSC；若只需要提取译文，勾选 **GSC→TXT**。
+CLI 默认提取 TXT，使用 `--gsc-to-tsc` 才生成 TSC。
+
+### 常用命令
+
+以下示例在资源工作副本中执行。省略 `-e` 时默认使用 CP932；
+补丁的编码应按实际文件选择，不由语言名称决定。
 
 | 需求 | 命令 |
-|------|------|
-| 提取脚本原文 | `liarsofttool -e gbk scenario.gsc` |
-| GSC 转结构化 TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
-| 从 TSC 恢复/更新 GSC | `liarsofttool scenario.tsc` |
-| 翻译后注回 | `liarsofttool -e gbk -r original.gsc trans.txt` |
-| 解包资源封包 | `liarsofttool -e cp932 archive.xfl` |
-| 解包场景封包 | `liarsofttool cgview.lwg` |
-| WCG 转 PNG | `liarsofttool image.wcg` |
-| LIM 转无损 WebP | `liarsofttool image.lim` |
-| WebP 转 LIM | `liarsofttool image.webp` |
-| PNG 转 WCG | `liarsofttool image.png` |
-| WAV 提取 OGG（标准 PCM 保留） | `liarsofttool audio.wav` |
-| OGG 解码为 PCM WAV（默认） | `liarsofttool audio.ogg` |
-| OGG 保留压缩流、封装为 WAV | `liarsofttool --vorbis-in-wav audio.ogg` |
-| 打包目录→XFL | `liarsofttool -e cp932 ./dir` |
-| 打包目录→LWG | `liarsofttool -e cp932 ./dir_with_meta` |
-| 递归解包并转换 | `liarsofttool -R -e cp932 archive.xfl` |
-| 转换并递归打包 | `liarsofttool -R -e cp932 ./dir` |
-| 只执行封包方向 | `liarsofttool --pack-only <输入...>` |
-| 只执行解包方向 | `liarsofttool --unpack-only <输入...>` |
-| EXE 编码转换 | `liarsofttool -e gbk game.exe` |
-| 批量转换 | `liarsofttool *.png` 或 `liarsofttool * -e gbk` |
+| --- | --- |
+| 提取脚本文本 | `liarsofttool scenario.gsc` |
+| 导出 TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
+| 将中文 TSC 编译为 GSC | `liarsofttool -e gbk scenario.tsc` |
+| 将 TXT 译文写回 GSC | `liarsofttool -e gbk -r original.gsc trans.txt` |
+| 解包 XFL / LWG | `liarsofttool archive.xfl` / `liarsofttool scene.lwg` |
+| 打包文件夹 | `liarsofttool ./resources` |
+| WCG → PNG | `liarsofttool image.wcg` |
+| PNG / JPG / BMP → WCG | `liarsofttool image.png` |
+| LIM → 无损 WebP | `liarsofttool image.lim` |
+| WebP → LIM | `liarsofttool image.webp` |
+| 提取 WAV 内的 OGG | `liarsofttool audio.wav` |
+| OGG → PCM WAV | `liarsofttool audio.ogg` |
+| 将 OGG 压缩封装为 WAV | `liarsofttool --vorbis-in-wav audio.ogg` |
+| 规范化 CodeX BMP 的透明度 | `liarsofttool --unpack-only image.bmp` |
+| EXE 转为 GBK 字体与标点设置 | `liarsofttool -e gbk game.exe` |
 
-> **提示**：日文版用 `cp932`（Windows-31J，默认；`shift_jis` 等旧别名也会映射到 CP932），中文版用 `-e gbk`，西里尔/英文版用 `-e cp1251`。EXE 转换会同步已识别的 RScript 禁则标点表（经典立即数比较及 Evermaiden 的寄存器比较结构）；运行时仍需使用与文本匹配的 Windows 系统代码页或 Locale Emulator（CP932/936/1251）。
+标准 PCM WAV 可以直接播放，解包时会原样保留，不会另外生成 OGG。
+EXE 转换生成另一个文件；运行游戏时仍需使用与资源匹配的系统区域设置或 Locale Emulator。
 
-### 编译
-
-**依赖：** CMake ≥ 3.10, GCC ≥ 9（C++17 + `<filesystem>`）, libiconv、libwebp、libvorbis/libogg 开发库（Debian/Ubuntu：`libwebp-dev libvorbis-dev libogg-dev`）
-
-Windows/Linux 共用 GTKmm 3 图形界面，默认启用；Debian/Ubuntu 还需 `pkg-config libgtkmm-3.0-dev`。
-只编译命令行时添加 `-DBUILD_GUI=OFF`，不需要 GTKmm 或 pkg-config。
+递归解包整个工作目录，并准备供 rscript2renpy 使用的资源：
 
 ```bash
-cd LiarsoftTool
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc)
-# CLI 版本
-sudo cp liarsofttool /usr/local/bin/
-# GUI 版本（Windows/Linux 均使用 GTKmm 3）
-# 直接运行 build/liarsofttool-gui 或双击 EXE
+liarsofttool -R --unpack-only --gsc-to-tsc -e cp932 ./Game
 ```
 
-#### Windows 原生编译 (MSYS2)
+递归转换并封包：
 
 ```bash
-# 在 MSYS2 UCRT64 终端中
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg}
-cd LiarsoftTool
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
-make -j$(nproc)
-# 产出 liarsofttool.exe 和 liarsofttool-gui.exe
-# 从仓库根目录制作可分发目录（目标目录必须不存在）
-cd ..
-bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
-# 双击 windows-bundle/bin/liarsofttool-gui.exe；分发整个目录，不只分发 EXE
+liarsofttool -R --pack-only -e gbk ./resources
 ```
 
-打包脚本递归收集 DLL 依赖及 GTK 图标、字体配置、图像加载模块和许可证，生成
-GLib schemas 与可重定位的图像加载缓存。用户无需安装 MSYS2；不要混用 UCRT64
-与 MINGW64 的编译器、库和运行时。CLI-only 构建不使用此 GUI 打包脚本。
+递归封包先处理子目录。带 `.meta.xml` 的目录生成 LWG，其余生成 XFL。
+封包只收录 LIM、WCG、GSC、WAV、XML、LWG、XFL、MSK。启用递归时会先转换
+PNG、TSC 等编辑文件，不会直接收入封包。请保留解包生成的 `.meta.xml`。
 
-#### 从 Linux 交叉编译 Windows 版
+同时启用“仅封包”和“仅解包”时不执行操作。递归处理中遇到单个文件失败会给出
+警告并继续；空封包会报错。
 
-需先为 MinGW 准备 Windows 目标的 libwebp 头文件和库，并通过 CMake 的
-`WEBP_INCLUDE_DIR` / `WEBP_LIBRARY` 指定；不能链接本机 Linux 的 libwebp。
-新版静态 libwebp 还需同一目标平台的 libsharpyuv，可通过 `WEBP_SHARPYUV_LIBRARY` 指定。
-音频还需目标平台的 libogg/libvorbis/libvorbisfile；使用 `CMAKE_PREFIX_PATH` 指向其安装目录，
-或指定 `OGG_INCLUDE_DIR`、`VORBIS_INCLUDE_DIR`、`OGG_LIBRARY`、`VORBIS_LIBRARY`、`VORBISFILE_LIBRARY`。
-启用测试时还需 `VORBISENC_LIBRARY`（仅用于生成测试音频）。动态构建需附带相应 DLL。
-若链接动态库，运行时须随程序提供对应的 WebP DLL；静态链接则无需该 DLL。
-GUI 还需同一 MinGW 目标的 GTKmm 3 全套开发依赖；用 `PKG_CONFIG_LIBDIR` 指向
-目标库的 `.pc` 目录、`PKG_CONFIG_SYSROOT_DIR` 设置 sysroot，避免误链接 Linux GTK。
-下例仅构建 CLI；准备好目标 GTKmm 后，去掉 `-DBUILD_GUI=OFF` 才会生成 GUI。
-GUI 使用 MSYS2 库时还须使用 POSIX 线程模型的 MinGW 编译器（例如
-`x86_64-w64-mingw32-g++-posix`）；不能混用 win32 线程模型的 C++ ABI。
+### 脚本翻译
 
-```bash
-sudo apt install g++-mingw-w64-x86-64
-mkdir build/win && cd build/win
-cmake -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_GUI=OFF \
-      -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
-      -DCMAKE_SYSTEM_NAME=Windows ../..
-make -j$(nproc)
-# 产出 liarsofttool.exe
-```
+只改对话时可使用 TXT：在 `>` 后填写译文，再以原 GSC 为参考写回。
+需要编辑完整脚本时使用 TSC，修改其中的命令和文字后重新编译。
+TSC 用 UTF-8 保存，生成中文 GSC 时使用 `-e gbk`。
 
-### GUI 图形界面
-
-直接运行 `liarsofttool-gui` 或双击可执行文件启动：
-
-- **拖放文件**到窗口即可添加到转换列表
-- 编码选择（CP932 / GBK / CP1251）、参考 GSC 指定、输出目录，以及递归/仅封包/仅解包/GSC→TXT/Vorbis-in-WAV 开关；GSC 默认转换为结构化 TSC，OGG 默认解码为 PCM WAV，勾选 Vorbis-in-WAV 改为压缩封装
-- 显示输入路径、输出路径、转换类型、状态四列
-- 批量转换带进度条，后台多线程不阻塞界面
-- 警告与错误提示提供“Copy details”一键复制，包含完整诊断信息及输入/输出路径，方便反馈问题
-- Windows/Linux 使用同一 GTKmm 3 界面；Windows 需随包提供 GTK 运行库和资源
-- 转换期间禁止修改队列和关闭窗口，完成后恢复操作，避免后台任务访问已销毁的控件
-- Windows 文件路径仍受转换核心的系统代码页限制；不能无损表示的路径会报错，请移至 ASCII 路径。界面的 UTF-8 与脚本编码选择互不影响
+GSC→TSC 是实验性功能，不是所有游戏都已适配。编辑前保留原 GSC，
+不要删除 TSC 中自动生成的标签和元数据。
+命令含义见 [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.md)。
 
 ### 命令行参数
 
-| 参数 | 说明 |
-|------|------|
-| `-e, --encoding <enc>` | 编码：`cp932`（Windows-31J 日文，默认）/ `gbk`（中文）/ `cp1251`（西里尔及英文） |
-| `-r, --reference <path>` | TXT→GSC 时所需的参考 GSC 文件 |
-| `-o, --output <path>` | 显式指定输出路径 |
-| `-R, --recursive` | 递归处理输入目录和子封包，并在打包/解包时自动转换资源 |
-| `-j, --jobs <0..64>` | 递归资源转换的线程数；0 为自动（最多 4 个），1 为串行 |
-| `--pack-only` | 只执行封包及编码方向的输入 |
-| `--unpack-only` | 只执行解包及解码方向的输入 |
-| `--gsc-to-tsc` | 将 GSC 反编译为结构化 UTF-8 TSC，而非提取为 TXT |
-| `--vorbis-in-wav` | OGG→WAV 改为保留压缩流的 Vorbis-in-WAV 封装，含递归封包；不勾选默认解码为 PCM |
-| `-h, --help` | 显示帮助 |
+| 参数 | 用途 |
+| --- | --- |
+| `-e, --encoding` | CP932（日文，默认）、GBK 或 CP1251 |
+| `-o, --output` | 指定输出文件或目录 |
+| `-r, --reference` | TXT 写回时使用的原 GSC |
+| `-R, --recursive` | 递归处理子目录和封包，同时转换资源 |
+| `--pack-only` / `--unpack-only` | 只处理选定方向 |
+| `--gsc-to-tsc` | GSC 导出为 TSC |
+| `--vorbis-in-wav` | OGG→WAV 时保留压缩音频 |
+| `-j, --jobs` | 递归转换线程数，0 自动，1 串行，最大 64 |
+| `-h, --help` | 查看帮助 |
 
-支持多个输入文件及 shell 通配符：`liarsofttool *.wcg`、`liarsofttool * -e gbk`。
-两个参数时若扩展名不同则视为 `输入 输出`（向后兼容）。
-`-R --unpack-only <目录>` 会遍历目录树中的每个可解包文件，不会把目录重新封包。
+可以传入多个文件，也可以使用通配符，例如 `liarsofttool *.wcg`。
 
-### 支持格式
+### 从源码编译
 
-| 格式 | 扩展名 | 操作 | 说明 |
-|------|--------|------|------|
-| XFL | `.xfl` | 解包/打包 | 通用资源封包，Magic: `LB\x01\x00` |
-| LWG | `.lwg` | 解包/打包 | 场景合成封包，Magic: `LG\x01\x00`，含图层 X/Y/Flag |
-| GSC | `.gsc` | 提取/注回 | 游戏脚本。兼容现代头（36B）及早期头（28B），自动按 HeaderLength 适配 |
-| TSC | `.tsc` | → GSC | 从结构化指令、字符串和数据块重新编译 GSC；支持直接修改正文 |
-| WCG | `.wcg` | ↔ PNG | 8 位 RGBA 像素无损转换，支持配对通道、独立四通道及透明度遮罩 |
-| LIM | `.lim` | ↔ WebP | 无损 RGBA；读取 16-bit BGR565/遮罩，回写为版本 3 的独立 A/R/G/B 通道 |
-| EXE | `.exe` | CP932/GBK/CP1251 | 修改引擎字体 charset 参数，并转换已识别的日文、中文或俄文禁则标点表 |
-| WAV | `.wav` | → OGG/保留 | 按 RIFF 块定位嵌入 Ogg，不限制偏移 66；标准 PCM WAV 无需转换 |
-| OGG | `.ogg` | → WAV | 默认解码为 16 位 PCM；可选 Vorbis-in-WAV；两种方式均不需要原 WAV |
+需要 C++17 编译器、CMake、WebP、Vorbis/Ogg；图形界面还需要 GTKmm 3。
+Windows 和 Linux 使用同一套 GUI。
 
-WCG 编码默认使用两个 16 位颜色对；任一颜色对达到 65536 种时，自动改用独立 A/R/G/B 通道，避免调色板计数溢出并保持像素无损。仅透明度的 WCG 导出为 RGB 全零、透明度保留的 PNG，不补造颜色。四通道路径已根据 Cannonball 原程序验证静态逻辑，其他引擎的游戏内兼容性仍需测试；PNG 的 ICC/gamma 等元数据不会写入 WCG。
-
-LIM 导出为无损 `.webp`，包括完全透明像素下的 RGB；同名 WCG 仍导出 `.png`，两者不互相覆盖。WebP 回写为版本 3 的 LIM，保持解码后的 RGBA 像素，但不保证原 LIM 的位深、压缩方式或字节排列不变。不支持动画 WebP；WebP 单边尺寸上限为 16383 像素。WebP 的 ICC/EXIF 等元数据不会写入 LIM。旧的 LIM 导出 PNG 请从原 LIM 重新生成 WebP，不能直接改后缀。
-
-LWG 的零数据条目仍会写入 `.meta.xml`，以 `empty="1"` 保留名字、坐标、Flag 和顺序；回编不会误用同名图片填充它们。旧版解包已经丢失的条目需从原 LWG 重新提取。仅有空条目、没有有效资源的封包仍会报错。
-图层名中的 XML 特殊字符会转义，回编时还原原名；实际文件名沿用解包时的文件系统字符替换规则。旧工具生成的非法 XML（例如包含 `</Layer set>` 原文）请从原 LWG 重新提取。
-
-GSC 文本格式：`#` 标记原文，`>` 标记译文，支持 `\t`（全角空格）和多行。
-
-`--gsc-to-tsc` 支持 28 字节早期（含 CodeX 之前）头，以及采用 RScript 1.8、1.9
-或现代指令布局的 36 字节头；程序会根据完整指令边界、跳转目标和操作数结构
-自动选择布局，并将选择写入 TSC 元数据。已识别文件的 TSC 正文由主动可编译的
-`*命令`、`*vm`、标签、`*datablock` 和字符串字面量组成，不保存原代码区或原字符串表。
-回编时会重新编码字符串，按内容去重，并重算字符串索引、偏移、代码、数据块及完整头部。
-因此目标是保持已识别指令的结构和执行语义，但字符串编号和字节排列不保证与原文件完全
-相同。28 字节格式按旧引擎规则以 16 位字数计算 Section D 的声明长度；36 字节格式在默认
-情况下生成标准空入口表和名字表终止符。
-原文件若带有非空的命名入口表（如 `scmode`、`REP001`），反编译会写出
-`;@gsc-trailer <hex>`（Section D 之后的全部尾部字节）以及
-`;@gsc-trailer-header <u7> <u8>`（头部第 7、8 个字，用于确定尾部两张表的长度，仅在非
-标准值 4/1 时出现）。名字、保留槽和填充原样保留，入口代码地址按正文的 `L_xxxxxx`
-标签重定位；`*insub` 的首参数也使用标签，不再保留易失效的旧数字地址。
-不要删除或改名命名入口对应的生成标签；旧 TSC 缺少这些标签时须从 GSC 重新导出，
-不能静默使用旧偏移。没有这两行时按标准空入口表处理。28 字节格式没有
-尾部区域，出现该元数据会直接报错。
-数据块元素数量限于引擎的有符号 16 位范围（0–32767）；`*data` 的非零块编号必须存在，
-零编号按引擎约定表示不复制数据。
-28 字节头的字符串区长度偏小时，仅在字符串连续排列、原数据区校验失败、按真实 `00`
-结束符补足后数据表有效且尾部仅有零填充时尝试恢复；指令及引用仍须通过校验。
-成功恢复会通过 CLI/GUI/递归解包报告警告，并在 TSC 留下普通 `; warning:` 注释；
-回编将重新计算正确长度，不保留过时头部及多余零填充。无法可靠恢复或识别指令布局的
-文件使用 `;@gsc-raw-v1` 兼容回退，并明确标注无法反编译。
-TSC 正文始终是 UTF-8，且**不再记录**字符串编码：`--gsc-to-tsc` 的 `-e` 决定按何种编码
-解读原 GSC，`tsc → gsc` 的 `-e` 决定写出何种编码的 GSC。因此把日文 TSC 翻译成中文后，
-回编时用 `-e gbk` 即可得到中文版引擎需要的 GBK 文件；忘记指定编码时（默认 CP932），
-无法表示的文字会**直接报错**，而不是悄悄写成 `?`。旧 TSC 里遗留的 `;@gsc-text-encoding`
-行会被忽略（编码始终以 `-e` 为准）。
-`*TXT`/`*TXA` 的字符串参数、`*font` 的文字、`*folder` 路径、`*gosub` 的子程序名、
-选择题文字和字符串操作都直接出现在正文中。普通注释不参与生成；可以修改、新增、删除和重排完整指令，但标签及
-各指令参数仍须符合所记录的 RScript schema。旧版结构化 TSC 不再兼容，须从原 GSC 重生成。
-与 `-R --unpack-only` 组合时，会在整个目录树及内嵌封包中生成 `.tsc`；递归
-封包会先将这种 TSC 恢复或更新为 GSC。
-
-完整映射及未知项见 [GSC opcode 与 TSC 命令对照表](docs/GSC_OPCODE_REFERENCE.md) / [English](docs/GSC_OPCODE_REFERENCE.en.md)。
-
-### 典型工作流
+Debian / Ubuntu：
 
 ```bash
-# --- 汉化流程 ---
-liarsofttool -e gbk data.xfl unpacked/
-liarsofttool -e gbk unpacked/0010.gsc              # → 0010.txt
-# 翻译 0010.txt …
-liarsofttool -e gbk -r unpacked/0010.gsc 0010.txt  # → 0010.gsc
-cp 0010.gsc unpacked/0010.gsc
-liarsofttool -e gbk unpacked/                      # → unpacked.xfl
-
-# --- 场景编辑 ---
-liarsofttool cgview.lwg cgview/                    # 解包+生成 .meta.xml
-liarsofttool cgview/bg.wcg                         # → bg.png
-# 编辑 bg.png …
-liarsofttool cgview/bg.png                         # → bg.wcg
-liarsofttool cgview/                               # → cgview.lwg
-
-# --- EXE 编码转换 ---
-liarsofttool -e gbk game.exe        # 转换 GBK 字体及中文禁则表
-liarsofttool -e cp1251 game.exe     # 转换 CP1251 字体及俄文禁则表
-liarsofttool -e cp932 game.exe      # 恢复 CP932 字体及日文禁则表
-# 输出 name.gbk.exe / name.cp1251.exe / name.sjis.exe，不覆盖原文件
-
-# --- 音频往返 ---
-liarsofttool audio.wav                         # 嵌入式 → audio.ogg；标准 PCM 原样保留
-liarsofttool audio.ogg                         # → audio.wav（16 位 PCM）
-liarsofttool --vorbis-in-wav audio.ogg          # → audio.wav（保留 Vorbis 压缩流）
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libgtkmm-3.0-dev
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2
 ```
 
-OGG→WAV 默认完整解码为有符号 16 位小端 PCM，保留单/双声道和采样率，不重采样、不再次有损压缩；文件通常明显增大。为避免错误声道映射，暂不支持多于两声道的 PCM 输出，会明确报错。PCM WAV 不再含可直接提取的 OGG，也不能无损恢复原 OGG 压缩字节。
+程序位于 `build/`。只构建命令行时，配置阶段添加 `-DBUILD_GUI=OFF`。
+Windows 编译和打包见 [构建说明](docs/BUILDING.md)。
 
-GUI 勾选 **Vorbis-in-WAV** 或 CLI 添加 `--vorbis-in-wav`，改为保留完整 Vorbis 流，自动构造 mode 1（`0x674f`）头、`fact` 和 RIFF/data 长度。不冒用可能依赖驱动内置码本的 mode 3 标记；读取仍支持含完整 Ogg 的 mode 1/1+/3/3+，不支持将 mode 2 的独立头直接当作完整 Ogg。RIFF 读取按块 ID、长度和偶数字节对齐定位，允许额外元数据、不同块顺序及不同长度的 `fmt`。
+### 更多说明
 
-两种方式都不读取或依赖原 WAV，`-r` 仅用于 TXT→GSC。输入须为完整、连续的单流 Ogg Vorbis；损坏或不支持的输入报错且不覆盖已有目标。递归封包时警告、继续处理其他文件，并排除该失败项的旧目标。原游戏实际播放仍由用户验收，不承诺原 WAV 容器逐字节还原。旧实验性开关已移除。
+[文档目录](docs/README.md) · [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.md)
 
-> 提示：输出内容相同则不重写。解包/解码产生的文件会同步为直接来源文件的修改时间，即使内容相同也会同步时间；封包/编码方向仍保留内容相同的已有输出时间。
-
-XFL/LWG 不保存条目的原始修改时间，解出的所有文件（含 `.meta.xml`）继承输入封包的修改时间；递归时向下传递到内层封包及 PNG、WebP、OGG、TXT/TSC。单独执行 GSC/WCG/LIM/WAV 解码也继承输入时间。不更改源文件、目录时间或输出目录内与本次解包无关的文件；标准 PCM WAV 不产生新 OGG，不改动已有同名 OGG。时间无法读取或设置时报告错误（递归时作为警告），不静默忽略。
-
-目录打包只收集 `.lim`、`.wcg`、`.gsc`、`.wav`、`.xml`、`.lwg`、`.xfl`、`.msk`（扩展名不区分大小写），PNG 等工程文件不会直接进入封包。默认只处理指定目录或封包的当前层。
-
-启用 `-R` 或 GUI 的“Recursive”后，打包会先自底向上处理子目录：含 `.meta.xml` 的目录生成同名 LWG，其余可打包目录生成同名 XFL；同时自动执行 TSC→GSC、TXT→GSC（需同名 GSC 作为参考）、PNG/JPG/JPEG/BMP→WCG、WebP→LIM、OGG→WAV（默认 PCM，可选 Vorbis-in-WAV，无需模板）。PNG 与 WebP 可同名共存，不再改名或生成 `.lim.old`。缺少参考文件、转换失败或子目录无法打包时，会警告并继续，且失败项的旧目标不会被收入本次封包。最外层没有有效资源时仍会报错，不生成空封包。
-
-递归解包会继续解开内嵌 XFL/LWG，并自动处理 GSC（命令行默认生成 TXT，GUI 默认生成 TSC、勾选“GSC→TXT”后生成 TXT）、WCG→PNG、LIM→WebP、嵌入式 WAV→OGG；已经是标准 PCM 的 WAV 会原样保留并视为成功。单个文件失败只会产生警告，不会中断其余处理。
-
-递归处理会一次建立当前目录的文件索引，并并行转换独立资源，CLI、Linux GUI 和 Windows GUI 共用这一逻辑。CLI 用 `-j N` / `--jobs N`（如 `liarsofttool -R -j 8 archive.xfl`），GUI 用 **Threads (0 = auto)** 设置线程数：范围 0～64，0 默认自动选择至多 4 个工作线程，1 为串行。同名来源仍按优先级串行处理，警告按固定顺序汇总；子目录先封包、外层先解包的顺序不变，不会递归叠加线程。多个大封包及 GUI/CLI 的输入队列仍串行处理，避免并发加载整个封包导致内存暴涨；手动增加资源转换线程仍会增加内存和磁盘压力。
-
-“仅封包”包括目录→XFL/LWG、TSC/TXT→GSC、PNG 等图片→WCG、WebP→LIM、OGG→WAV；“仅解包”包括 XFL/LWG→目录、GSC→TXT、WCG→PNG、LIM→WebP、WAV→OGG。两者都不启用时维持原有的全类型处理；两者同时启用时所有输入都跳过，不写入文件。EXE 编码转换不属于这两个方向，仅在两者都未启用时执行。
-
-### 已知限制
-
-- **多级目录**：XFL/LWG 中文件均扁平存放。
-- **EXE 排版规则**：禁则表转换只应用于完整匹配已知 RScript 机器码结构的程序（立即数比较、`MOV EAX / CMP SI, AX` 比较）；只修改字符常量，不改写分支或系统代码页。其他引擎版本仍只转换已识别的字体 charset。
+请使用合法持有的游戏资源。脚本、图像或 EXE 能成功转换，不代表所有引擎版本
+都能直接使用，替换回游戏后请自行测试。
 
 ---
 
 ## English
 
-### Quick Reference
+LiarsoftTool handles resources from CodeX RScript games, including titles by
+Liar-soft and raiL-soft. It packs and unpacks archives, converts images and audio,
+and extracts or rebuilds scripts.
+
+To port a game to Ren'Py, use it with
+[rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy).
+
+### Getting started
+
+On Windows, extract the complete release package and run
+`bin/liarsofttool-gui.exe`. Keep the bundled files together.
+On Linux, run `liarsofttool-gui`. The command-line program is `liarsofttool`.
+
+Work on a copy of your game resources. Output normally goes beside the input
+and rebuilding may overwrite files with the same name.
+
+In the GUI:
+
+1. Add files or folders, or drag them into the window.
+2. Select the resource encoding: usually CP932 for Japanese or GBK for Chinese patches.
+3. Choose Recursive, Pack only or Unpack only as needed, then check the output paths.
+4. Start conversion. Use **Copy details** to copy a complete error report.
+
+The GUI exports GSC to TSC by default; enable **GSC→TXT** for translation text.
+The CLI exports TXT by default; add `--gsc-to-tsc` for TSC.
+
+### Common commands
+
+Examples operate on working copies. The default encoding is CP932.
+Choose a patch's encoding from its actual files, not its language label.
 
 | Task | Command |
-|------|---------|
-| Extract script strings | `liarsofttool -e gbk scenario.gsc` |
-| GSC to structured TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
-| Restore/update GSC from TSC | `liarsofttool scenario.tsc` |
-| Inject translation | `liarsofttool -e gbk -r original.gsc trans.txt` |
-| Unpack resource archive | `liarsofttool -e cp932 archive.xfl` |
-| Unpack scene archive | `liarsofttool cgview.lwg` |
-| WCG to PNG | `liarsofttool image.wcg` |
-| LIM to lossless WebP | `liarsofttool image.lim` |
-| WebP to LIM | `liarsofttool image.webp` |
-| PNG to WCG | `liarsofttool image.png` |
-| WAV extract OGG (retain PCM) | `liarsofttool audio.wav` |
-| OGG decode to PCM WAV (default) | `liarsofttool audio.ogg` |
-| OGG wrap to compressed WAV | `liarsofttool --vorbis-in-wav audio.ogg` |
-| Pack directory → XFL | `liarsofttool -e cp932 ./dir` |
-| Pack directory → LWG | `liarsofttool -e cp932 ./dir_with_meta` |
-| Recursively unpack and convert | `liarsofttool -R -e cp932 archive.xfl` |
-| Convert and recursively pack | `liarsofttool -R -e cp932 ./dir` |
-| Only pack/encode | `liarsofttool --pack-only <inputs...>` |
-| Only unpack/decode | `liarsofttool --unpack-only <inputs...>` |
-| EXE encoding convert | `liarsofttool -e gbk game.exe` |
-| Batch convert | `liarsofttool *.png` or `liarsofttool * -e gbk` |
+| --- | --- |
+| Extract script text | `liarsofttool scenario.gsc` |
+| Export TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
+| Compile Chinese TSC to GSC | `liarsofttool -e gbk scenario.tsc` |
+| Import translated TXT | `liarsofttool -e gbk -r original.gsc trans.txt` |
+| Unpack XFL / LWG | `liarsofttool archive.xfl` / `liarsofttool scene.lwg` |
+| Pack a folder | `liarsofttool ./resources` |
+| WCG → PNG | `liarsofttool image.wcg` |
+| PNG / JPG / BMP → WCG | `liarsofttool image.png` |
+| LIM → lossless WebP | `liarsofttool image.lim` |
+| WebP → LIM | `liarsofttool image.webp` |
+| Extract OGG from WAV | `liarsofttool audio.wav` |
+| OGG → PCM WAV | `liarsofttool audio.ogg` |
+| Wrap OGG in WAV without decoding | `liarsofttool --vorbis-in-wav audio.ogg` |
+| Normalize CodeX BMP transparency | `liarsofttool --unpack-only image.bmp` |
+| Set GBK font and punctuation rules in an EXE | `liarsofttool -e gbk game.exe` |
 
-> **Tip:** Use `cp932` for Japanese (Windows-31J, default; legacy `shift_jis` aliases also map to CP932), `-e gbk` for Chinese, and `-e cp1251` for Cyrillic/English texts. EXE conversion also updates recognized RScript punctuation tables (classic immediate comparisons and Evermaiden's register-comparison layout). Run the game under the matching Windows system code page or Locale Emulator (CP932/936/1251).
-> Output paths default to the input file's directory when omitted.
+Standard PCM WAV is already playable and remains unchanged during unpacking;
+no OGG is created. EXE conversion writes a separate file. The game still needs
+a matching system locale or Locale Emulator configuration.
 
-### Build
-
-**Requirements:** CMake ≥ 3.10, GCC ≥ 9 (C++17 + `<filesystem>`), libiconv, libwebp and libvorbis/libogg development files (`libwebp-dev libvorbis-dev libogg-dev` on Debian/Ubuntu)
-
-Windows and Linux share one GTKmm 3 GUI, enabled by default; Debian/Ubuntu also
-need `pkg-config libgtkmm-3.0-dev`. Use `-DBUILD_GUI=OFF` for CLI-only builds,
-which need neither GTKmm nor pkg-config.
+Recursively prepare a working directory for rscript2renpy:
 
 ```bash
-cd LiarsoftTool
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make -j$(nproc)
-# CLI version
-sudo cp liarsofttool /usr/local/bin/
-# GUI version (GTKmm 3 on both Windows and Linux)
-# Run build/liarsofttool-gui directly or double-click the EXE
+liarsofttool -R --unpack-only --gsc-to-tsc -e cp932 ./Game
 ```
 
-#### Native Windows build (MSYS2)
+Convert resources and pack recursively:
 
 ```bash
-# In MSYS2 UCRT64 terminal
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg}
-cd LiarsoftTool
-mkdir build && cd build
-cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ..
-make -j$(nproc)
-# Produces liarsofttool.exe and liarsofttool-gui.exe
-# From the repository root, create a distributable folder (must not exist yet)
-cd ..
-bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
-# Launch windows-bundle/bin/liarsofttool-gui.exe; distribute the whole folder
+liarsofttool -R --pack-only -e gbk ./resources
 ```
 
-The bundler recursively collects DLL dependencies, GTK icons, font configuration,
-image loaders and licenses, then generates GLib schemas and a relocatable loader
-cache. Users need no MSYS2 installation. Do not mix UCRT64 and MINGW64 compilers,
-libraries or runtimes. This GUI bundler is not used for CLI-only builds.
+Recursive packing handles children first. Folders with `.meta.xml` become LWG;
+other folders become XFL. Archives include only LIM, WCG, GSC, WAV, XML, LWG,
+XFL and MSK. With recursive packing, editing files such as PNG and TSC are
+converted first, not stored directly. Keep the `.meta.xml` files produced by unpacking.
 
-#### Cross-compile Windows from Linux
+Enabling both direction filters skips every input. Recursive processing warns
+and continues when one file fails; an empty archive is an error.
 
-Provide MinGW-targeted libwebp headers and libraries using CMake's
-`WEBP_INCLUDE_DIR` / `WEBP_LIBRARY`; do not link the host Linux library.
-Newer static libwebp also needs target-platform libsharpyuv; use `WEBP_SHARPYUV_LIBRARY` if necessary.
-Audio also requires target-platform libogg/libvorbis/libvorbisfile. Set `CMAKE_PREFIX_PATH`
-to their installation prefix, or provide `OGG_INCLUDE_DIR`, `VORBIS_INCLUDE_DIR`,
-`OGG_LIBRARY`, `VORBIS_LIBRARY`, and `VORBISFILE_LIBRARY`.
-Tests also need `VORBISENC_LIBRARY` to generate test audio. Dynamic builds must ship the audio DLLs.
-Dynamic builds must ship the corresponding WebP DLL; static builds need no WebP DLL.
-GUI cross-builds also need the complete matching MinGW GTKmm 3 development stack.
-Set `PKG_CONFIG_LIBDIR` to target `.pc` directories and `PKG_CONFIG_SYSROOT_DIR` to
-the sysroot; never link host Linux GTK libraries. The example below builds only
-the CLI; remove `-DBUILD_GUI=OFF` once target GTKmm dependencies are available.
-With MSYS2 GUI libraries, use the POSIX-thread MinGW compiler (e.g.
-`x86_64-w64-mingw32-g++-posix`), not the incompatible win32-thread C++ ABI.
+### Translating scripts
 
-```bash
-sudo apt install g++-mingw-w64-x86-64
-mkdir build/win && cd build/win
-cmake -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_GUI=OFF \
-      -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
-      -DCMAKE_SYSTEM_NAME=Windows ../..
-make -j$(nproc)
-# Produces liarsofttool.exe
-```
+For dialogue-only changes, edit the text after `>` in TXT and import it using
+the original GSC as the reference. For full script editing, export TSC, edit
+its commands and text, then compile it back. Save TSC as UTF-8; use `-e gbk`
+when compiling Chinese GSC.
 
-### GUI
+GSC→TSC is experimental and does not support every game. Keep the original GSC,
+and retain generated labels and metadata in TSC.
+See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
 
-Run `liarsofttool-gui` or double-click the executable:
+### Command-line options
 
-- **Drag & drop** files onto the window to add them
-- Encoding selector (CP932 / GBK / CP1251), optional GSC reference, output directory, and recursive/pack-only/unpack-only/GSC→TXT/Vorbis-in-WAV toggles; GSC defaults to structured TSC output, OGG defaults to PCM WAV unless Vorbis-in-WAV is checked
-- Four-column list: Input Path, Output Path, Type, Status
-- Batch conversion with progress bar; background threading keeps UI responsive
-- Warning/error dialogs offer **Copy details**, copying the complete diagnostics and input/output paths for bug reports
-- Windows/Linux use the same GTKmm 3 frontend; Windows distributions must include GTK runtime libraries and resources
-- Queue editing and window closing are disabled until conversion finishes, keeping background tasks away from destroyed widgets
-- Windows paths must be representable in the conversion core's system code page; otherwise they fail explicitly. Move such files to an ASCII path. UI UTF-8 handling does not change the selected script encoding
-
-### CLI Options
-
-| Option | Description |
-|--------|-------------|
-| `-e, --encoding <enc>` | Encoding: `cp932` (Windows-31J JP, default) / `gbk` (CN) / `cp1251` (Cyrillic & English) |
-| `-r, --reference <path>` | Reference GSC for TXT injection |
-| `-o, --output <path>` | Explicit output path |
-| `-R, --recursive` | Process nested archives and convert resources while packing/unpacking |
-| `-j, --jobs <0..64>` | Recursive resource conversion workers; 0 = automatic (up to 4), 1 = serial |
-| `--pack-only` | Only process packing and encoding inputs |
-| `--unpack-only` | Only process unpacking and decoding inputs |
-| `--gsc-to-tsc` | Decompile GSC to structured UTF-8 TSC instead of extracting TXT |
-| `--vorbis-in-wav` | Wrap compressed Ogg in WAV instead of default PCM decoding, including recursive packing |
+| Option | Purpose |
+| --- | --- |
+| `-e, --encoding` | CP932 (Japanese, default), GBK or CP1251 |
+| `-o, --output` | Output file or directory |
+| `-r, --reference` | Original GSC for importing TXT |
+| `-R, --recursive` | Process nested folders and archives, converting resources |
+| `--pack-only` / `--unpack-only` | Restrict the conversion direction |
+| `--gsc-to-tsc` | Export GSC as TSC |
+| `--vorbis-in-wav` | Preserve compressed audio when producing WAV |
+| `-j, --jobs` | Recursive conversion workers: 0 automatic, 1 serial, up to 64 |
 | `-h, --help` | Show help |
 
-Multiple inputs and shell wildcards are supported: `liarsofttool *.wcg`, `liarsofttool * -e gbk`.
-When exactly two args have different extensions, the second is treated as output (backward compat).
+Multiple inputs and wildcards are supported, for example `liarsofttool *.wcg`.
 
-### Supported Formats
+### Building from source
 
-| Format | Extension | Operation | Notes |
-|--------|-----------|-----------|-------|
-| XFL | `.xfl` | unpack/pack | Resource archive, Magic: `LB\x01\x00` |
-| LWG | `.lwg` | unpack/pack | Scene composition, Magic: `LG\x01\x00`, with layer X/Y/Flag |
-| GSC | `.gsc` | extract/inject | Game script. Compatible with modern 36B and early 28B headers; auto-adapts to HeaderLength |
-| TSC | `.tsc` | → GSC | Recompile GSC from structured instructions, strings, and data blocks; body is directly editable |
-| WCG | `.wcg` | ↔ PNG | Lossless 8-bit RGBA pixels; paired channels, four separate channels, and alpha masks |
-| LIM | `.lim` | ↔ WebP | Lossless RGBA; reads BGR565/masks and writes version-3 separate A/R/G/B channels |
-| EXE | `.exe` | CP932/GBK/CP1251 | Converts recognized font charset operands and Japanese, Chinese, or Russian line-break punctuation tables |
-| WAV | `.wav` | → OGG/retain | Locate embedded Ogg by RIFF chunks, not fixed offset 66; retain standard PCM |
-| OGG | `.ogg` | → WAV | Default: 16-bit PCM; optional Vorbis-in-WAV; neither needs an original WAV |
+Requires a C++17 compiler, CMake, WebP and Vorbis/Ogg. The GUI also requires
+GTKmm 3. Windows and Linux share the same frontend.
 
-WCG encoding normally uses two 16-bit color pairs. If either pair has all 65536 values, it switches to separate A/R/G/B streams without losing pixels or overflowing the palette count. Alpha-only WCG files export as PNG with zero RGB and preserved alpha, without inventing colors. The four-channel path follows Cannonball's statically verified decoder; in-game compatibility with other engines still needs testing. PNG ICC/gamma metadata is not stored in WCG.
-
-LIM exports lossless `.webp`, preserving RGB even under fully transparent pixels.
-Same-name WCG files still export `.png`, so neither image overwrites the other.
-WebP imports produce version-3 LIM with equivalent decoded RGBA, not identical
-original bit depth, compression or bytes. Animated WebP is unsupported; WebP
-dimensions cannot exceed 16383 pixels per side. ICC/EXIF metadata is not stored
-in LIM. Re-export old LIM-derived PNG files from the original LIM; renaming a
-PNG extension does not convert it to WebP.
-
-LWG layer names are XML-escaped in `.meta.xml` and restored when packing; file lookup uses the same filesystem-safe names as extraction. Re-extract original LWG files if an older tool produced invalid XML containing literal names such as `</Layer set>`.
-
-Zero-data LWG entries remain in `.meta.xml` with `empty="1"`, preserving their names, coordinates, flags, and order without borrowing a same-named image when repacked. Re-extract the original LWG to recover entries discarded by older versions. An archive containing only empty entries still fails to pack.
-
-GSC text format: `#` prefix for original, `>` for translation. Supports `\t` and multi-line.
-
-`--gsc-to-tsc` supports early 28-byte headers (including pre-CodeX variants)
-and 36-byte headers using
-RScript 1.8, RScript 1.9, or modern instruction layouts. It selects a layout
-from complete instruction boundaries, jump targets, and operand structure, then
-records that choice in TSC metadata.
-For recognized layouts, the TSC body contains active `*command`, `*vm`, label,
-`*datablock`, and quoted-string source instead of embedded code or string-table
-bytes. Recompilation re-encodes and interns strings, recalculates every index and
-offset, rebuilds code and data blocks, and writes the complete 28- or 36-byte
-container. Recognized instructions aim to preserve structure and semantics;
-string numbering and byte layout need not be identical to the input. Legacy
-containers count Section D in 16-bit words when calculating the declared size;
-modern containers receive the standard empty entry tables and names terminator.
-Files whose trailer (named-entry tables plus names blob, e.g. `scmode` or `REP001`)
-is not the standard empty one record it as `;@gsc-trailer <hex>` and, when the
-sizing header words differ from the standard 4/1, `;@gsc-trailer-header <u7> <u8>`;
-names, reserved slots and padding are preserved, while entry code offsets are
-relocated using the generated `L_xxxxxx` source labels. `*insub` also takes a
-label instead of a stale numeric address. Keep named-entry labels intact;
-regenerate older TSC missing those labels instead of retaining old offsets.
-The 28-byte format rejects trailer metadata. Data-block counts must be within
-0–32767; nonzero `*data` block references must exist (zero means no copy).
-Underreported legacy string lengths are recovered only for compact string pools
-whose original data tables are invalid, whose NUL-terminated extension leads to
-valid data tables, and whose remaining tail contains only zero padding.
-Instructions and references must still validate. Recovery reports a warning in
-the CLI, GUI and recursive unpacker and leaves an ordinary `; warning:` comment
-in TSC. Recompilation normalizes lengths and redundant zero padding instead of
-preserving the stale header. Unrecoverable files and unknown
-instruction layouts retain the `;@gsc-raw-v1` fallback and are explicitly marked
-unavailable for decompilation. Older structured TSC files are unsupported and
-must be regenerated from their original GSC files. The TSC body is always UTF-8
-and no longer records a string encoding: `-e` selects how the source GSC is read
-when decompiling and which encoding the rebuilt GSC is written in. A Japanese
-TSC can therefore be translated into Chinese and recompiled with `-e gbk` for a
-GBK-patched engine; when the requested encoding cannot represent a character the
-conversion fails with an error instead of silently writing `?`. A leftover
-`;@gsc-text-encoding` line in an older TSC is ignored. TXT/TXA, font, folder,
-gosub subroutine names, selection, and string-operation text appears directly
-in the source; editing it rebuilds the string table as well.
-Ordinary comments are ignored. Commands may be inserted, deleted, or reordered
-as long as labels and operands remain valid for the recorded RScript schema.
-Combined with `-R --unpack-only`, it generates `.tsc` throughout directory
-trees and nested archives; recursive packing restores or updates them to GSC.
-
-See the [GSC opcode/TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md)
-(or the [Chinese original](docs/GSC_OPCODE_REFERENCE.md)) for
-the complete mapping and explicitly unknown entries.
-
-### Typical Workflows
+On Debian / Ubuntu:
 
 ```bash
-# --- Translation ---
-liarsofttool -e gbk data.xfl unpacked/
-liarsofttool -e gbk unpacked/0010.gsc              # → 0010.txt
-# translate 0010.txt …
-liarsofttool -e gbk -r unpacked/0010.gsc 0010.txt  # → 0010.gsc
-cp 0010.gsc unpacked/0010.gsc
-liarsofttool -e gbk unpacked/                      # → unpacked.xfl
-
-# --- Scene editing ---
-liarsofttool cgview.lwg cgview/                    # unpack + generate .meta.xml
-liarsofttool cgview/bg.wcg                         # → bg.png
-# edit bg.png …
-liarsofttool cgview/bg.png                         # → bg.wcg
-liarsofttool cgview/                               # → cgview.lwg
-
-# --- EXE encoding conversion ---
-liarsofttool -e gbk game.exe        # Set GBK font and Chinese line-break rules
-liarsofttool -e cp1251 game.exe     # Set CP1251 font and Russian line-break rules
-liarsofttool -e cp932 game.exe      # Restore CP932 font and Japanese line-break rules
-# Output: name.gbk.exe / name.cp1251.exe / name.sjis.exe; original untouched
-
-# --- Audio roundtrip ---
-liarsofttool audio.wav                         # embedded → audio.ogg; standard PCM retained
-liarsofttool audio.ogg                         # → audio.wav (16-bit PCM)
-liarsofttool --vorbis-in-wav audio.ogg          # → audio.wav (compressed Vorbis)
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libgtkmm-3.0-dev
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2
 ```
 
-OGG→WAV defaults to fully decoded signed 16-bit little-endian PCM, preserving
-mono/stereo channels and sample rate without resampling or another lossy encode.
-Files are usually much larger. More than two channels are explicitly rejected
-for PCM output to avoid incorrect speaker mapping. PCM WAV no longer contains
-an extractable Ogg stream and cannot restore the original compressed Ogg bytes.
+Executables are in `build/`. Add `-DBUILD_GUI=OFF` when configuring a CLI-only
+build. See [build instructions](docs/BUILDING.md) for Windows and packaging.
 
-Check **Vorbis-in-WAV** in the GUI or pass `--vorbis-in-wav` to preserve the complete
-Vorbis stream and construct a mode-1 (`0x674f`) header, `fact`, and RIFF/data lengths.
-It does not misuse mode-3 tags that can depend on driver-specific built-in codebooks.
-Reading still supports full Ogg streams in modes 1/1+/3/3+, but does not treat
-mode-2 separate headers as a self-contained Ogg stream. RIFF chunks are located
-by ID, length and word alignment, allowing metadata, different order and longer fmt chunks.
+### Further reading
 
-Neither mode reads or requires an original WAV; `-r` is only for TXT→GSC.
-Inputs must be complete, continuous single-stream Ogg Vorbis. Invalid/unsupported
-inputs fail before overwriting an output; recursive packing warns, continues,
-and excludes that failed item's old target. In-game playback still needs user
-validation; original WAV container bytes are not guaranteed. The experimental switch was removed.
+[Documentation](docs/README.md) · [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md)
 
-> Tip: identical output content is not rewritten. Unpacking/decoding synchronizes
-> the output modification time with its immediate source even when content is
-> identical; packing/encoding still preserves the time of identical existing outputs.
-
-XFL/LWG do not store per-entry modification times. Extracted files, including
-`.meta.xml`, inherit the input archive's time. Recursive extraction propagates it
-through nested archives and generated PNG, WebP, OGG and TXT/TSC files. Standalone
-GSC/WCG/LIM/WAV decoding also inherits the input time. Sources, directory times
-and unrelated files in the output directory are not changed. Retained PCM WAV
-does not create or retime an existing OGG. Timestamp read/write failures are
-reported as errors (warnings during recursive processing), never silently ignored.
-
-Directory packing only includes `.lim`, `.wcg`, `.gsc`, `.wav`, `.xml`, `.lwg`, `.xfl`, and `.msk` files (case-insensitive); project files such as PNG are never stored directly. By default, only the current level of the selected directory or archive is processed.
-
-With `-R` or the GUI **Recursive** toggle, packing processes subdirectories deepest-first: directories containing `.meta.xml` become sibling LWG files, while other packable directories become sibling XFL files. It also performs TSC→GSC, TXT→GSC (requiring a same-name GSC reference), PNG/JPG/JPEG/BMP→WCG, WebP→LIM and OGG→WAV (default PCM, optional Vorbis-in-WAV, no template). Same-name PNG and WebP coexist without renaming LIM or creating `.lim.old` backups. A missing reference, failed conversion, or failed child archive produces a warning and processing continues. Any stale target for that failed item is excluded from the new parent archive. The outermost archive still fails instead of creating an empty archive.
-
-Recursive unpacking opens nested XFL/LWG archives and processes GSC files (the CLI defaults to TXT; the GUI defaults to TSC and uses the **GSC→TXT** toggle for legacy TXT output), WCG→PNG, LIM→WebP, and embedded WAV→OGG. Standard PCM WAV files are retained unchanged and count as successful. Failure of one file produces a warning without stopping the remaining work.
-
-Recursive processing indexes each directory once and converts independent resource groups in parallel, shared by the CLI and both GUIs. Set `-j N` / `--jobs N` (e.g. `liarsofttool -R -j 8 archive.xfl`) or **Threads (0 = auto)** in the GUI: 0–64, with 0 automatically choosing up to four workers and 1 running serially. Same-name sources remain serial and priority-ordered; warnings are collected in a fixed order. Children are still packed before parents and outer archives extracted before their contents; recursion does not multiply the worker count. Whole archives and the CLI/GUI input queues remain serial to avoid loading several large archives into memory at once. Manually raising the resource worker count still increases memory use and disk contention.
-
-**Pack only** covers directory→XFL/LWG, TSC/TXT→GSC, PNG and other images→WCG, WebP→LIM, and OGG→WAV. **Unpack only** covers XFL/LWG→directory, GSC→TXT, WCG→PNG, LIM→WebP, and WAV→OGG. With neither enabled, all existing operations remain available. With both enabled, every input is skipped and no file is written. EXE encoding conversion belongs to neither direction and therefore runs only when both filters are off.
-
-### Known Limitations
-
-- **Subdirectories**: all files in XFL/LWG archives are flat (no nesting).
-- **EXE line breaking**: punctuation-table conversion requires a complete match of a known RScript machine-code structure (immediate comparisons or `MOV EAX / CMP SI, AX` comparisons). Only character constants change; branches and the system code page remain untouched. Other engine versions still receive only recognized font-charset changes.
+Use game resources you legally own. Successful conversion does not guarantee
+compatibility with every engine version; test edited resources in the game.
 
 ---
 
-## License
+## License and credits
 
-GNU General Public License v3.0 (inherited from arc_unpacker's CG decompression code).
+LiarsoftTool is licensed under GPLv3. Third-party components retain their own licenses.
 
-Third-party code:
-- [stb_image](https://github.com/nothings/stb) (public domain) — PNG read/write
-- [libwebp](https://chromium.googlesource.com/webm/libwebp/) (BSD) — lossless WebP read/write
-- [libogg/libvorbis](https://xiph.org/vorbis/) (BSD) — Vorbis decoding; libvorbisenc generates test audio only
-- [GTK/GTKmm](https://www.gtk.org/) (LGPL) — shared desktop GUI; Windows bundles include dependency license notices under `share/licenses`
-- CG decompression algorithm from [arc_unpacker](https://github.com/vn-tools/arc_unpacker) (GPLv3)
-
-Audio library notices: [libogg/libvorbis licenses](docs/THIRD_PARTY_AUDIO_LICENSES.md).
+- [RaiLTools](https://github.com/EusthEnoptEron/RaiLTools) — archive and script format research.
+- [arc_unpacker](https://github.com/vn-tools/arc_unpacker) — GPLv3 image decompression code.
+- [GARbro](https://github.com/crskycode/GARbro) — WCG encoder reference.
+- [stb](https://github.com/nothings/stb) — image loading and writing.
+- [WebP](https://chromium.googlesource.com/webm/libwebp/) — lossless WebP support.
+- [Ogg / Vorbis](https://xiph.org/vorbis/) — audio support; [license notices](docs/THIRD_PARTY_AUDIO_LICENSES.md).
+- [GTK / GTKmm](https://www.gtk.org/) — shared desktop interface.

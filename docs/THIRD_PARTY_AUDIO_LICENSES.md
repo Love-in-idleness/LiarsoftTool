@@ -1,4 +1,8 @@
-# Third-party audio libraries
+# 音频依赖许可证 / Audio library licenses
+
+[返回文档目录 / Documentation](README.md)
+
+以下为随程序分发的音频库许可证，原文保留。
 
 LiarsoftTool uses libogg and libvorbis/libvorbisfile for Vorbis decoding.
 libvorbisenc is used only by the automated tests, not the application.
