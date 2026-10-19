@@ -24,79 +24,25 @@ Linux 用户运行 `liarsofttool-gui`；命令行程序为 `liarsofttool`。
 3. 按需选择递归、仅封包或仅解包，检查列表中的输出路径。
 4. 开始转换。遇到问题时，用 “Copy details” 复制完整提示。
 
-GUI 默认将 GSC 转成 TSC；若只需要提取译文，勾选 **GSC→TXT**。
-CLI 默认提取 TXT，使用 `--gsc-to-tsc` 才生成 TSC。
+GUI 和 CLI 默认都将 GSC 转成 TSC。只需要提取文本时，GUI 勾选 **GSC→TXT**。
 
-### 常用命令
+### 命令行帮助
 
-以下示例在资源工作副本中执行。省略 `-e` 时默认使用 CP932；
-补丁的编码应按实际文件选择，不由语言名称决定。
-
-| 需求 | 命令 |
-| --- | --- |
-| 提取脚本文本 | `liarsofttool scenario.gsc` |
-| 导出 TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
-| 将中文 TSC 编译为 GSC | `liarsofttool -e gbk scenario.tsc` |
-| 将 TXT 译文写回 GSC | `liarsofttool -e gbk -r original.gsc trans.txt` |
-| 解包 XFL / LWG | `liarsofttool archive.xfl` / `liarsofttool scene.lwg` |
-| 打包文件夹 | `liarsofttool ./resources` |
-| WCG → PNG | `liarsofttool image.wcg` |
-| PNG / JPG / BMP → WCG | `liarsofttool image.png` |
-| LIM → 无损 WebP | `liarsofttool image.lim` |
-| WebP → LIM | `liarsofttool image.webp` |
-| 提取 WAV 内的 OGG | `liarsofttool audio.wav` |
-| OGG → PCM WAV | `liarsofttool audio.ogg` |
-| 将 OGG 压缩封装为 WAV | `liarsofttool --vorbis-in-wav audio.ogg` |
-| 规范化 CodeX BMP 的透明度 | `liarsofttool --unpack-only image.bmp` |
-| EXE 转为 GBK 字体与标点设置 | `liarsofttool -e gbk game.exe` |
-
-标准 PCM WAV 可以直接播放，解包时会原样保留，不会另外生成 OGG。
-EXE 转换生成另一个文件；运行游戏时仍需使用与资源匹配的系统区域设置或 Locale Emulator。
-
-递归解包整个工作目录，并准备供 rscript2renpy 使用的资源：
+支持格式、参数和转换示例请在软件中查看：
 
 ```bash
-liarsofttool -R --unpack-only --gsc-to-tsc -e cp932 ./Game
+liarsofttool -h
 ```
-
-递归转换并封包：
-
-```bash
-liarsofttool -R --pack-only -e gbk ./resources
-```
-
-递归封包先处理子目录。带 `.meta.xml` 的目录生成 LWG，其余生成 XFL。
-封包只收录 LIM、WCG、GSC、WAV、XML、LWG、XFL、MSK。启用递归时会先转换
-PNG、TSC 等编辑文件，不会直接收入封包。请保留解包生成的 `.meta.xml`。
-
-同时启用“仅封包”和“仅解包”时不执行操作。递归处理中遇到单个文件失败会给出
-警告并继续；空封包会报错。
 
 ### 脚本翻译
 
 只改对话时可使用 TXT：在 `>` 后填写译文，再以原 GSC 为参考写回。
 需要编辑完整脚本时使用 TSC，修改其中的命令和文字后重新编译。
-TSC 用 UTF-8 保存，生成中文 GSC 时使用 `-e gbk`。
+TSC 用 UTF-8 保存，生成 GSC 时选择与目标游戏匹配的编码。
 
 GSC→TSC 是实验性功能，不是所有游戏都已适配。编辑前保留原 GSC，
 不要删除 TSC 中自动生成的标签和元数据。
 命令含义见 [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.md)。
-
-### 命令行参数
-
-| 参数 | 用途 |
-| --- | --- |
-| `-e, --encoding` | CP932（日文，默认）、GBK 或 CP1251 |
-| `-o, --output` | 指定输出文件或目录 |
-| `-r, --reference` | TXT 写回时使用的原 GSC |
-| `-R, --recursive` | 递归处理子目录和封包，同时转换资源 |
-| `--pack-only` / `--unpack-only` | 只处理选定方向 |
-| `--gsc-to-tsc` | GSC 导出为 TSC |
-| `--vorbis-in-wav` | OGG→WAV 时保留压缩音频 |
-| `-j, --jobs` | 递归转换线程数，0 自动，1 串行，最大 64 |
-| `-h, --help` | 查看帮助 |
-
-可以传入多个文件，也可以使用通配符，例如 `liarsofttool *.wcg`。
 
 ### 从源码编译
 
@@ -148,82 +94,27 @@ In the GUI:
 3. Choose Recursive, Pack only or Unpack only as needed, then check the output paths.
 4. Start conversion. Use **Copy details** to copy a complete error report.
 
-The GUI exports GSC to TSC by default; enable **GSC→TXT** for translation text.
-The CLI exports TXT by default; add `--gsc-to-tsc` for TSC.
+Both the GUI and CLI export GSC to TSC by default.
+Enable **GSC→TXT** in the GUI to extract translation text.
 
-### Common commands
+### Command-line help
 
-Examples operate on working copies. The default encoding is CP932.
-Choose a patch's encoding from its actual files, not its language label.
-
-| Task | Command |
-| --- | --- |
-| Extract script text | `liarsofttool scenario.gsc` |
-| Export TSC | `liarsofttool --gsc-to-tsc scenario.gsc` |
-| Compile Chinese TSC to GSC | `liarsofttool -e gbk scenario.tsc` |
-| Import translated TXT | `liarsofttool -e gbk -r original.gsc trans.txt` |
-| Unpack XFL / LWG | `liarsofttool archive.xfl` / `liarsofttool scene.lwg` |
-| Pack a folder | `liarsofttool ./resources` |
-| WCG → PNG | `liarsofttool image.wcg` |
-| PNG / JPG / BMP → WCG | `liarsofttool image.png` |
-| LIM → lossless WebP | `liarsofttool image.lim` |
-| WebP → LIM | `liarsofttool image.webp` |
-| Extract OGG from WAV | `liarsofttool audio.wav` |
-| OGG → PCM WAV | `liarsofttool audio.ogg` |
-| Wrap OGG in WAV without decoding | `liarsofttool --vorbis-in-wav audio.ogg` |
-| Normalize CodeX BMP transparency | `liarsofttool --unpack-only image.bmp` |
-| Set GBK font and punctuation rules in an EXE | `liarsofttool -e gbk game.exe` |
-
-Standard PCM WAV is already playable and remains unchanged during unpacking;
-no OGG is created. EXE conversion writes a separate file. The game still needs
-a matching system locale or Locale Emulator configuration.
-
-Recursively prepare a working directory for rscript2renpy:
+For supported formats, options and conversion examples, run:
 
 ```bash
-liarsofttool -R --unpack-only --gsc-to-tsc -e cp932 ./Game
+liarsofttool -h
 ```
-
-Convert resources and pack recursively:
-
-```bash
-liarsofttool -R --pack-only -e gbk ./resources
-```
-
-Recursive packing handles children first. Folders with `.meta.xml` become LWG;
-other folders become XFL. Archives include only LIM, WCG, GSC, WAV, XML, LWG,
-XFL and MSK. With recursive packing, editing files such as PNG and TSC are
-converted first, not stored directly. Keep the `.meta.xml` files produced by unpacking.
-
-Enabling both direction filters skips every input. Recursive processing warns
-and continues when one file fails; an empty archive is an error.
 
 ### Translating scripts
 
 For dialogue-only changes, edit the text after `>` in TXT and import it using
 the original GSC as the reference. For full script editing, export TSC, edit
-its commands and text, then compile it back. Save TSC as UTF-8; use `-e gbk`
-when compiling Chinese GSC.
+its commands and text, then compile it back. Save TSC as UTF-8 and choose
+the encoding used by the target game when compiling GSC.
 
 GSC→TSC is experimental and does not support every game. Keep the original GSC,
 and retain generated labels and metadata in TSC.
 See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
-
-### Command-line options
-
-| Option | Purpose |
-| --- | --- |
-| `-e, --encoding` | CP932 (Japanese, default), GBK or CP1251 |
-| `-o, --output` | Output file or directory |
-| `-r, --reference` | Original GSC for importing TXT |
-| `-R, --recursive` | Process nested folders and archives, converting resources |
-| `--pack-only` / `--unpack-only` | Restrict the conversion direction |
-| `--gsc-to-tsc` | Export GSC as TSC |
-| `--vorbis-in-wav` | Preserve compressed audio when producing WAV |
-| `-j, --jobs` | Recursive conversion workers: 0 automatic, 1 serial, up to 64 |
-| `-h, --help` | Show help |
-
-Multiple inputs and wildcards are supported, for example `liarsofttool *.wcg`.
 
 ### Building from source
 

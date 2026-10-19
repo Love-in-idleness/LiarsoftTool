@@ -3,7 +3,7 @@
 [返回文档目录](README.md)
 
 说明 WAV/OGG 的处理规则及 CannonBall 原程序依据。
-日常转换命令见 [主说明](../README.md#常用命令)。
+日常转换用法请运行 `liarsofttool -h` 查看软件内帮助。
 
 ## 转换规则
 

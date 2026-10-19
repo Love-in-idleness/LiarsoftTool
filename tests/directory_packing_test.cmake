@@ -429,7 +429,7 @@ function(expect_source_time source output)
         message(FATAL_ERROR "Modification time not inherited: ${source} -> ${output}")
     endif()
 endfunction()
-execute_process(COMMAND "${TOOL}" -R --gsc-to-tsc
+execute_process(COMMAND "${TOOL}" -R
     -o "${TEST_ROOT}/dated_unpacked" "${TEST_ROOT}/timestamps/dated.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
@@ -445,6 +445,77 @@ foreach(name IN ITEMS nested.xfl nested/layout.xml scene.lwg scene/.meta.xml
         message(FATAL_ERROR "CLI/shared conversion outputs differ: ${name}")
     endif()
 endforeach()
+
+# CLI defaults match the GUI's TSC mode, including nested archives above and
+# unpack-only directory traversal. TXT remains an explicit user choice.
+foreach(mode IN ITEMS default txt explicit_tsc last_txt last_tsc)
+    file(MAKE_DIRECTORY "${TEST_ROOT}/gsc_modes/${mode}")
+    file(COPY "${TEST_ROOT}/dated_unpacked/script.gsc"
+         DESTINATION "${TEST_ROOT}/gsc_modes/${mode}")
+    set(format_options)
+    set(output_ext tsc)
+    if(mode STREQUAL "txt")
+        set(format_options --gsc-to-txt)
+        set(output_ext txt)
+    elseif(mode STREQUAL "explicit_tsc")
+        set(format_options --gsc-to-tsc)
+    elseif(mode STREQUAL "last_txt")
+        set(format_options --gsc-to-tsc --gsc-to-txt)
+        set(output_ext txt)
+    elseif(mode STREQUAL "last_tsc")
+        set(format_options --gsc-to-txt --gsc-to-tsc)
+    endif()
+    set(source "${TEST_ROOT}/gsc_modes/${mode}/script.gsc")
+    execute_process(COMMAND "${TOOL}" ${format_options} "${source}"
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    if(result OR NOT EXISTS "${TEST_ROOT}/gsc_modes/${mode}/script.${output_ext}")
+        message(FATAL_ERROR "GSC output mode ${mode} failed: ${output} ${error}")
+    endif()
+    expect_source_time("${source}" "${TEST_ROOT}/gsc_modes/${mode}/script.${output_ext}")
+    if(output_ext STREQUAL "tsc")
+        if(EXISTS "${TEST_ROOT}/gsc_modes/${mode}/script.txt" OR
+           NOT output MATCHES "GSC -> TSC")
+            message(FATAL_ERROR "CLI default differs from GUI TSC mode: ${output}")
+        endif()
+        file(SHA256 "${TEST_ROOT}/gsc_modes/${mode}/script.tsc" actual)
+        file(SHA256 "${TEST_ROOT}/timestamps/expected/script.tsc" expected)
+        if(NOT actual STREQUAL expected)
+            message(FATAL_ERROR "CLI TSC differs from GUI/shared conversion")
+        endif()
+    elseif(EXISTS "${TEST_ROOT}/gsc_modes/${mode}/script.tsc" OR
+           NOT output MATCHES "GSC -> TXT")
+        message(FATAL_ERROR "Explicit TXT mode produced TSC: ${output}")
+    endif()
+endforeach()
+
+foreach(mode IN ITEMS default txt)
+    file(MAKE_DIRECTORY "${TEST_ROOT}/gsc_recursive_${mode}/child")
+    file(COPY "${TEST_ROOT}/dated_unpacked/script.gsc"
+         DESTINATION "${TEST_ROOT}/gsc_recursive_${mode}/child")
+    set(format_options)
+    set(output_ext tsc)
+    set(other_ext txt)
+    if(mode STREQUAL "txt")
+        set(format_options --gsc-to-txt)
+        set(output_ext txt)
+        set(other_ext tsc)
+    endif()
+    execute_process(COMMAND "${TOOL}" -R --unpack-only ${format_options}
+        "${TEST_ROOT}/gsc_recursive_${mode}"
+        RESULT_VARIABLE result ERROR_VARIABLE error)
+    if(result OR NOT EXISTS "${TEST_ROOT}/gsc_recursive_${mode}/child/script.${output_ext}"
+       OR EXISTS "${TEST_ROOT}/gsc_recursive_${mode}/child/script.${other_ext}")
+        message(FATAL_ERROR "Recursive GSC output mode ${mode} failed: ${error}")
+    endif()
+endforeach()
+
+execute_process(COMMAND "${TOOL}" -R --gsc-to-txt
+    -o "${TEST_ROOT}/dated_txt" "${TEST_ROOT}/timestamps/dated.xfl"
+    RESULT_VARIABLE result ERROR_VARIABLE error)
+if(result OR NOT EXISTS "${TEST_ROOT}/dated_txt/script.txt" OR
+   EXISTS "${TEST_ROOT}/dated_txt/script.tsc")
+    message(FATAL_ERROR "Recursive archive TXT selection failed: ${error}")
+endif()
 
 execute_process(COMMAND "${TOOL}" "${TEST_ROOT}/convert/badref.wav"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)

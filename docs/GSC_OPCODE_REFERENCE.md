@@ -3,7 +3,7 @@
 [返回文档目录](README.md) · [English](GSC_OPCODE_REFERENCE.en.md)
 
 本页用于查找 TSC 命令及对应 opcode。翻译对话时修改引号内的文字，
-保留自动生成的标签和元数据。导出与回编命令见 [主说明](../README.md#脚本翻译)。
+保留自动生成的标签和元数据。导出与回编用法请运行 `liarsofttool -h` 查看。
 
 ## 表格说明
 

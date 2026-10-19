@@ -4,7 +4,7 @@
 
 ## 使用与构建
 
-- [常用命令和资源处理](../README.md#中文)
+- [项目介绍与使用](../README.md#中文)；命令行帮助运行 `liarsofttool -h`。
 - [Windows 构建与打包](BUILDING.md)
 - [TSC 指令参考](GSC_OPCODE_REFERENCE.md) · [English](GSC_OPCODE_REFERENCE.en.md)
 - [音频依赖许可证](THIRD_PARTY_AUDIO_LICENSES.md)

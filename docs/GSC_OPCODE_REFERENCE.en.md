@@ -4,7 +4,7 @@
 
 Use this page to look up generated TSC commands and their opcode numbers.
 To translate dialogue, edit quoted text; keep generated labels and metadata.
-See the [main guide](../README.md#english) for export and compilation commands.
+Run `liarsofttool -h` for export and compilation commands.
 
 ## Reading the tables
 

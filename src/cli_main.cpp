@@ -21,11 +21,13 @@ static void printUsage(const char* prog) {
               << "  -j, --jobs <0..64>    Resource conversion workers (0=auto, 1=serial)\n"
               << "      --pack-only        Only pack/encode inputs\n"
               << "      --unpack-only      Only unpack/decode inputs\n"
-              << "      --gsc-to-tsc       Structured GSC -> TSC output\n"
+              << "      --gsc-to-tsc       Structured GSC -> TSC output (default)\n"
+              << "      --gsc-to-txt       Extract translatable GSC text as TXT\n"
               << "      --vorbis-in-wav    Wrap Ogg in WAV instead of decoding to PCM\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
-              << "  .gsc  -> .txt         Extract translatable strings from GSC\n"
+              << "  .gsc  -> .tsc         Export structured TSC (default)\n"
+              << "  .gsc  -> .txt         Extract text with --gsc-to-txt\n"
               << "  .tsc  -> .gsc         Compile structured TSC source into GSC\n"
               << "  .txt  -> .gsc         Pack translated strings back into GSC\n"
               << "  .xfl  -> directory    Unpack XFL archive into a folder\n"
@@ -42,7 +44,7 @@ static void printUsage(const char* prog) {
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
               << "  " << prog << " -e cp932 scenario.gsc\n"
-              << "  " << prog << " -e gbk scenario.gsc output.txt\n"
+              << "  " << prog << " --gsc-to-txt -e gbk scenario.gsc output.txt\n"
               << "  " << prog << " -e cp932 -r original.gsc translation.txt\n"
               << "  " << prog << " -e gbk archive.xfl\n"
               << "  " << prog << " image.wcg\n"
@@ -164,7 +166,7 @@ int main(int argc, char* argv[]) {
     bool recursive = false;
     bool packOnly = false;
     bool unpackOnly = false;
-    bool gscToTsc = false;
+    bool gscToTsc = true;
     bool vorbisInWav = false;
     unsigned workers = 0;
 
@@ -204,6 +206,8 @@ int main(int argc, char* argv[]) {
             unpackOnly = true;
         } else if (arg == "--gsc-to-tsc") {
             gscToTsc = true;
+        } else if (arg == "--gsc-to-txt") {
+            gscToTsc = false;
         } else if (arg == "--vorbis-in-wav") {
             vorbisInWav = true;
         } else if (arg[0] == '-') {
