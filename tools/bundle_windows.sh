@@ -15,7 +15,7 @@ fi
 for binary in liarsofttool.exe liarsofttool-gui.exe; do
     [[ -f "$build/$binary" ]] || { echo "Missing executable: $build/$binary" >&2; exit 1; }
 done
-for binary in glib-compile-schemas.exe gdk-pixbuf-query-loaders.exe; do
+for binary in glib-compile-schemas.exe gdk-pixbuf-query-loaders.exe update-mime-database.exe; do
     [[ -f "$prefix/bin/$binary" ]] || { echo "Missing GTK utility: $binary" >&2; exit 1; }
 done
 objdump=${OBJDUMP:-objdump}
@@ -26,8 +26,8 @@ if [[ -n ${EXE_RUNNER:-} ]]; then runner=("$EXE_RUNNER"); fi
 mkdir -p "$destination/bin" "$destination/lib" "$destination/share"
 destination=$(cd "$destination" && pwd)
 cp "$build/liarsofttool.exe" "$build/liarsofttool-gui.exe" "$destination/bin/"
-cp "$prefix/bin/glib-compile-schemas.exe" "$prefix/bin/gdk-pixbuf-query-loaders.exe" "$destination/bin/"
-for directory in lib/gdk-pixbuf-2.0 lib/gtk-3.0 share/glib-2.0 share/icons share/themes share/licenses share/fontconfig etc/fonts; do
+cp "$prefix/bin/glib-compile-schemas.exe" "$prefix/bin/gdk-pixbuf-query-loaders.exe" "$prefix/bin/update-mime-database.exe" "$destination/bin/"
+for directory in lib/gdk-pixbuf-2.0 lib/gtk-3.0 share/glib-2.0 share/icons share/themes share/licenses share/fontconfig share/mime etc/fonts; do
     if [[ -d "$prefix/$directory" ]]; then
         mkdir -p "$destination/$(dirname "$directory")"
         cp -R "$prefix/$directory" "$destination/$(dirname "$directory")/"
@@ -69,5 +69,6 @@ done
     cd "$destination"
     "${runner[@]}" bin/glib-compile-schemas.exe share/glib-2.0/schemas
     "${runner[@]}" bin/gdk-pixbuf-query-loaders.exe > lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
+    "${runner[@]}" bin/update-mime-database.exe share/mime
 )
 echo "Windows GTK bundle ready: $destination (launch bin/liarsofttool-gui.exe)"
