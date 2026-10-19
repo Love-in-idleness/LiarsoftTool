@@ -34,7 +34,7 @@ for directory in lib/gdk-pixbuf-2.0 lib/gtk-3.0 share/glib-2.0 share/icons share
     fi
 done
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-cp "$root/README.md" "$destination/"
+cp "$root/README.md" "$root/COPYING" "$destination/"
 mkdir -p "$destination/share/doc/LiarsoftTool"
 cp "$root/docs/THIRD_PARTY_AUDIO_LICENSES.md" "$destination/share/doc/LiarsoftTool/"
 
