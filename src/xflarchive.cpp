@@ -1,5 +1,6 @@
 #include "xflarchive.h"
 #include "bigendian.h"
+#include "bmp_normalizer.h"
 #include "gscfile.h"
 #include "gsc_decompiler.h"
 #include "fileio.h"
@@ -65,7 +66,7 @@ bool matchesOperationMode(const std::string& path, bool packOnly,
     const bool unpacking = (directory && recursive) ||
                            (!directory && (ext == ".xfl" || ext == ".lwg" ||
                            ext == ".gsc" || ext == ".wcg" || ext == ".lim" ||
-                           ext == ".wav"));
+                           ext == ".wav" || ext == ".bmp"));
     return (!packOnly || packing) && (!unpackOnly || unpacking);
 }
 
@@ -356,7 +357,7 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
     for (const auto& subdirectory : subdirectories)
         unpackDirectory(subdirectory, encoding, depth + 1, warnings, gscToTsc, workers);
 
-    auto groups = conversionGroups(directory, {".gsc", ".wcg", ".lim", ".wav"});
+    auto groups = conversionGroups(directory, {".gsc", ".wcg", ".lim", ".wav", ".bmp"});
     convertGroups(groups, workers, [&](ConversionGroup& group) {
         for (const auto& source : group.sources) {
             const auto ext = lower(source.extension().string());
@@ -364,6 +365,7 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
                                              (gscToTsc ? ".tsc" : ".txt") :
                                              ext == ".wav" ? ".ogg" :
                                              ext == ".lim" ? ".webp" : ".png");
+            if (ext == ".bmp") target = source;
             try {
                 if (ext == ".gsc") {
                     if (gscToTsc) {
@@ -382,6 +384,8 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
                 } else if (ext == ".lim") {
                     limSaveWebp(limDecode(readFile(source)), target.string());
                     copyModificationTime(source.string(), target.string());
+                } else if (ext == ".bmp") {
+                    normalizeCodexBmpFile(source.string(), target.string());
                 } else {
                     WavOggExtractor::extractToFile(source.string(), target.string());
                 }

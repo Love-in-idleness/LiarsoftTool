@@ -123,12 +123,14 @@ static void addFiles(const std::vector<std::string>& paths, const std::string& o
             const std::string input = liarsoft::gui::nativePathFromUtf8(p);
             if (!liarsoft::conversion::isSupported(input)) continue;
             const auto output = liarsoft::conversion::guessOutput(
-                input, liarsoft::gui::nativePathFromUtf8(outDir), gscToTsc, encoding);
+                input, liarsoft::gui::nativePathFromUtf8(outDir), gscToTsc, encoding,
+                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active());
             auto row = *(g_store->append());
             row[g_columns.inputPath]  = p;
             row[g_columns.outputPath] = displayText(output);
             row[g_columns.fileType]   = liarsoft::conversion::guessType(
-                input, gscToTsc, encoding);
+                input, gscToTsc, encoding,
+                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active());
             row[g_columns.status]     = "Ready";
         } catch (const std::exception& error) { showInputError(error); }
     }
@@ -240,9 +242,11 @@ static void updateOutputPaths() {
             const std::string input = corePath(
                 static_cast<Glib::ustring>(child[g_columns.inputPath]));
             child[g_columns.outputPath] = displayText(liarsoft::conversion::guessOutput(
-                input, outDir, gscToTsc, encoding));
+                input, outDir, gscToTsc, encoding,
+                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active()));
             child[g_columns.fileType] = liarsoft::conversion::guessType(
-                input, gscToTsc, encoding);
+                input, gscToTsc, encoding,
+                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active());
         }
     } catch (const std::exception& error) { showInputError(error); }
 }
@@ -392,10 +396,13 @@ int runGui(int argc, char* argv[]) {
         "Recursively pack/unpack archives and convert their resources");
     g_packOnlyCheck = Gtk::manage(new Gtk::CheckButton("Pack only"));
     g_unpackOnlyCheck = Gtk::manage(new Gtk::CheckButton("Unpack only"));
+    g_unpackOnlyCheck->set_tooltip_text(
+        "Only decode resources; normalize CodeX inverse-alpha BMPs to standard BMP V4");
     g_gscToTxtCheck = Gtk::manage(new Gtk::CheckButton("GSC → TXT"));
     g_gscToTxtCheck->set_tooltip_text(
         "Generate legacy TXT instead of structured TSC when decoding GSC files");
     g_gscToTxtCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
+    g_unpackOnlyCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
     g_encodingCombo->signal_changed().connect(sigc::ptr_fun(&updateOutputPaths));
     optionsBar->pack_start(*g_recursiveCheck, false, false);
     optionsBar->pack_start(*g_packOnlyCheck, false, false);

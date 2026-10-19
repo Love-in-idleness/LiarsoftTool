@@ -38,6 +38,7 @@ static void printUsage(const char* prog) {
               << "  .wav  -> .ogg         Extract embedded Ogg; retain standard PCM WAV\n"
               << "  .ogg  -> .wav         Decode to 16-bit PCM; --vorbis-in-wav keeps compressed audio\n"
               << "  .png/.jpg/.bmp -> .wcg Convert image to WCG\n"
+              << "  .bmp --unpack-only    Normalize CodeX inverse alpha in place (BMP V4)\n"
               << "  directory -> .xfl     Pack a folder into an XFL archive\n"
               << "  directory -> .lwg     Pack folder with .meta.xml into LWG\n"
               << "  .exe  -> .gbk.exe/.cp1251.exe/.sjis.exe  Set EXE charset and line-break rules\n\n"
@@ -141,7 +142,7 @@ static bool processOne(const std::string& inputPath,
         return false;
     }
     const auto out = outputPath.empty()
-        ? liarsoft::conversion::guessOutput(inputPath, "", gscToTsc, encoding)
+        ? liarsoft::conversion::guessOutput(inputPath, "", gscToTsc, encoding, unpackOnly)
         : outputPath;
     const liarsoft::conversion::ConversionOptions options{
         encoding, referencePath, recursive, gscToTsc, unpackOnly, vorbisInWav, workers};
@@ -150,7 +151,7 @@ static bool processOne(const std::string& inputPath,
         std::cerr << "Warning: " << warning << std::endl;
     const auto operation = fs::is_directory(inputPath) && unpackOnly
         ? "DIR -> recursive unpack"
-        : liarsoft::conversion::guessType(inputPath, gscToTsc, encoding);
+        : liarsoft::conversion::guessType(inputPath, gscToTsc, encoding, unpackOnly);
     std::cout << operation << ": " << inputPath << " -> "
               << (result.retainedPcm || (fs::is_directory(inputPath) && unpackOnly)
                   ? inputPath : out)
@@ -270,7 +271,7 @@ int main(int argc, char* argv[]) {
             } else if (!outputPath.empty() && allFiles.size() > 1) {
                 // Output path is a directory for batch mode
                 out = liarsoft::conversion::guessOutput(
-                    f, outputPath, gscToTsc, encoding);
+                    f, outputPath, gscToTsc, encoding, unpackOnly);
             }
             // else: out stays empty → auto-derived
 

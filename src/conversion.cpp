@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "exe_patch.h"
+#include "bmp_normalizer.h"
 #include "fileio.h"
 #include "gsc_decompiler.h"
 #include "gscfile.h"
@@ -37,7 +38,7 @@ std::string replaceExtension(const std::string& path,
 std::string guessOutput(const std::string& inputPath,
                         const std::string& outputDirectory,
                         bool gscToTsc,
-                        const std::string& encoding) {
+                        const std::string& encoding, bool unpackOnly) {
     const std::string ext = extension(inputPath);
     fs::path input(inputPath);
     if (fs::is_directory(input)) input = fs::absolute(input).lexically_normal();
@@ -45,6 +46,7 @@ std::string guessOutput(const std::string& inputPath,
     const fs::path base = outputDirectory.empty()
         ? input.parent_path() : fs::path(outputDirectory);
     const std::string stem = input.stem().string();
+    if (ext == ".bmp" && unpackOnly) return (base / input.filename()).string();
 
     if (fs::is_directory(input))
         return (base / (input.filename().string() +
@@ -69,8 +71,9 @@ std::string guessOutput(const std::string& inputPath,
 
 std::string guessType(const std::string& path,
                       bool gscToTsc,
-                      const std::string& encoding) {
+                      const std::string& encoding, bool unpackOnly) {
     const std::string ext = extension(path);
+    if (ext == ".bmp" && unpackOnly) return "CodeX BMP -> BMP";
     if (ext == ".gsc") return gscToTsc ? "GSC -> TSC" : "GSC -> TXT";
     if (ext == ".tsc") return "TSC -> GSC";
     if (ext == ".txt") return "TXT -> GSC";
@@ -156,6 +159,8 @@ ConversionResult convert(const std::string& inputPath,
         result.retainedPcm = !liarsoft::WavOggExtractor::extractToFile(inputPath, outputPath);
     } else if (ext == ".ogg") {
         liarsoft::WavOggExtractor::convertToFile(inputPath, outputPath, options.vorbisInWav);
+    } else if (ext == ".bmp" && options.unpackOnly) {
+        liarsoft::normalizeCodexBmpFile(inputPath, outputPath);
     } else if (ext == ".png" || ext == ".jpg" ||
                ext == ".jpeg" || ext == ".bmp") {
         int width, height, channels;

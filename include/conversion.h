@@ -26,10 +26,10 @@ std::string replaceExtension(const std::string& path,
 std::string guessOutput(const std::string& inputPath,
                         const std::string& outputDirectory,
                         bool gscToTsc,
-                        const std::string& encoding);
+                        const std::string& encoding, bool unpackOnly = false);
 std::string guessType(const std::string& path,
                       bool gscToTsc,
-                      const std::string& encoding);
+                      const std::string& encoding, bool unpackOnly = false);
 bool isSupported(const std::string& path);
 
 ConversionResult convert(const std::string& inputPath,

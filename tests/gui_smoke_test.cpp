@@ -25,6 +25,17 @@ int main(int argc, char* argv[]) {
     Glib::signal_timeout().connect([&]() {
         try {
             if (!started) {
+                const auto bmp = directory / "image.bmp";
+                addFiles({liarsoft::gui::nativeTextToUtf8(bmp.string())}, "");
+                g_unpackOnlyCheck->set_active(true);
+                auto bmpRow = *g_store->children().begin();
+                if (bmpRow[g_columns.outputPath] != displayText(bmp.string()) ||
+                    bmpRow[g_columns.fileType] != "CodeX BMP -> BMP")
+                    throw std::runtime_error("GUI did not select BMP normalization");
+                g_unpackOnlyCheck->set_active(false);
+                if (bmpRow[g_columns.outputPath] != displayText((directory / "image.wcg").string()))
+                    throw std::runtime_error("GUI did not restore BMP packing");
+                onClear();
                 addFiles({liarsoft::gui::nativeTextToUtf8(input.string())}, "");
                 g_convertBtn->clicked();
                 if (!g_busy || g_mainBox->get_sensitive() || !onClose(nullptr))

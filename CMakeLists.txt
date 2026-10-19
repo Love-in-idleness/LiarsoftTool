@@ -86,6 +86,7 @@ endif()
 # Compile the conversion core once for the CLI, GUI and test executables.
 add_library(liarsofttool_core STATIC
     src/conversion.cpp
+    src/bmp_normalizer.cpp
     src/bigendian.cpp
     src/encoding.cpp
     src/fileio.cpp
@@ -146,6 +147,12 @@ if(BUILD_TESTING)
     add_executable(encoding_test tests/encoding_test.cpp)
     add_test(NAME encoding COMMAND encoding_test)
 
+    add_executable(bmp_test tests/bmp_test.cpp)
+    add_test(NAME bmp COMMAND ${CMAKE_COMMAND}
+        -DBMP_TEST=$<TARGET_FILE:bmp_test> -DTOOL=$<TARGET_FILE:liarsofttool>
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/bmp_test_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/bmp_test.cmake)
+
     add_executable(gscfile_test tests/gscfile_test.cpp)
     add_test(NAME gscfile COMMAND gscfile_test)
 
@@ -203,7 +210,7 @@ if(BUILD_TESTING)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/directory_packing_test.cmake)
 endif()
 
-foreach(target liarsofttool liarsofttool-gui encoding_test gscfile_test fileio_test wav_ogg_test exe_patch_test
+foreach(target liarsofttool liarsofttool-gui bmp_test encoding_test gscfile_test fileio_test wav_ogg_test exe_patch_test
                gsc_decompiler_test gui_common_test gui_smoke_test archive_test cg_decompress_test)
     if(TARGET ${target})
         target_link_libraries(${target} PRIVATE liarsofttool_core)
