@@ -7,7 +7,7 @@
 在 MSYS2 的 UCRT64 终端中安装依赖，并在仓库根目录执行：
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg,curl}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -22,7 +22,7 @@ GUI 打包脚本不用于 CLI-only 构建。
 
 ## Linux 交叉编译
 
-先准备 Windows 目标的 WebP、Vorbis/Ogg 和 MinGW 工具链。
+先准备 Windows 目标的 WebP、Vorbis/Ogg、libcurl 7.85 及以上和 MinGW 工具链。
 通过 `CMAKE_PREFIX_PATH` 或对应的 CMake 库路径变量指定目标库，
 不要链接 Linux 主机上的库。
 
@@ -46,5 +46,5 @@ must not already exist. Run `bin/liarsofttool-gui.exe` from the generated bundle
 and distribute the complete directory, including its libraries and resources.
 
 For CLI-only builds, add `-DBUILD_GUI=OFF`; the GUI packaging script is not needed.
-Cross-building from Linux requires Windows-target WebP, Vorbis/Ogg and, for
+Cross-building from Linux requires Windows-target WebP, Vorbis/Ogg, libcurl 7.85 or newer and, for
 the GUI, GTKmm. Use a matching compiler, library stack and runtime throughout.

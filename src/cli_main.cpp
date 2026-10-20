@@ -1,6 +1,7 @@
 #include "conversion.h"
 #include "encoding.h"
 #include "xflarchive.h"
+#include "update_check.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -10,7 +11,7 @@
 namespace fs = std::filesystem;
 
 static void printUsage(const char* prog) {
-    std::cout << "LiarsoftTool - Liar-soft visual novel resource converter\n"
+    std::cout << "LiarsoftTool " << liarsoft::CurrentVersion << " - Liar-soft visual novel resource converter\n"
               << "Usage: " << prog << " [options] <input...> [output]\n\n"
               << "Options:\n"
               << "  -e, --encoding <enc>  Text encoding (default: cp932 / Windows-31J)\n"
@@ -24,6 +25,7 @@ static void printUsage(const char* prog) {
               << "      --gsc-to-tsc       Structured GSC -> TSC output (default)\n"
               << "      --gsc-to-txt       Extract translatable GSC text as TXT\n"
               << "      --vorbis-in-wav    Wrap Ogg in WAV instead of decoding to PCM\n"
+              << "      --check-update     Check GitHub for a newer release (no conversion)\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .tsc         Export structured TSC (default)\n"
@@ -170,6 +172,7 @@ int main(int argc, char* argv[]) {
     bool gscToTsc = true;
     bool vorbisInWav = false;
     unsigned workers = 0;
+    bool checkUpdate = false;
 
     // Parse arguments
     int i = 1;
@@ -211,7 +214,9 @@ int main(int argc, char* argv[]) {
             gscToTsc = false;
         } else if (arg == "--vorbis-in-wav") {
             vorbisInWav = true;
-        } else if (arg[0] == '-') {
+        } else if (arg == "--check-update") {
+            checkUpdate = true;
+        } else if (!arg.empty() && arg[0] == '-') {
             std::cerr << "Error: unknown option: " << arg << std::endl;
             printUsage(argv[0]);
             return 1;
@@ -221,6 +226,22 @@ int main(int argc, char* argv[]) {
         ++i;
     }
 
+    if (checkUpdate) {
+        if (!inputs.empty() || !explicitOutput.empty()) {
+            std::cerr << "Error: --check-update cannot be combined with input/output paths\n";
+            return 1;
+        }
+        try {
+            const auto info = liarsoft::checkForUpdate();
+            std::cout << "Current: " << liarsoft::CurrentVersion << "\nLatest: " << info.latestVersion
+                      << (info.available ? "\nUpdate available: " : "\nNo newer release: ")
+                      << liarsoft::LatestReleaseUrl << '\n';
+            return 0;
+        } catch (const std::exception& error) {
+            std::cerr << "Error: " << error.what() << '\n';
+            return 1;
+        }
+    }
     if (inputs.empty()) {
         std::cerr << "Error: no input specified" << std::endl;
         printUsage(argv[0]);

@@ -9,6 +9,7 @@
 #include "gui_common.h"
 #include "conversion.h"
 #include "xflarchive.h"
+#include "update_check.h"
 
 // ---- Column record for the file list ----
 struct FileRecord : public Gtk::TreeModelColumnRecord {
@@ -32,6 +33,7 @@ static Gtk::CheckButton* g_gscToTxtCheck = nullptr;
 static Gtk::CheckButton* g_vorbisInWavCheck = nullptr;
 static Gtk::SpinButton* g_workersSpin = nullptr;
 static Gtk::Button* g_convertBtn = nullptr;
+static Gtk::Button* g_updateBtn = nullptr;
 static Gtk::ProgressBar* g_progress = nullptr;
 static Gtk::Label* g_statusLabel = nullptr;
 static Gtk::Window* g_window = nullptr;
@@ -65,7 +67,7 @@ struct GuiUpdates {
 static GuiUpdates* g_updates = nullptr;
 
 static bool onClose(GdkEventAny*) {
-    if (g_busy) g_statusLabel->set_text("Please wait for conversion to finish before closing.");
+    if (g_busy) g_statusLabel->set_text("Please wait for the current operation to finish before closing.");
     return g_busy;
 }
 
@@ -348,6 +350,49 @@ static void onRemoveSelected(Gtk::TreeView* treeView) {
     }
 }
 
+static void onCheckUpdate() {
+    if (g_busy) return;
+    g_busy = true;
+    g_mainBox->set_sensitive(false);
+    g_statusLabel->set_text("Checking GitHub for updates...");
+    try {
+        g_worker = std::thread([]() {
+            liarsoft::UpdateInfo info{};
+            std::string error;
+            try { info = liarsoft::checkForUpdate(); }
+            catch (const std::exception& exception) { error = exception.what(); }
+            g_updates->post([info, error]() {
+                g_worker.join();
+                g_busy = false;
+                g_mainBox->set_sensitive(true);
+                g_statusLabel->set_text(error.empty() ? "Update check complete." : "Update check failed.");
+                if (!error.empty()) {
+                    showInputError(std::runtime_error(error));
+                    return;
+                }
+                Gtk::MessageDialog dialog(*g_window,
+                    info.available ? "A new version is available." : "No newer release is available.",
+                    false, Gtk::MESSAGE_INFO, Gtk::BUTTONS_CLOSE, true);
+                dialog.set_title("Check for updates");
+                dialog.set_secondary_text(std::string("Current: ") + liarsoft::CurrentVersion +
+                                          "\nLatest: " + info.latestVersion);
+                dialog.add_button("Open releases", 1);
+                if (dialog.run() == 1) {
+                    try { Gio::AppInfo::launch_default_for_uri(liarsoft::LatestReleaseUrl); }
+                    catch (const Glib::Error& exception) {
+                        showInputError(std::runtime_error(exception.what()));
+                    }
+                }
+            });
+        });
+    } catch (const std::exception& error) {
+        g_busy = false;
+        g_mainBox->set_sensitive(true);
+        g_statusLabel->set_text("Update check failed.");
+        showInputError(error);
+    }
+}
+
 // ---- Main GUI entry point ----
 int runGui(int argc, char* argv[]) {
     auto app = Gtk::Application::create(argc, argv, "io.github.liarsofttool",
@@ -358,7 +403,7 @@ int runGui(int argc, char* argv[]) {
 
     Gtk::Window window;
     g_window = &window;
-    window.set_title("LiarsoftTool");
+    window.set_title(std::string("LiarsoftTool ") + liarsoft::CurrentVersion);
     window.set_default_size(800, 500);
     window.signal_delete_event().connect(sigc::ptr_fun(&onClose));
 
@@ -425,6 +470,10 @@ int runGui(int argc, char* argv[]) {
     g_workersSpin->set_tooltip_text("Recursive resource conversion: 0 = auto (up to 4), 1 = serial. More threads use more memory.");
     workersBar->pack_start(*workersLabel, false, false);
     workersBar->pack_start(*g_workersSpin, false, false);
+    g_updateBtn = Gtk::manage(new Gtk::Button("Check for updates"));
+    g_updateBtn->set_tooltip_text("Contact GitHub only when clicked; never download or install automatically");
+    g_updateBtn->signal_clicked().connect(sigc::ptr_fun(&onCheckUpdate));
+    workersBar->pack_end(*g_updateBtn, false, false);
     mainBox->pack_start(*workersBar, false, false);
 
     // --- File list ---

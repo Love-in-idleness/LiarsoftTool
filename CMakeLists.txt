@@ -4,6 +4,7 @@ project(LiarsoftTool VERSION 2.2.4 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
+find_package(CURL 7.85 REQUIRED)
 
 # libvorbisfile provides the same PCM decoder on Linux and Windows.
 find_path(VORBIS_INCLUDE_DIR vorbis/vorbisfile.h)
@@ -64,6 +65,10 @@ endif()
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+add_library(liarsofttool_updates STATIC src/update_check.cpp)
+target_compile_definitions(liarsofttool_updates PUBLIC LIARSOFTTOOL_VERSION="${PROJECT_VERSION}")
+target_link_libraries(liarsofttool_updates PUBLIC CURL::libcurl)
+
 # Windows resource file (manifest for visual styles + DPI awareness)
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     # Find windres (prefixed with cross-compiler triplet, e.g. x86_64-w64-mingw32-windres)
@@ -110,6 +115,7 @@ endif()
 
 # ---- CLI target ----
 add_executable(liarsofttool src/cli_main.cpp)
+target_link_libraries(liarsofttool PRIVATE liarsofttool_updates)
 if(WIN32)
     target_sources(liarsofttool PRIVATE ${RESOURCE_OBJ})
 endif()
@@ -121,7 +127,7 @@ if(BUILD_GUI)
         src/gui.cpp
         src/gui_common.cpp
     )
-    target_link_libraries(liarsofttool-gui PRIVATE PkgConfig::GTKMM)
+    target_link_libraries(liarsofttool-gui PRIVATE PkgConfig::GTKMM liarsofttool_updates)
     if(WIN32)
         set_target_properties(liarsofttool-gui PROPERTIES WIN32_EXECUTABLE TRUE)
         target_sources(liarsofttool-gui PRIVATE ${RESOURCE_OBJ})
@@ -140,6 +146,12 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(update_check_test tests/update_check_test.cpp)
+    target_link_libraries(update_check_test PRIVATE liarsofttool_updates)
+    add_test(NAME update_check COMMAND update_check_test)
+    add_test(NAME update_check_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/update_check_test.cmake)
     find_library(VORBISENC_LIBRARY NAMES vorbisenc)
     if(NOT VORBISENC_LIBRARY)
         message(FATAL_ERROR "libvorbisenc is required to generate audio test inputs")
@@ -179,7 +191,7 @@ if(BUILD_TESTING)
 
     if(BUILD_GUI)
         add_executable(gui_smoke_test tests/gui_smoke_test.cpp src/gui_common.cpp)
-        target_link_libraries(gui_smoke_test PRIVATE PkgConfig::GTKMM)
+        target_link_libraries(gui_smoke_test PRIVATE PkgConfig::GTKMM liarsofttool_updates)
         if(WIN32)
             add_test(NAME gui_smoke COMMAND gui_smoke_test)
         else()

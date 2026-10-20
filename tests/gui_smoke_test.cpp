@@ -20,6 +20,7 @@ int main(int argc, char* argv[]) {
     liarsoft::writeTextFileIfChanged(input.string(),
         ";@gsc-byte-format modern-36\n;@gsc-schema modern\n*end\n");
     bool started = false;
+    bool checkingUpdate = false;
     std::string failure;
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
     Glib::signal_timeout().connect([&]() {
@@ -56,11 +57,38 @@ int main(int argc, char* argv[]) {
                 // Verify skipped jobs use the same safe completion path.
                 Glib::signal_timeout().connect([&]() {
                     if (g_busy) return true;
+                    if (checkingUpdate) {
+                        for (auto* window : Gtk::Window::list_toplevels()) {
+                            auto* dialog = dynamic_cast<Gtk::MessageDialog*>(window);
+                            if (!dialog || !dialog->get_visible()) continue;
+                            if (g_statusLabel->get_text() != "Update check failed." ||
+                                !g_mainBox->get_sensitive() || g_worker.joinable())
+                                failure = "GUI did not recover from an offline update check";
+                            dialog->response(Gtk::RESPONSE_CLOSE);
+                            g_window->hide();
+                            return false;
+                        }
+                        if (std::chrono::steady_clock::now() > deadline) {
+                            failure = "GUI update dialog timed out";
+                            g_window->hide();
+                            return false;
+                        }
+                        return true;
+                    }
                     const auto finishedRow = *g_store->children().begin();
-                    if (finishedRow[g_columns.status] != "SKIPPED")
+                    if (finishedRow[g_columns.status] != "SKIPPED") {
                         failure = "GUI operation filters did not skip the input";
-                    g_window->hide();
-                    return false;
+                        g_window->hide();
+                        return false;
+                    }
+                    Glib::setenv("HTTPS_PROXY", "http://127.0.0.1:1");
+                    Glib::setenv("ALL_PROXY", "http://127.0.0.1:1");
+                    Glib::setenv("NO_PROXY", "");
+                    checkingUpdate = true;
+                    g_updateBtn->clicked();
+                    if (!g_busy || g_mainBox->get_sensitive() || !onClose(nullptr))
+                        failure = "GUI did not start the update check in the background";
+                    return true;
                 }, 10);
                 return false;
             }

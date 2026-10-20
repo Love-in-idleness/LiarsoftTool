@@ -59,7 +59,7 @@ for ((i=0; i<${#queue[@]}; ++i)); do
             ws2_32.dll|winmm.dll|setupapi.dll|cfgmgr32.dll|hid.dll|winspool.drv|\
             version.dll|bcrypt.dll|bcryptprimitives.dll|crypt32.dll|dnsapi.dll|\
             iphlpapi.dll|secur32.dll|netapi32.dll|userenv.dll|wtsapi32.dll|\
-            winhttp.dll|normaliz.dll)
+            winhttp.dll|normaliz.dll|wldap32.dll)
                 ;;
             *) echo "Unresolved non-system dependency: $dll (${queue[i]})" >&2; exit 1 ;;
         esac

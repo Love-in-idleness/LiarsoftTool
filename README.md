@@ -26,6 +26,9 @@ Linux 用户运行 `liarsofttool-gui`；命令行程序为 `liarsofttool`。
 
 GUI 和 CLI 默认都将 GSC 转成 TSC。只需要提取文本时，GUI 勾选 **GSC→TXT**。
 
+点击 **Check for updates** 可手动检查新版并打开 GitHub 发布页。
+程序不会在启动时联网，也不会自动下载或安装更新。
+
 ### 命令行帮助
 
 支持格式、参数和转换示例请在软件中查看：
@@ -46,13 +49,13 @@ GSC→TSC 是实验性功能，不是所有游戏都已适配。编辑前保留�
 
 ### 从源码编译
 
-需要 C++17 编译器、CMake、WebP、Vorbis/Ogg；图形界面还需要 GTKmm 3。
+需要 C++17 编译器、CMake、WebP、Vorbis/Ogg、libcurl 7.85 及以上；图形界面还需要 GTKmm 3。
 Windows 和 Linux 使用同一套 GUI。
 
 Debian / Ubuntu：
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libgtkmm-3.0-dev
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtkmm-3.0-dev
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -97,6 +100,9 @@ In the GUI:
 Both the GUI and CLI export GSC to TSC by default.
 Enable **GSC→TXT** in the GUI to extract translation text.
 
+Click **Check for updates** to check manually and open the GitHub releases page.
+The application never connects on startup or downloads and installs updates automatically.
+
 ### Command-line help
 
 For supported formats, options and conversion examples, run:
@@ -118,13 +124,13 @@ See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
 
 ### Building from source
 
-Requires a C++17 compiler, CMake, WebP and Vorbis/Ogg. The GUI also requires
+Requires a C++17 compiler, CMake, WebP, Vorbis/Ogg and libcurl 7.85 or newer. The GUI also requires
 GTKmm 3. Windows and Linux share the same frontend.
 
 On Debian / Ubuntu:
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libgtkmm-3.0-dev
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtkmm-3.0-dev
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -152,3 +158,4 @@ LiarsoftTool is licensed under GPLv3. Third-party components retain their own li
 - [WebP](https://chromium.googlesource.com/webm/libwebp/) — lossless WebP support.
 - [Ogg / Vorbis](https://xiph.org/vorbis/) — audio support; [license notices](docs/THIRD_PARTY_AUDIO_LICENSES.md).
 - [GTK / GTKmm](https://www.gtk.org/) — shared desktop interface.
+- [libcurl](https://curl.se/libcurl/) — HTTPS update checks.
