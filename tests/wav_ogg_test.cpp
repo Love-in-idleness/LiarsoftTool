@@ -48,6 +48,18 @@ int main(int argc, char** argv) {
         const auto pcm = Audio::decodeToPcm(clean);
         require(Audio::isStandardPcmWav(pcm) && !Audio::hasEmbeddedOgg(pcm) &&
                 Audio::extract(pcm).empty(), "PCM WAV misidentified as compressed audio");
+        auto legacyPcm = pcm;
+        legacyPcm.insert(legacyPcm.begin() + 36, {0x81, 0});
+        writeU32(legacyPcm, 16, 18);
+        fixRiffSize(legacyPcm);
+        require(Audio::isStandardPcmWav(legacyPcm) &&
+                Audio::extract(legacyPcm).empty(),
+                "PCM WAV cbSize must be ignored, not treated as compressed format data");
+        auto badExtension = wav;
+        badExtension[36] = 0xff;
+        badExtension[37] = 0xff;
+        rejects([&] { Audio::extract(badExtension); },
+                "Truncated non-PCM format extension accepted");
         require(pcm.size() == 44 + 1257 * 2 && readU32(pcm, 24) == 44100 &&
                 pcm[22] == 1 && pcm[32] == 2 && pcm[34] == 16 &&
                 readU32(pcm, 28) == 88200 && readU32(pcm, 40) == 2514 &&

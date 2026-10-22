@@ -180,7 +180,9 @@ WavChunks parseWav(const std::vector<uint8_t>& data) {
             if (chunks.format || size < 16)
                 throw std::runtime_error("Invalid or duplicate WAV fmt chunk");
             chunks.format = start;
-            if (size >= 18 && readU16(data, start + 16) > size - 18)
+            // WAVE_FORMAT_PCM ignores cbSize, including garbage in old assets.
+            if (readU16(data, start) != 1 && size >= 18 &&
+                readU16(data, start + 16) > size - 18)
                 throw std::runtime_error("Truncated WAV format extension");
         } else if (audio) {
             if (chunks.audio) throw std::runtime_error("Duplicate WAV data chunk");
