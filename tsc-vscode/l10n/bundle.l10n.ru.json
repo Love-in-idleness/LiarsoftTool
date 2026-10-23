@@ -1,0 +1,10 @@
+{
+  "LiarsoftTool failed. See the LiarsoftTool TSC output for details.": "Ошибка вызова LiarsoftTool. Подробности — в панели вывода LiarsoftTool TSC.",
+  "Trust this workspace before running LiarsoftTool.": "Перед запуском LiarsoftTool добавьте рабочее пространство в доверенные.",
+  "Open a local TSC file first.": "Сначала откройте локальный файл TSC.",
+  "Save": "Сохранить",
+  "Save this file before checking or compiling?": "Сохранить файл перед проверкой или компиляцией?",
+  "The tool did not return TSC diagnostics.": "Программа не вернула диагностику TSC. Нужна версия LiarsoftTool с поддержкой --check-tsc.",
+  "GSC compilation failed.": "Ошибка компиляции GSC.",
+  "GSC written: {0}": "GSC записан: {0}"
+}

@@ -1,0 +1,9 @@
+{
+  "description": "TSC highlighting, compiler-backed diagnostics and local GSC compilation.",
+  "trust": "Highlighting works in Restricted Mode. Checking and compilation require a trusted workspace.",
+  "check": "Check saved file",
+  "compile": "Compile saved file to GSC",
+  "path": "Installed LiarsoftTool executable. Use a full path if it is not on PATH. Never downloaded automatically.",
+  "encoding": "Target game encoding used for checking and compiling, not the TSC source encoding (UTF-8).",
+  "output": "GSC output folder, absolute or relative to the TSC file. Empty writes beside the TSC. Existing GSC may be replaced."
+}

@@ -1,0 +1,37 @@
+{
+  "name": "liarsofttool-tsc",
+  "displayName": "CodeX TSC",
+  "description": "%description%",
+  "version": "0.1.0",
+  "publisher": "love-in-idleness",
+  "license": "GPL-3.0-only",
+  "repository": {"type": "git", "url": "https://github.com/Love-in-idleness/LiarsoftTool.git"},
+  "engines": {"vscode": "^1.74.0"},
+  "categories": ["Programming Languages"],
+  "main": "./src/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": ["onLanguage:codex-tsc"],
+  "extensionKind": ["workspace"],
+  "capabilities": {
+    "untrustedWorkspaces": {"supported": "limited", "description": "%trust%"},
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "languages": [{"id": "codex-tsc", "aliases": ["CodeX TSC", "TSC"], "extensions": [".tsc"], "configuration": "./language-configuration.json"}],
+    "grammars": [{"language": "codex-tsc", "scopeName": "source.codex-tsc", "path": "./syntaxes/tsc.tmLanguage.json"}],
+    "commands": [
+      {"command": "liarsofttool.checkTsc", "title": "%check%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted && editorLangId == codex-tsc"},
+      {"command": "liarsofttool.compileTsc", "title": "%compile%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted && editorLangId == codex-tsc"}
+    ],
+    "configuration": {
+      "title": "CodeX TSC",
+      "properties": {
+        "liarsofttool.path": {"type": "string", "default": "liarsofttool", "scope": "machine", "description": "%path%"},
+        "liarsofttool.encoding": {"type": "string", "enum": ["CP932", "GBK", "CP1251"], "default": "CP932", "scope": "resource", "description": "%encoding%"},
+        "liarsofttool.outputDirectory": {"type": "string", "default": "", "scope": "resource", "description": "%output%"}
+      }
+    }
+  },
+  "scripts": {"test": "node --test test/*.test.js", "package": "vsce package --no-dependencies"},
+  "devDependencies": {"@vscode/vsce": "4.0.0"}
+}

@@ -1,0 +1,10 @@
+{
+  "LiarsoftTool failed. See the LiarsoftTool TSC output for details.": "LiarsoftTool 调用失败，请查看 LiarsoftTool TSC 输出中的详情。",
+  "Trust this workspace before running LiarsoftTool.": "请先信任此工作区，再运行 LiarsoftTool。",
+  "Open a local TSC file first.": "请先打开本机 TSC 文件。",
+  "Save": "保存",
+  "Save this file before checking or compiling?": "是否先保存此文件，再检查或编译？",
+  "The tool did not return TSC diagnostics.": "工具未返回 TSC 检查结果，请使用支持 --check-tsc 的 LiarsoftTool。",
+  "GSC compilation failed.": "GSC 编译失败。",
+  "GSC written: {0}": "已生成 GSC：{0}"
+}

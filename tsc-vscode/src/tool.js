@@ -1,0 +1,33 @@
+const { spawn } = require('node:child_process');
+
+function runTool(executable, args, options = {}) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(executable, args, {
+            cwd: options.cwd, signal: options.signal, shell: false, windowsHide: true,
+            stdio: ['ignore', 'pipe', 'pipe']
+        });
+        let stdout = '', stderr = '', finished = false;
+        const timer = setTimeout(() => {
+            child.kill(); finish(new Error('LiarsoftTool timed out'));
+        }, 60000);
+        function finish(error, result) {
+            if (finished) return;
+            finished = true; clearTimeout(timer);
+            if (error) reject(error); else resolve(result);
+        }
+        function collect(name, value) {
+            if (name === 'stdout') stdout += value; else stderr += value;
+            if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > 8 * 1024 * 1024) {
+                child.kill(); finish(new Error('LiarsoftTool output is too large'));
+            }
+        }
+        child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+        child.stdout.on('data', value => collect('stdout', value));
+        child.stderr.on('data', value => collect('stderr', value));
+        child.once('error', error => finish(error));
+        child.once('close', (code, signal) => signal
+            ? finish(new Error(`LiarsoftTool stopped (${signal})`))
+            : finish(null, { code, stdout, stderr }));
+    });
+}
+module.exports = { runTool };

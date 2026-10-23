@@ -1,0 +1,9 @@
+{
+  "description": "TSC 高亮、复用编译器的错误检查与本机 GSC 编译。",
+  "trust": "受限模式可使用高亮；检查和编译需要信任工作区。",
+  "check": "检查已保存文件",
+  "compile": "将已保存文件编译为 GSC",
+  "path": "已安装的 LiarsoftTool 程序。不在 PATH 中时填写完整路径；不会自动下载。",
+  "encoding": "检查与编译使用的游戏目标编码，不是 TSC 源码编码（UTF-8）。",
+  "output": "GSC 输出目录，可用绝对路径或相对 TSC 的路径。留空写在 TSC 旁，可能覆盖已有 GSC。"
+}

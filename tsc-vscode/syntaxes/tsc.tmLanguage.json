@@ -1,0 +1,17 @@
+{
+  "name": "CodeX TSC",
+  "scopeName": "source.codex-tsc",
+  "patterns": [
+    {"name": "meta.annotation.codex-tsc", "match": "^;(@gsc-[^\\s]+)(.*)$", "captures": {"1": {"name": "keyword.other.metadata.codex-tsc"}, "2": {"name": "string.unquoted.metadata.codex-tsc"}}},
+    {"name": "comment.line.semicolon.codex-tsc", "match": ";.*$"},
+    {"name": "entity.name.label.codex-tsc", "match": "^\\s*:[^\\s;]+"},
+    {"name": "keyword.control.codex-tsc", "match": "^\\s*\\*[A-Za-z_][A-Za-z_0-9-]*"},
+    {"name": "string.quoted.double.codex-tsc", "begin": "\"", "end": "\"", "patterns": [
+      {"name": "constant.character.escape.codex-tsc", "match": "\\\\[nrt\\\\\"]"},
+      {"name": "invalid.illegal.escape.codex-tsc", "match": "\\\\."}
+    ]},
+    {"name": "variable.other.indirect.codex-tsc", "match": "@+(?:0[xX][0-9a-fA-F]+|[0-9]+)\\b"},
+    {"name": "constant.numeric.codex-tsc", "match": "(?<![A-Za-z_0-9])[+-]?(?:0[xX][0-9a-fA-F]+|[0-9]+)\\b"},
+    {"name": "entity.name.label.reference.codex-tsc", "match": "\\bL_[0-9a-fA-F]+\\b"}
+  ]
+}

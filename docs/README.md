@@ -7,6 +7,7 @@
 - [项目介绍与使用](../README.md#中文)；命令行帮助运行 `liarsofttool -h`。
 - [Windows 构建与打包](BUILDING.md)
 - [TSC 指令参考](GSC_OPCODE_REFERENCE.md) · [English](GSC_OPCODE_REFERENCE.en.md)
+- [VS Code TSC 插件](../tsc-vscode/README.md) · [English](../tsc-vscode/README.en.md) · [Русский](../tsc-vscode/README.ru.md)
 - [音频依赖许可证](THIRD_PARTY_AUDIO_LICENSES.md)
 
 ## 开发参考

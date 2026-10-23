@@ -1,0 +1,6 @@
+{
+  "comments": {"lineComment": ";"},
+  "brackets": [["[", "]"], ["(", ")"]],
+  "autoClosingPairs": [{"open": "\"", "close": "\"", "notIn": ["string", "comment"]}],
+  "surroundingPairs": [["\"", "\""]]
+}

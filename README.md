@@ -80,6 +80,9 @@ Windows 编译和打包见 [构建说明](docs/BUILDING.md)。
 
 ### 更多说明
 
+[VS Code TSC 插件](tsc-vscode/README.md) 提供高亮、错误检查与编译，
+在本分支独立维护，只提供本地 VSIX，不发布扩展市场。
+
 [文档目录](docs/README.md) · [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.md)
 · [开发规划](docs/ROADMAP.md)
 
@@ -172,6 +175,10 @@ Executables are in `build/`. Add `-DBUILD_GUI=OFF` when configuring a CLI-only
 build. See [build instructions](docs/BUILDING.md) for Windows and packaging.
 
 ### Further reading
+
+The [VS Code TSC extension](tsc-vscode/README.en.md) provides highlighting,
+diagnostics and compilation. It is maintained separately on this branch and
+packaged locally as a VSIX, not published to the Marketplace.
 
 See the [roadmap](docs/ROADMAP.md#english) for planned work.
 

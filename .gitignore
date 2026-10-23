@@ -17,3 +17,5 @@ __pycache__/
 *.old
 *.bak
 RELEASE_NOTES*.md
+tsc-vscode/node_modules/
+!tsc-vscode/test/
