@@ -1,6 +1,7 @@
 #include "gui.h"
 #include "gui_common.h"
 #include "gui_preferences.h"
+#include "gui_browser.h"
 #include "conversion.h"
 #include "xflarchive.h"
 #include "update_check.h"
@@ -20,7 +21,7 @@ struct Job {
 };
 struct Gui {
     GtkWindow* window = nullptr;
-    GtkWidget *content, *list, *convert, *status, *progress;
+    GtkWidget *content, *list, *convert, *status, *progress, *browser = nullptr;
     GtkWidget *encoding, *reference, *output, *recursive, *packOnly, *unpackOnly, *txt, *vorbis, *workers;
     GtkWidget *preferencesButton, *updateButton;
     AdwDialog* preferencesDialog = nullptr;
@@ -111,8 +112,9 @@ static void sensitive() {
 }
 static void busy(bool value) { ui.busy = value; sensitive(); }
 static gboolean closeWindow(GtkWindow*, gpointer) {
-    if (ui.busy) gtk_label_set_text(GTK_LABEL(ui.status), _("Please wait for the operation to finish."));
-    return ui.busy;
+    const bool working = ui.busy || liarsoft::gui::resourceBrowserWriting(ui.browser);
+    if (working) gtk_label_set_text(GTK_LABEL(ui.status), _("Please wait for the operation to finish."));
+    return working;
 }
 static liarsoft::conversion::ConversionOptions options() {
     const char* encodings[] = {"CP932", "GBK", "CP1251"};
@@ -169,7 +171,7 @@ static void clearFiles() {
     gtk_label_set_text(GTK_LABEL(ui.status), _("Ready"));
 }
 static void convert() {
-    if (ui.busy || ui.jobs.empty()) return;
+    if (ui.busy || ui.jobs.empty() || liarsoft::gui::resourceBrowserWriting(ui.browser)) return;
     try {
         const auto opt = options();
         const bool packOnly = active(ui.packOnly);
@@ -414,7 +416,23 @@ static void activate(GtkApplication* app, gpointer) {
         addFiles(paths); return TRUE;
     }), nullptr);
     gtk_widget_add_controller(ui.content, GTK_EVENT_CONTROLLER(drop));
-    buildPreferences(); theme(); sensitive();
+    buildPreferences();
+    auto* tasks = ui.content;
+    g_object_ref(tasks);
+    adw_toolbar_view_set_content(toolbar, nullptr);
+    ui.content = adw_view_stack_new();
+    adw_view_stack_add_titled(ADW_VIEW_STACK(ui.content), tasks, "tasks", _("Conversion tasks"));
+    g_object_unref(tasks);
+    ui.browser = liarsoft::gui::createResourceBrowser(ui.window, GTK_DROP_DOWN(ui.encoding), +[](const std::string& file) {
+        addFiles({file});
+        adw_view_stack_set_visible_child_name(ADW_VIEW_STACK(ui.content), "tasks");
+    });
+    adw_view_stack_add_titled(ADW_VIEW_STACK(ui.content), ui.browser, "resources", _("Resources"));
+    auto* switcher = adw_view_switcher_new();
+    adw_view_switcher_set_stack(ADW_VIEW_SWITCHER(switcher), ADW_VIEW_STACK(ui.content));
+    adw_header_bar_set_title_widget(header, switcher);
+    adw_toolbar_view_set_content(toolbar, ui.content);
+    theme(); sensitive();
     gtk_window_present(ui.window);
 }
 }

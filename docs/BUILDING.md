@@ -7,7 +7,7 @@
 在 MSYS2 的 UCRT64 终端中安装依赖，并在仓库根目录执行：
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl,gstreamer,gst-plugins-base,gst-plugins-good}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -16,6 +16,7 @@ bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
 打包目标目录必须尚不存在。运行
 `build/windows-bundle/bin/liarsofttool-gui.exe`。
 分发完整的 `windows-bundle` 目录，不要只发送 EXE。
+GStreamer 插件和扫描器用于音频预览，打包时须与 GTK 一同保留。
 
 只需要 CLI 时，配置阶段添加 `-DBUILD_GUI=OFF`，无需 GTK4/libadwaita；
 GUI 打包脚本不用于 CLI-only 构建。
@@ -59,6 +60,7 @@ Windows 在独立的 MSYS2 UCRT64 环境中安装 `gcc`、`cmake`、`pkgconf` �
 Use the commands above in an MSYS2 UCRT64 terminal. The GUI bundle directory
 must not already exist. Run `bin/liarsofttool-gui.exe` from the generated bundle
 and distribute the complete directory, including its libraries and resources.
+Keep the bundled GStreamer plugins and scanner for audio previews.
 
 For CLI-only builds, add `-DBUILD_GUI=OFF`; the GUI packaging script is not needed.
 Cross-building from Linux requires Windows-target WebP, Vorbis/Ogg, libcurl 7.85 or newer and, for

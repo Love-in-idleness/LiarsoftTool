@@ -27,7 +27,7 @@ mkdir -p "$destination/bin" "$destination/lib" "$destination/share"
 destination=$(cd "$destination" && pwd)
 cp "$build/liarsofttool.exe" "$build/liarsofttool-gui.exe" "$destination/bin/"
 cp "$prefix/bin/glib-compile-schemas.exe" "$prefix/bin/gdk-pixbuf-query-loaders.exe" "$prefix/bin/update-mime-database.exe" "$destination/bin/"
-for directory in lib/gdk-pixbuf-2.0 lib/gtk-4.0 lib/gio/modules share/glib-2.0 share/icons share/themes share/licenses share/fontconfig share/mime share/locale etc/fonts; do
+for directory in lib/gdk-pixbuf-2.0 lib/gtk-4.0 lib/gio/modules lib/gstreamer-1.0 libexec/gstreamer-1.0 share/glib-2.0 share/icons share/themes share/licenses share/fontconfig share/mime share/locale etc/fonts; do
     if [[ -d "$prefix/$directory" ]]; then
         mkdir -p "$destination/$(dirname "$directory")"
         cp -R "$prefix/$directory" "$destination/$(dirname "$directory")/"
@@ -60,9 +60,9 @@ for ((i=0; i<${#queue[@]}; ++i)); do
             imm32.dll|comctl32.dll|comdlg32.dll|usp10.dll|msimg32.dll|uxtheme.dll|\
             advapi32.dll|shell32.dll|shlwapi.dll|ole32.dll|oleaut32.dll|rpcrt4.dll|\
             ws2_32.dll|winmm.dll|setupapi.dll|cfgmgr32.dll|hid.dll|winspool.drv|\
-            version.dll|bcrypt.dll|bcryptprimitives.dll|crypt32.dll|dnsapi.dll|\
+            version.dll|bcrypt.dll|bcryptprimitives.dll|crypt32.dll|ncrypt.dll|dnsapi.dll|\
             iphlpapi.dll|secur32.dll|netapi32.dll|userenv.dll|wtsapi32.dll|\
-            winhttp.dll|normaliz.dll|wldap32.dll)
+            winhttp.dll|normaliz.dll|wldap32.dll|wsock32.dll|dsound.dll|avrt.dll|mmdevapi.dll)
                 ;;
             *) echo "Unresolved non-system dependency: $dll (${queue[i]})" >&2; exit 1 ;;
         esac

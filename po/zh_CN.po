@@ -177,3 +177,101 @@ msgstr "全部转换"
 
 msgid "Could not read preferences"
 msgstr "无法读取首选项"
+
+msgid "Resources"
+msgstr "资源浏览"
+
+
+msgid "Preview failed; raw bytes remain available."
+msgstr "预览失败，仍可查看原始字节。"
+
+
+msgid "No decoder for this entry. Use the hex view, or double-click to open an archive."
+msgstr "无法解码此条目。可查看十六进制，或双击打开归档。"
+
+
+msgid "Export complete"
+msgstr "导出完成"
+
+
+msgid "entries"
+msgstr "个条目"
+
+
+msgid "bytes"
+msgstr "字节"
+
+
+msgid "Export cannot overwrite its source file."
+msgstr "导出不能覆盖源文件。"
+
+
+msgid "Export original bytes"
+msgstr "导出原始字节"
+
+
+msgid "Open resource"
+msgstr "打开资源"
+
+
+msgid "Open file"
+msgstr "打开文件"
+
+
+msgid "Open folder"
+msgstr "打开文件夹"
+
+
+msgid "Back"
+msgstr "返回"
+
+
+msgid "Resource setting"
+msgstr "资源编码设置"
+
+
+msgid "Text and archive filename encoding"
+msgstr "文本和归档内文件名编码"
+
+
+msgid "Open a folder or archive. Browsing never unpacks or changes the input."
+msgstr "打开文件夹或归档。浏览不会解包或修改输入。"
+
+
+msgid "Text"
+msgstr "文本"
+
+
+msgid "Image zoom"
+msgstr "图片缩放"
+
+
+msgid "Image"
+msgstr "图片"
+
+
+msgid "Volume"
+msgstr "音量"
+
+
+msgid "Audio"
+msgstr "音频"
+
+
+msgid "Previous page"
+msgstr "上一页"
+
+
+msgid "Next page"
+msgstr "下一页"
+
+
+msgid "Hex"
+msgstr "十六进制"
+
+
+msgid "Add to conversion tasks"
+msgstr "加入转换任务"
+
+msgid "Unknown type"
+msgstr "未知类型"

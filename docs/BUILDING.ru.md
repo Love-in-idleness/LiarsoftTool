@@ -7,7 +7,7 @@
 Установите зависимости в терминале MSYS2 UCRT64 и выполните из корня репозитория:
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl,gstreamer,gst-plugins-base,gst-plugins-good}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -16,6 +16,7 @@ bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
 Каталог назначения ещё не должен существовать. Запускайте
 `build/windows-bundle/bin/liarsofttool-gui.exe`. Передавайте весь каталог
 `windows-bundle`, а не отдельный EXE.
+Сохраняйте плагины GStreamer и их сканер: они нужны для предпросмотра аудио.
 
 Для сборки только CLI добавьте `-DBUILD_GUI=OFF`; GTK4/libadwaita тогда не нужны.
 Скрипт упаковки GUI для такой сборки не используется.

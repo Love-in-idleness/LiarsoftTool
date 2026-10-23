@@ -177,3 +177,101 @@ msgstr "Преобразовать всё"
 
 msgid "Could not read preferences"
 msgstr "Не удалось прочитать параметры"
+
+msgid "Resources"
+msgstr "Ресурсы"
+
+
+msgid "Preview failed; raw bytes remain available."
+msgstr "Не удалось открыть предпросмотр; исходные байты доступны."
+
+
+msgid "No decoder for this entry. Use the hex view, or double-click to open an archive."
+msgstr "Для записи нет декодера. Откройте шестнадцатеричный вид или дважды щёлкните архив."
+
+
+msgid "Export complete"
+msgstr "Экспорт завершён"
+
+
+msgid "entries"
+msgstr "записей"
+
+
+msgid "bytes"
+msgstr "байт"
+
+
+msgid "Export cannot overwrite its source file."
+msgstr "Экспорт не может перезаписать исходный файл."
+
+
+msgid "Export original bytes"
+msgstr "Экспорт исходных байтов"
+
+
+msgid "Open resource"
+msgstr "Открыть ресурс"
+
+
+msgid "Open file"
+msgstr "Открыть файл"
+
+
+msgid "Open folder"
+msgstr "Открыть папку"
+
+
+msgid "Back"
+msgstr "Назад"
+
+
+msgid "Resource setting"
+msgstr "Кодировка из параметров"
+
+
+msgid "Text and archive filename encoding"
+msgstr "Кодировка текста и имён в архиве"
+
+
+msgid "Open a folder or archive. Browsing never unpacks or changes the input."
+msgstr "Откройте папку или архив. Просмотр не распаковывает и не изменяет исходные файлы."
+
+
+msgid "Text"
+msgstr "Текст"
+
+
+msgid "Image zoom"
+msgstr "Масштаб изображения"
+
+
+msgid "Image"
+msgstr "Изображение"
+
+
+msgid "Volume"
+msgstr "Громкость"
+
+
+msgid "Audio"
+msgstr "Аудио"
+
+
+msgid "Previous page"
+msgstr "Предыдущая страница"
+
+
+msgid "Next page"
+msgstr "Следующая страница"
+
+
+msgid "Hex"
+msgstr "Байты"
+
+
+msgid "Add to conversion tasks"
+msgstr "Добавить в задачи преобразования"
+
+msgid "Unknown type"
+msgstr "Неизвестный тип"

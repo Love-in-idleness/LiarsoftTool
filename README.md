@@ -1,4 +1,4 @@
-# LiarsoftTool · [中文](#中文) | [English](#english)
+# LiarsoftTool · [中文](#中文) | [English](#english) | [Русский](README.ru.md)
 
 ![LiarsoftTool](image.png)
 
@@ -20,14 +20,28 @@ Linux 用户运行 `liarsofttool-gui`；命令行程序为 `liarsofttool`。
 图形界面的操作顺序：
 
 1. 添加文件或文件夹，也可以直接拖入窗口。
-2. 选择资源编码。日文通常用 CP932，中文补丁通常用 GBK。
-3. 按需选择递归、仅封包或仅解包，检查列表中的输出路径。
+2. 在“首选项”选择资源编码。日文通常用 CP932，中文补丁通常用 GBK。
+3. 按需设置递归、仅封包或仅解包，检查“转换任务”中的输出路径。
 4. 开始转换。遇到问题时，用 “Copy details” 复制完整提示。
 
 GUI 和 CLI 默认都将 GSC 转成 TSC。只需要提取文本时，GUI 勾选 **GSC→TXT**。
 
 点击 **Check for updates** 可手动检查新版并打开 GitHub 发布页。
 程序不会在启动时联网，也不会自动下载或安装更新。
+
+### 资源浏览
+
+在“资源浏览”打开文件夹、XFL 或 LWG，双击条目进入子目录或嵌套归档。
+选中条目可预览图片、音频、文本，或将 GSC 只读反编译为 TSC。
+文本显示不正确时切换编码；TSC 始终按 UTF-8 读取。
+不支持或损坏的文件仍可查看分页十六进制字节。
+
+浏览和预览不解包、不修改原文件。“导出原始字节”只导出当前条目，
+不会转换格式。归档中的条目要转换时，先导出，再加入“转换任务”。
+独立文件可直接加入转换任务。
+
+图片支持缩放和透明背景。音频可播放、暂停、拖动进度和调节音量。
+音频预览需要 GTK 媒体后端及 GStreamer 的 Ogg/Vorbis 插件；Windows 完整包已包含。
 
 ### 命令行帮助
 
@@ -56,7 +70,7 @@ Windows 和 Linux 使用同一套 GUI。首选项集中设置转换选项、主�
 Debian / Ubuntu：
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -95,8 +109,8 @@ and rebuilding may overwrite files with the same name.
 In the GUI:
 
 1. Add files or folders, or drag them into the window.
-2. Select the resource encoding: usually CP932 for Japanese or GBK for Chinese patches.
-3. Choose Recursive, Pack only or Unpack only as needed, then check the output paths.
+2. Select the resource encoding in Preferences: usually CP932 for Japanese or GBK for Chinese patches.
+3. Set Recursive, Pack only or Unpack only as needed, then check Conversion tasks and output paths.
 4. Start conversion. Use **Copy details** to copy a complete error report.
 
 Both the GUI and CLI export GSC to TSC by default.
@@ -104,6 +118,21 @@ Enable **GSC→TXT** in the GUI to extract translation text.
 
 Click **Check for updates** to check manually and open the GitHub releases page.
 The application never connects on startup or downloads and installs updates automatically.
+
+### Resource browsing
+
+Open a folder, XFL or LWG in Resources. Double-click entries to enter folders or
+nested archives. Select an entry to preview images, audio or text, or decompile
+GSC into a read-only TSC view. Change the encoding if needed; TSC always uses UTF-8.
+Unsupported or damaged files remain available in the paginated hex view.
+
+Browsing and previews neither unpack nor modify the input. Export original bytes
+saves only the selected entry, without conversion. To convert an embedded entry,
+export it first, then add it to Conversion tasks. Standalone files can be added directly.
+
+Images support zoom and transparency. Audio supports playback, pause, seeking and
+volume. Audio previews need a GTK media backend and GStreamer Ogg/Vorbis plugins;
+the complete Windows bundle includes them.
 
 ### Command-line help
 
@@ -134,7 +163,7 @@ language. English, Russian and Simplified Chinese are supported; language change
 On Debian / Ubuntu:
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -164,4 +193,5 @@ LiarsoftTool is licensed under GPLv3. Third-party components retain their own li
 - [WebP](https://chromium.googlesource.com/webm/libwebp/) — lossless WebP support.
 - [Ogg / Vorbis](https://xiph.org/vorbis/) — audio support; [license notices](docs/THIRD_PARTY_AUDIO_LICENSES.md).
 - [GTK4 / libadwaita](https://www.gtk.org/) — shared desktop interface.
+- [GStreamer](https://gstreamer.freedesktop.org/) — audio previews through GTK's media backend.
 - [libcurl](https://curl.se/libcurl/) — HTTPS update checks.

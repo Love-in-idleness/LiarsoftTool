@@ -130,6 +130,7 @@ if(BUILD_GUI)
     add_executable(liarsofttool-gui
         src/gui_main.cpp
         src/gui.cpp
+        src/gui_browser.cpp
         src/gui_common.cpp
     )
     target_link_libraries(liarsofttool-gui PRIVATE liarsofttool_gui_preferences liarsofttool_updates)
@@ -196,7 +197,16 @@ if(BUILD_TESTING)
     add_test(NAME gui_common COMMAND gui_common_test)
 
     if(BUILD_GUI)
-        add_executable(gui_smoke_test tests/gui_smoke_test.cpp src/gui_common.cpp)
+        find_program(XGETTEXT xgettext REQUIRED)
+        find_program(MSGCMP msgcmp REQUIRED)
+        add_test(NAME gui_translations COMMAND ${CMAKE_COMMAND}
+            -DXGETTEXT=${XGETTEXT} -DMSGCMP=${MSGCMP}
+            -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/gui_translations.cmake)
+        add_executable(gui_smoke_test tests/gui_smoke_test.cpp src/gui_common.cpp src/gui_browser.cpp)
+        add_executable(gui_browser_test tests/gui_browser_test.cpp src/gui_common.cpp)
+        target_link_libraries(gui_browser_test PRIVATE liarsofttool_gui_preferences "${VORBISENC_LIBRARY}")
+        add_dependencies(gui_browser_test gui_translations)
         target_link_libraries(gui_smoke_test PRIVATE liarsofttool_gui_preferences liarsofttool_updates)
         add_dependencies(gui_smoke_test gui_translations)
         foreach(language en ru zh_CN fr_FR)
@@ -204,14 +214,17 @@ if(BUILD_TESTING)
         endforeach()
         if(WIN32)
             add_test(NAME gui_smoke COMMAND gui_smoke_test)
+            add_test(NAME gui_browser COMMAND gui_browser_test)
         else()
             find_program(XVFB_RUN xvfb-run)
             if(XVFB_RUN)
                 add_test(NAME gui_smoke COMMAND ${XVFB_RUN} -a $<TARGET_FILE:gui_smoke_test>)
+                add_test(NAME gui_browser COMMAND ${XVFB_RUN} -a $<TARGET_FILE:gui_browser_test>)
             endif()
         endif()
         if(TEST gui_smoke)
             set_tests_properties(gui_smoke PROPERTIES TIMEOUT 30)
+            set_tests_properties(gui_browser PROPERTIES TIMEOUT 35)
         endif()
     endif()
 
