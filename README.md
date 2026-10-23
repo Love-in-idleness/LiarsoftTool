@@ -66,6 +66,7 @@ Windows 编译和打包见 [构建说明](docs/BUILDING.md)。
 ### 更多说明
 
 [文档目录](docs/README.md) · [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.md)
+· [开发规划](docs/ROADMAP.md)
 
 请使用合法持有的游戏资源。脚本、图像或 EXE 能成功转换，不代表所有引擎版本
 都能直接使用，替换回游戏后请自行测试。
@@ -139,6 +140,8 @@ Executables are in `build/`. Add `-DBUILD_GUI=OFF` when configuring a CLI-only
 build. See [build instructions](docs/BUILDING.md) for Windows and packaging.
 
 ### Further reading
+
+See the [roadmap](docs/ROADMAP.md#english) for planned work.
 
 [Documentation](docs/README.md) · [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md)
 
