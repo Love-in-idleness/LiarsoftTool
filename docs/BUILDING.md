@@ -1,6 +1,6 @@
 # Windows 构建与打包
 
-[返回主说明](../README.md) · [English](#english)
+[返回主说明](../README.md) · [English](#english) · [Русский](BUILDING.ru.md)
 
 ## MSYS2 UCRT64
 
@@ -39,6 +39,21 @@ cmake --build build/win -j2
 GUI 还需匹配的 GTKmm 开发库和 pkg-config 配置。
 所有编译器和库应使用同一目标及运行时；不要混用 UCRT64/MINGW64 或不同线程模型。
 
+## GTK4 迁移检查（开发用）
+
+旧 GUI 尚未被这个检查程序替换。最小窗口使用 C++ 调用 GTK4/libadwaita 的 C API，
+验证窗口创建、浅色／深色／系统主题切换及关闭；不提供转换功能。
+需要 GTK4 和 libadwaita 1.4 及以上。
+
+```bash
+cmake -S tests/gtk4 -B build/gtk4-probe
+cmake --build build/gtk4-probe -j2
+ctest --test-dir build/gtk4-probe --output-on-failure
+```
+
+Windows 在独立的 MSYS2 UCRT64 环境中安装 `gcc`、`cmake`、`pkgconf` 和
+`libadwaita` 对应的 UCRT64 包，再执行上述命令。不要复用 MINGW64 的旧 GTKmm 库。
+
 ## English
 
 Use the commands above in an MSYS2 UCRT64 terminal. The GUI bundle directory
@@ -48,3 +63,7 @@ and distribute the complete directory, including its libraries and resources.
 For CLI-only builds, add `-DBUILD_GUI=OFF`; the GUI packaging script is not needed.
 Cross-building from Linux requires Windows-target WebP, Vorbis/Ogg, libcurl 7.85 or newer and, for
 the GUI, GTKmm. Use a matching compiler, library stack and runtime throughout.
+
+The standalone `tests/gtk4` CMake project checks a GTK4/libadwaita C API window
+and the system/light/dark theme API; it is not the replacement GUI yet.
+Use libadwaita 1.4 or newer, and an isolated, consistent UCRT64 toolchain on Windows.
