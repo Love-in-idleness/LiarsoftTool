@@ -1,6 +1,6 @@
 # Сборка и упаковка для Windows
 
-[中文 / English](BUILDING.md) · [Главная страница](../README.md)
+[中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md)
 
 ## MSYS2 UCRT64
 

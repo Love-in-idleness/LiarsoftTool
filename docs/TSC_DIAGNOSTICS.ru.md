@@ -1,6 +1,6 @@
 # Интерфейс проверки TSC
 
-[中文 / English](TSC_DIAGNOSTICS.md) · [Документация](README.md)
+[中文](TSC_DIAGNOSTICS.zh.md) | [English](TSC_DIAGNOSTICS.en.md) | [Русский](TSC_DIAGNOSTICS.ru.md)
 
 Описание для авторов редакторов и инструментов. Пользовательские команды доступны
 в `liarsofttool -h`.

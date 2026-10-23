@@ -1,6 +1,6 @@
 # TSC Command Reference
 
-[Documentation](README.md) · [中文](GSC_OPCODE_REFERENCE.md)
+[中文](GSC_OPCODE_REFERENCE.zh.md) | [English](GSC_OPCODE_REFERENCE.en.md) | [Русский](GSC_OPCODE_REFERENCE.ru.md)
 
 Use this page to look up generated TSC commands and their opcode numbers.
 To translate dialogue, edit quoted text; keep generated labels and metadata.
@@ -186,7 +186,7 @@ each high-nibble family.
 | High family | Operation |
 |---:|---|
 | `0x1***` | assignment `=` |
-| `0x2***` | logical OR `||` |
+| `0x2***` | logical OR `\|\|` |
 | `0x3***` | logical AND `&&` |
 | `0x4***` | equal `==` |
 | `0x5***` | greater or equal `>=` |

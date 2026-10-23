@@ -1,0 +1,64 @@
+# 开发参考：RsComp.dll 与媒体指令
+
+[中文](RSCOMP_MEDIA_AUDIT.zh.md) | [English](RSCOMP_MEDIA_AUDIT.en.md) | [Русский](RSCOMP_MEDIA_AUDIT.ru.md)
+
+[返回文档目录](README.zh.md)
+
+两版编译器的媒体命令布局，以及与媒体解码的区别。日常操作见 [主说明](../README.zh.md)。
+以下保留样本与静态分析记录，结论只适用于标明的构建。
+
+核对日期：2026-10-08。只做哈希、PE 导入/导出、字符串和定点反汇编，未加载或执行 DLL。
+
+## 样本
+
+| 路径 | 字节数 | PE 时间戳 | Compile RVA | SHA-256 |
+| --- | ---: | --- | --- | --- |
+| `CodeXRScript/OC用パッチ/data/RsComp.dll` | 364611 | 2008-07-22 | `0x124e` | `6c65c3545a559b6e4a01d54fdb2f57ad4e605b27dc73959cde18bd3468f3cb30` |
+| `res_ft/UBAI/RsComp.dll` | 90112 | 2012-10-14 | `0x7090` | `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9` |
+
+`ubai/RsComp.dll` 与第二个样本逐字节相同，不是第三个版本。PE 时间戳只是文件字段，不独立证明发布日期。
+两者都是 x86 PE32，仅导出 `Compile`，静态导入库均只有 `KERNEL32.dll` 和 `USER32.dll`。
+
+## 正面证据：媒体命令的编译，不是媒体编解码
+
+下列地址都是 PE 虚拟地址，ImageBase 为 `0x10000000`。
+
+- 旧版入口 `0x1000124e` 跳转到 `0x10012220`，再转入编译实现。
+  新版 `0x10007090` 调用 `0x10005270`，分配编译缓冲区，调用 `0x10001b60` 和 `0x10002510`，释放缓冲区并返回结果。
+- 旧版 `0x10008bc3` 比较 `bgm_on`，匹配后以 `0x3c` 调用输出指令的 helper；
+  `0x10008d85` 比较 `voice`，匹配后输出 `0x42`，继续编译四个表达式参数。
+- 新版 `0x100039b7` 比较 `bgm_on`，匹配后输出 `0x3c`；
+  `0x10003ab7` 比较 `voice`，匹配后输出 `0x42`，第一参数走字符串处理，其余走表达式处理。
+  因此这两版能帮助核对不同年代的媒体命令参数布局，不能把同名命令直接当成同一种参数格式。
+- 新版 `load` 的字符串交叉引用在 `0x10003bc7`，`draw` 在 `0x10003e06`，都属于同一个命令解析函数 `0x10002850`。
+  被这些命令复用的 `0x10001000` 明确向输出缓冲区写入一个 16 位值，并将代码长度增加 2；不是载入或解码图片。
+
+## 排除误判
+
+不能只凭没有静态音频 DLL 导入就断言没有动态调用。分析时另检查了 `LoadLibraryA` / `GetProcAddress` 引用：
+
+- 新版 `0x1000c650` 动态加载 `user32.dll`，获取窗口相关函数 `GetActiveWindow`、`GetLastActivePopup` 等，属于运行库辅助路径。
+- 旧版 `0x10022040` 也是上述窗口辅助路径；`0x100019b4` 加载 `RsComp.dll`，
+  `0x100036da` 取得 `Compile`，属于编译器包装接口。另有按传入名称加载模块的路径，不能据此猜测外部模块的能力。
+- 两个文件中都未检出 `OggS`、`RIFF`、`vorbis`、`.acm`、`.wcg`、`.lim`、`.png` 等格式/编解码特征字符串；
+  导入表未见 ACM、WinMM、GDI 图像或媒体编解码 API。结合已定位的编译路径，没有得到新的 WAV/WCG/LIM 编解码算法证据。
+
+结论是**分析时没有找到可用于媒体格式处理的新实现**，而非证明 DLL 中每个未识别函数都不可能涉及媒体。
+音频实际加载/转换仍应以引擎 EXE 的 ACM 路径和 `vorbis.acm` 为依据，图像以 EXE 的 WCG/LIM 解码函数为依据。
+这些 DLL 对 GSC/TSC 媒体命令布局有帮助，但没有解决 WAV 容器逐字节还原；现有音频边界见 [音频处理核对](AUDIO_PROCESSING_AUDIT.zh.md)。
+
+## `oc_reference/bgmsv` 的 MP3 是否为游戏音频格式
+
+这些文件确实是带 ID3 的 MPEG Layer III 音频；但 `oc_reference/bgmlist.html` 明确将
+`bgmsv/TrackNN.mp3` 的链接放在“试听”列。`CodeXRScript/readme.txt`（CP932）说明
+`oc_reference` 是在浏览器打开的参考资料；追加安装清单只有图片、脚本、`RsComp.dll`
+和 `version.dat`，没有安装 `bgmsv`。这不能证明原引擎会直接使用 MP3。
+
+静态交叉核对 `res_ft/exe/{Cannonball,Forest,kagerou}.exe`：三者均有
+`%s\\Track%02d.wav` 与 `%s\\%04d.wav` 路径模板，未检出 `.mp3` 或 `bgmsv` 特征。
+Cannonball 中前者的调用引用位于 `0x0042c71c`，后者包括 `0x004136ae`；
+`mpegvideo` 的引用位于 `0x00431f8f`，是另一条媒体路径，不能据此将 MP3 放进 BGM/WAV 路径。
+
+结论限于这些样本：MP3 是文档试听资源，没有证据支持用同名 MP3 替换游戏 WAV。
+不应为此扩大封包白名单或仅改后缀。若某个引擎另有明确的 MP3/裸 Ogg 路径，
+应单独按调用证据支持；目标是可播放，不要求 WAV 逐字节复原。

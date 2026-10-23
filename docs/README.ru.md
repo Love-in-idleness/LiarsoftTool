@@ -1,12 +1,12 @@
 # Документация
 
-[中文](README.md) · [Главная](../README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
 
 ## Использование и сборка
 
 - [Обзор и работа с программой](../README.ru.md); справка CLI — `liarsofttool -h`.
 - [Сборка и упаковка Windows](BUILDING.ru.md)
-- [Справочник TSC, английский](GSC_OPCODE_REFERENCE.en.md)
+- [Справочник TSC](GSC_OPCODE_REFERENCE.ru.md)
 - [Лицензии аудиобиблиотек](THIRD_PARTY_AUDIO_LICENSES.md)
 
 ## Разработка
@@ -15,16 +15,16 @@
 - [Интерфейс проверки TSC](TSC_DIAGNOSTICS.ru.md)
 - [Правила работы](../AGENTS.ru.md)
 
-Ниже технические материалы, пока на китайском. Для обычной работы они не нужны.
+Ниже технические справочники. Для обычной работы они не нужны.
 Адреса и выводы относятся только к указанным сборкам.
 
-- [Аудиоконтейнеры](AUDIO_PROCESSING_AUDIT.md)
-- [CannonBall](CANNONBALL_ENGINE_AUDIT.md)
-- [Evermaiden](EVERMAIDEN_ENGINE_AUDIT.md)
-- [Khime / Albatross](KHIME_ALBATROSS_ENGINE_AUDIT.md)
-- [Jeanne / Kagerou](JEANNE_KAGEROU_ENGINE_AUDIT.md)
-- [Пробная версия CNMI](CNMI_TRIAL_ENGINE_AUDIT.md)
-- [RsComp.dll и медиакоманды](RSCOMP_MEDIA_AUDIT.md)
+- [Аудиоконтейнеры](AUDIO_PROCESSING_AUDIT.ru.md)
+- [CannonBall](CANNONBALL_ENGINE_AUDIT.ru.md)
+- [Evermaiden](EVERMAIDEN_ENGINE_AUDIT.ru.md)
+- [Khime / Albatross](KHIME_ALBATROSS_ENGINE_AUDIT.ru.md)
+- [Jeanne / Kagerou](JEANNE_KAGEROU_ENGINE_AUDIT.ru.md)
+- [Пробная версия CNMI](CNMI_TRIAL_ENGINE_AUDIT.ru.md)
+- [RsComp.dll и медиакоманды](RSCOMP_MEDIA_AUDIT.ru.md)
 
 ## Проверки
 

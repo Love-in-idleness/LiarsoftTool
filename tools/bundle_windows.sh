@@ -36,7 +36,9 @@ done
 [[ -d "$build/locale" ]] || { echo "Missing GUI translations: $build/locale" >&2; exit 1; }
 cp -R "$build/locale" "$destination/share/"
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-cp "$root/README.md" "$root/COPYING" "$destination/"
+cp "$root"/README*.md "$root"/AGENTS*.md "$root/image.png" "$root/COPYING" "$destination/"
+mkdir -p "$destination/docs"
+cp "$root"/docs/*.md "$destination/docs/"
 mkdir -p "$destination/share/doc/LiarsoftTool"
 cp "$root/docs/THIRD_PARTY_AUDIO_LICENSES.md" "$destination/share/doc/LiarsoftTool/"
 
