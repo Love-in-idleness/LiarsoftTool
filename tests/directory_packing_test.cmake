@@ -319,6 +319,8 @@ if(result OR NOT EXISTS "${TEST_ROOT}/webp_cli/item.webp" OR
    EXISTS "${TEST_ROOT}/webp_cli/item.png")
     message(FATAL_ERROR "CLI LIM output is not WebP: ${error}")
 endif()
+# Keep the reference distinct on Windows' case-insensitive filesystem.
+file(RENAME "${TEST_ROOT}/webp_cli/item.LIM" "${TEST_ROOT}/webp_cli/expected.lim")
 execute_process(
     COMMAND "${TOOL}" --pack-only "${TEST_ROOT}/webp_cli/item.webp"
     RESULT_VARIABLE result ERROR_VARIABLE error)
@@ -326,7 +328,7 @@ if(result OR NOT EXISTS "${TEST_ROOT}/webp_cli/item.lim" OR
    EXISTS "${TEST_ROOT}/webp_cli/item.wcg")
     message(FATAL_ERROR "CLI WebP output is not LIM: ${error}")
 endif()
-file(READ "${TEST_ROOT}/webp_cli/item.LIM" expected_lim HEX)
+file(READ "${TEST_ROOT}/webp_cli/expected.lim" expected_lim HEX)
 file(READ "${TEST_ROOT}/webp_cli/item.lim" rebuilt_lim HEX)
 if(NOT rebuilt_lim STREQUAL expected_lim)
     message(FATAL_ERROR "CLI LIM/WebP/LIM round trip changed the canonical image")
