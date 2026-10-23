@@ -2,6 +2,8 @@
 
 [返回主说明](../README.md)
 
+[Русский](README.ru.md)
+
 ## 使用与构建
 
 - [项目介绍与使用](../README.md#中文)；命令行帮助运行 `liarsofttool -h`。
