@@ -24,6 +24,12 @@ namespace fs = std::filesystem;
 namespace liarsoft {
 namespace {
 
+struct TscSourceError : std::runtime_error {
+    size_t line;
+    TscSourceError(size_t line, const std::string& message)
+        : std::runtime_error(message), line(line) {}
+};
+
 struct Instruction {
     size_t offset;
     uint16_t opcode;
@@ -917,128 +923,133 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     size_t offset = 0;
     while (std::getline(input, line)) {
         ++lineNo;
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        if (line.compare(0, std::char_traits<char>::length(BYTE_FORMAT), BYTE_FORMAT) == 0) {
-            if (headerSize) throw std::runtime_error("duplicate ;@gsc-byte-format metadata");
-            const auto value = line.substr(std::char_traits<char>::length(BYTE_FORMAT));
-            if (value == "legacy-28") headerSize = 28;
-            else if (value == "modern-36") headerSize = 36;
-            else throw std::runtime_error("unsupported GSC byte format: " + value);
-            continue;
+        try {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.compare(0, std::char_traits<char>::length(BYTE_FORMAT), BYTE_FORMAT) == 0) {
+                if (headerSize) throw std::runtime_error("duplicate ;@gsc-byte-format metadata");
+                const auto value = line.substr(std::char_traits<char>::length(BYTE_FORMAT));
+                if (value == "legacy-28") headerSize = 28;
+                else if (value == "modern-36") headerSize = 36;
+                else throw std::runtime_error("unsupported GSC byte format: " + value);
+                continue;
+            }
+            // A stale `;@gsc-text-encoding` line from an older TSC is ignored: the
+            // output encoding is always the one requested on the command line.
+            if (line.compare(0, std::char_traits<char>::length(INSTRUCTION_SCHEMA), INSTRUCTION_SCHEMA) == 0) {
+                if (selectedSchema) throw std::runtime_error("duplicate ;@gsc-schema metadata");
+                selectedSchema = parseSchemaName(
+                    line.substr(std::char_traits<char>::length(INSTRUCTION_SCHEMA)));
+                continue;
+            }
+            // Checked before `;@gsc-trailer`, whose keyword it extends.
+            std::string payload;
+            if (matchMetadata(line, TRAILER_HEADER, payload)) {
+                if (trailerHeader) throw std::runtime_error("duplicate ;@gsc-trailer-header metadata");
+                std::istringstream fields(payload);
+                std::string first, second, extra;
+                if (!(fields >> first >> second) || (fields >> extra))
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": malformed ;@gsc-trailer-header metadata");
+                trailerHeader = std::make_pair(parseOperand(first, 'D', lineNo),
+                                               parseOperand(second, 'D', lineNo));
+                continue;
+            }
+            if (matchMetadata(line, TRAILER, payload)) {
+                if (trailer) throw std::runtime_error("duplicate ;@gsc-trailer metadata");
+                trailer = parseHexBytes(payload, TRAILER);
+                continue;
+            }
+            const auto tokens = tokenizeSource(line, lineNo);
+            if (tokens.empty()) continue;
+            const auto& first = tokens.front().value;
+            if (first.empty()) throw std::runtime_error("expected command or label");
+            if (first.front() == ':') {
+                if (tokens.size() != 1 || first.size() == 1)
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": malformed label");
+                if (!labels.emplace(first.substr(1), offset).second)
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": duplicate label");
+                continue;
+            }
+            if (first.front() != '*')
+                throw std::runtime_error("line " + std::to_string(lineNo) +
+                                         ": expected command or label");
+            if (!selectedSchema)
+                throw std::runtime_error(";@gsc-schema must precede commands");
+            SourceInstruction instruction;
+            instruction.lineNo = lineNo;
+            instruction.offset = offset;
+            const std::string name = first.substr(1);
+            size_t operandAt = 1;
+            if (name == "datablock") {
+                if (tokens.size() < 3)
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": datablock needs index and count");
+                const auto index = parseOperand(tokens[1].value, 'D', lineNo);
+                const auto count = parseOperand(tokens[2].value, 'D', lineNo);
+                if (count > 32767)
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": data-block count exceeds signed 16-bit engine limit");
+                if (index != dataBlocks.size() || tokens.size() != count + 3ull)
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": non-sequential or malformed datablock");
+                SourceDataBlock block;
+                block.lineNo = lineNo;
+                for (size_t i = 0; i < count; ++i)
+                    block.values.push_back(static_cast<int16_t>(
+                        parseOperand(tokens[i + 3].value, 'S', lineNo)));
+                dataBlocks.push_back(std::move(block));
+                continue;
+            }
+            if (name == "vm") {
+                if (tokens.size() < 2)
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": missing VM opcode");
+                instruction.opcode = static_cast<uint16_t>(parseOperand(tokens[1].value, 'H', lineNo));
+                if (!(instruction.opcode & 0xf000))
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": invalid VM opcode");
+                instruction.kinds = (instruction.opcode & 0xf000) == 0xf000
+                    ? (headerSize == 28 ? "HH" : "HS")
+                    : (headerSize == 28 ? "HHH" : "HSS");
+                operandAt = 2;
+            } else if (name == "opcode") {
+                if (tokens.size() < 2)
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": missing opcode number");
+                instruction.opcode = static_cast<uint16_t>(parseOperand(tokens[1].value, 'H', lineNo));
+                operandAt = 2;
+            } else if (name == "jz") instruction.opcode = 3;
+            else if (name == "jnz") instruction.opcode = 4;
+            else if (name == "goto") instruction.opcode = 5;
+            else if (name == "data") instruction.opcode = 18;
+            else {
+                const auto found = opcodes.find(name);
+                if (found == opcodes.end())
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": unknown command: " + name);
+                instruction.opcode = found->second;
+            }
+            if (instruction.kinds.empty()) {
+                const auto& schemas = schemasFor(*selectedSchema);
+                const auto found = schemas.find(instruction.opcode);
+                if (found == schemas.end())
+                    throw std::runtime_error("line " + std::to_string(lineNo) +
+                                             ": opcode is unavailable in selected schema");
+                instruction.kinds = found->second;
+            }
+            instruction.operands.assign(tokens.begin() + static_cast<ptrdiff_t>(operandAt),
+                                        tokens.end());
+            if (instruction.operands.size() != instruction.kinds.size()) {
+                throw std::runtime_error("line " + std::to_string(lineNo) +
+                                         ": wrong operand count for " + name);
+            }
+            offset += instructionSize(instruction.kinds);
+            instructions.push_back(std::move(instruction));
+        } catch (const std::exception& error) {
+            throw TscSourceError(lineNo, error.what());
         }
-        // A stale `;@gsc-text-encoding` line from an older TSC is ignored: the
-        // output encoding is always the one requested on the command line.
-        if (line.compare(0, std::char_traits<char>::length(INSTRUCTION_SCHEMA), INSTRUCTION_SCHEMA) == 0) {
-            if (selectedSchema) throw std::runtime_error("duplicate ;@gsc-schema metadata");
-            selectedSchema = parseSchemaName(
-                line.substr(std::char_traits<char>::length(INSTRUCTION_SCHEMA)));
-            continue;
-        }
-        // Checked before `;@gsc-trailer`, whose keyword it extends.
-        std::string payload;
-        if (matchMetadata(line, TRAILER_HEADER, payload)) {
-            if (trailerHeader) throw std::runtime_error("duplicate ;@gsc-trailer-header metadata");
-            std::istringstream fields(payload);
-            std::string first, second, extra;
-            if (!(fields >> first >> second) || (fields >> extra))
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": malformed ;@gsc-trailer-header metadata");
-            trailerHeader = std::make_pair(parseOperand(first, 'D', lineNo),
-                                           parseOperand(second, 'D', lineNo));
-            continue;
-        }
-        if (matchMetadata(line, TRAILER, payload)) {
-            if (trailer) throw std::runtime_error("duplicate ;@gsc-trailer metadata");
-            trailer = parseHexBytes(payload, TRAILER);
-            continue;
-        }
-        const auto tokens = tokenizeSource(line, lineNo);
-        if (tokens.empty()) continue;
-        const auto& first = tokens.front().value;
-        if (first.front() == ':') {
-            if (tokens.size() != 1 || first.size() == 1)
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": malformed label");
-            if (!labels.emplace(first.substr(1), offset).second)
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": duplicate label");
-            continue;
-        }
-        if (first.front() != '*')
-            throw std::runtime_error("line " + std::to_string(lineNo) +
-                                     ": expected command or label");
-        if (!selectedSchema)
-            throw std::runtime_error(";@gsc-schema must precede commands");
-        SourceInstruction instruction;
-        instruction.lineNo = lineNo;
-        instruction.offset = offset;
-        const std::string name = first.substr(1);
-        size_t operandAt = 1;
-        if (name == "datablock") {
-            if (tokens.size() < 3)
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": datablock needs index and count");
-            const auto index = parseOperand(tokens[1].value, 'D', lineNo);
-            const auto count = parseOperand(tokens[2].value, 'D', lineNo);
-            if (count > 32767)
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": data-block count exceeds signed 16-bit engine limit");
-            if (index != dataBlocks.size() || tokens.size() != count + 3ull)
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": non-sequential or malformed datablock");
-            SourceDataBlock block;
-            block.lineNo = lineNo;
-            for (size_t i = 0; i < count; ++i)
-                block.values.push_back(static_cast<int16_t>(
-                    parseOperand(tokens[i + 3].value, 'S', lineNo)));
-            dataBlocks.push_back(std::move(block));
-            continue;
-        }
-        if (name == "vm") {
-            if (tokens.size() < 2)
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": missing VM opcode");
-            instruction.opcode = static_cast<uint16_t>(parseOperand(tokens[1].value, 'H', lineNo));
-            if (!(instruction.opcode & 0xf000))
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": invalid VM opcode");
-            instruction.kinds = (instruction.opcode & 0xf000) == 0xf000
-                ? (headerSize == 28 ? "HH" : "HS")
-                : (headerSize == 28 ? "HHH" : "HSS");
-            operandAt = 2;
-        } else if (name == "opcode") {
-            if (tokens.size() < 2)
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": missing opcode number");
-            instruction.opcode = static_cast<uint16_t>(parseOperand(tokens[1].value, 'H', lineNo));
-            operandAt = 2;
-        } else if (name == "jz") instruction.opcode = 3;
-        else if (name == "jnz") instruction.opcode = 4;
-        else if (name == "goto") instruction.opcode = 5;
-        else if (name == "data") instruction.opcode = 18;
-        else {
-            const auto found = opcodes.find(name);
-            if (found == opcodes.end())
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": unknown command: " + name);
-            instruction.opcode = found->second;
-        }
-        if (instruction.kinds.empty()) {
-            const auto& schemas = schemasFor(*selectedSchema);
-            const auto found = schemas.find(instruction.opcode);
-            if (found == schemas.end())
-                throw std::runtime_error("line " + std::to_string(lineNo) +
-                                         ": opcode is unavailable in selected schema");
-            instruction.kinds = found->second;
-        }
-        instruction.operands.assign(tokens.begin() + static_cast<ptrdiff_t>(operandAt),
-                                    tokens.end());
-        if (instruction.operands.size() != instruction.kinds.size()) {
-            throw std::runtime_error("line " + std::to_string(lineNo) +
-                                     ": wrong operand count for " + name);
-        }
-        offset += instructionSize(instruction.kinds);
-        instructions.push_back(std::move(instruction));
     }
     if (!headerSize) throw std::runtime_error("TSC has no ;@gsc-byte-format metadata");
     if (!selectedSchema) throw std::runtime_error("TSC has no ;@gsc-schema metadata");
@@ -1071,44 +1082,48 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
         for (const auto value : block.values) dataWords.push_back(static_cast<uint16_t>(value));
     }
     for (const auto& instruction : instructions) {
-        code.push_back(static_cast<uint8_t>(instruction.opcode));
-        code.push_back(static_cast<uint8_t>(instruction.opcode >> 8));
-        for (size_t i = 0; i < instruction.kinds.size(); ++i) {
-            const char kind = instruction.kinds[i];
-            uint32_t value;
-            const auto& token = instruction.operands[i];
-            if (isStringOperand(instruction.opcode, i)) {
-                if (!token.quoted)
-                    throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
-                                             ": string operand must be quoted");
-                value = addString(token.value);
-            } else if (isCodeTarget(instruction.opcode, i)) {
-                const auto found = labels.find(token.value);
-                if (token.quoted || found == labels.end())
-                    throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
-                                             ": unknown label: " + token.value);
-                if (found->second > std::numeric_limits<uint32_t>::max())
-                    throw std::runtime_error("GSC code is too large");
-                value = static_cast<uint32_t>(found->second);
-                if (instruction.opcode == 200 && value >= offset)
-                    throw std::runtime_error("insub must point inside GSC code");
-            } else {
-                if (token.quoted)
-                    throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
-                                             ": numeric operand cannot be quoted");
-                value = parseOperand(token.value, kind, instruction.lineNo);
-                if (instruction.opcode == 18 && i == 1 && value != 0 &&
-                    value >= dataBlocks.size())
-                    throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
-                                             ": data block is outside its table");
+        try {
+            code.push_back(static_cast<uint8_t>(instruction.opcode));
+            code.push_back(static_cast<uint8_t>(instruction.opcode >> 8));
+            for (size_t i = 0; i < instruction.kinds.size(); ++i) {
+                const char kind = instruction.kinds[i];
+                uint32_t value;
+                const auto& token = instruction.operands[i];
+                if (isStringOperand(instruction.opcode, i)) {
+                    if (!token.quoted)
+                        throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
+                                                 ": string operand must be quoted");
+                    value = addString(token.value);
+                } else if (isCodeTarget(instruction.opcode, i)) {
+                    const auto found = labels.find(token.value);
+                    if (token.quoted || found == labels.end())
+                        throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
+                                                 ": unknown label: " + token.value);
+                    if (found->second > std::numeric_limits<uint32_t>::max())
+                        throw std::runtime_error("GSC code is too large");
+                    value = static_cast<uint32_t>(found->second);
+                    if (instruction.opcode == 200 && value >= offset)
+                        throw std::runtime_error("insub must point inside GSC code");
+                } else {
+                    if (token.quoted)
+                        throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
+                                                 ": numeric operand cannot be quoted");
+                    value = parseOperand(token.value, kind, instruction.lineNo);
+                    if (instruction.opcode == 18 && i == 1 && value != 0 &&
+                        value >= dataBlocks.size())
+                        throw std::runtime_error("line " + std::to_string(instruction.lineNo) +
+                                                 ": data block is outside its table");
+                }
+                if (kind == 'H' || kind == 'S') {
+                    code.push_back(static_cast<uint8_t>(value));
+                    code.push_back(static_cast<uint8_t>(value >> 8));
+                } else {
+                    for (int shift = 0; shift < 32; shift += 8)
+                        code.push_back(static_cast<uint8_t>(value >> shift));
+                }
             }
-            if (kind == 'H' || kind == 'S') {
-                code.push_back(static_cast<uint8_t>(value));
-                code.push_back(static_cast<uint8_t>(value >> 8));
-            } else {
-                for (int shift = 0; shift < 32; shift += 8)
-                    code.push_back(static_cast<uint8_t>(value >> shift));
-            }
+        } catch (const std::exception& error) {
+            throw TscSourceError(instruction.lineNo, error.what());
         }
     }
 
@@ -1265,48 +1280,54 @@ std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText,
     uint64_t expectedHash = 0;
     bool reading = false;
     bool complete = false;
+    size_t lineNo = 0;
 
     while (std::getline(input, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        if (line.compare(0, std::char_traits<char>::length(RAW_HEADER), RAW_HEADER) == 0) {
-            if (reading || complete)
-                throw std::runtime_error("duplicate ;@gsc-raw-v1 metadata");
-            std::istringstream fields(
-                line.substr(std::char_traits<char>::length(RAW_HEADER)));
-            std::string sizeField, hashField, extra;
-            if (!(fields >> sizeField >> hashField) || (fields >> extra) ||
-                sizeField.rfind("size=", 0) != 0 ||
-                hashField.rfind("fnv1a64=", 0) != 0)
-                throw std::runtime_error("malformed ;@gsc-raw-v1 header");
-            try {
-                size_t used = 0;
-                expectedSize = static_cast<size_t>(
-                    std::stoull(sizeField.substr(5), &used, 10));
-                if (used != sizeField.size() - 5) throw std::invalid_argument("size");
-                used = 0;
-                expectedHash = std::stoull(hashField.substr(8), &used, 16);
-                if (used != hashField.size() - 8 || hashField.size() != 24)
-                    throw std::invalid_argument("hash");
-            } catch (const std::exception&) {
-                throw std::runtime_error("invalid ;@gsc-raw-v1 size or checksum");
+        ++lineNo;
+        try {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.compare(0, std::char_traits<char>::length(RAW_HEADER), RAW_HEADER) == 0) {
+                if (reading || complete)
+                    throw std::runtime_error("duplicate ;@gsc-raw-v1 metadata");
+                std::istringstream fields(
+                    line.substr(std::char_traits<char>::length(RAW_HEADER)));
+                std::string sizeField, hashField, extra;
+                if (!(fields >> sizeField >> hashField) || (fields >> extra) ||
+                    sizeField.rfind("size=", 0) != 0 ||
+                    hashField.rfind("fnv1a64=", 0) != 0)
+                    throw std::runtime_error("malformed ;@gsc-raw-v1 header");
+                try {
+                    size_t used = 0;
+                    expectedSize = static_cast<size_t>(
+                        std::stoull(sizeField.substr(5), &used, 10));
+                    if (used != sizeField.size() - 5) throw std::invalid_argument("size");
+                    used = 0;
+                    expectedHash = std::stoull(hashField.substr(8), &used, 16);
+                    if (used != hashField.size() - 8 || hashField.size() != 24)
+                        throw std::invalid_argument("hash");
+                } catch (const std::exception&) {
+                    throw std::runtime_error("invalid ;@gsc-raw-v1 size or checksum");
+                }
+                reading = true;
+                continue;
             }
-            reading = true;
-            continue;
+            if (!reading) continue;
+            if (line == RAW_END) {
+                reading = false;
+                complete = true;
+                continue;
+            }
+            if (line.compare(0, std::char_traits<char>::length(RAW_CHUNK), RAW_CHUNK) != 0)
+                throw std::runtime_error("unexpected line inside ;@gsc-raw metadata");
+            const auto hex = line.substr(std::char_traits<char>::length(RAW_CHUNK));
+            if (hex.empty() || hex.size() % 2)
+                throw std::runtime_error("malformed ;@gsc-raw chunk");
+            for (size_t i = 0; i < hex.size(); i += 2)
+                result.push_back(static_cast<uint8_t>((hexDigit(hex[i]) << 4) |
+                                                      hexDigit(hex[i + 1])));
+        } catch (const std::exception& error) {
+            throw TscSourceError(lineNo, error.what());
         }
-        if (!reading) continue;
-        if (line == RAW_END) {
-            reading = false;
-            complete = true;
-            continue;
-        }
-        if (line.compare(0, std::char_traits<char>::length(RAW_CHUNK), RAW_CHUNK) != 0)
-            throw std::runtime_error("unexpected line inside ;@gsc-raw metadata");
-        const auto hex = line.substr(std::char_traits<char>::length(RAW_CHUNK));
-        if (hex.empty() || hex.size() % 2)
-            throw std::runtime_error("malformed ;@gsc-raw chunk");
-        for (size_t i = 0; i < hex.size(); i += 2)
-            result.push_back(static_cast<uint8_t>((hexDigit(hex[i]) << 4) |
-                                                  hexDigit(hex[i + 1])));
     }
     if (reading) throw std::runtime_error("missing ;@gsc-raw-end marker");
     if (!complete) throw std::runtime_error("TSC has no ;@gsc-raw-v1 metadata");
@@ -1315,6 +1336,17 @@ std::vector<uint8_t> restoreGscFromTsc(const std::string& tscText,
     if (fnv1a64(result) != expectedHash)
         throw std::runtime_error(";@gsc-raw checksum mismatch");
     return result;
+}
+
+std::vector<TscDiagnostic> checkTsc(const std::string& tscText, const std::string& encoding) {
+    try {
+        restoreGscFromTsc(tscText, encoding);
+        return {};
+    } catch (const TscSourceError& error) {
+        return {{"error", error.what(), error.line}};
+    } catch (const std::exception& error) {
+        return {{"error", error.what(), 0}};
+    }
 }
 
 std::vector<std::string> decompileGscToFile(const std::string& inputPath,

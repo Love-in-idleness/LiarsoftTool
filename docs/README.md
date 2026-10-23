@@ -12,6 +12,7 @@
 ## 开发参考
 
 - [开发规划](ROADMAP.md) · [Русский](ROADMAP.ru.md)
+- [TSC 检查接口](TSC_DIAGNOSTICS.md) · [Русский](TSC_DIAGNOSTICS.ru.md)
 
 以下为引擎和文件格式的分析依据，普通使用无需阅读。
 地址和结论只适用于文中标明的构建。

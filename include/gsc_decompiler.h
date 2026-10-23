@@ -2,6 +2,7 @@
 #define LIARSOFTTOOL_GSC_DECOMPILER_H
 
 #include <cstdint>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,16 @@ std::vector<std::string> decompileGscToFile(const std::string& inputPath,
 std::vector<uint8_t> restoreGscFromTsc(
     const std::string& tscText,
     const std::string& fallbackEncoding = "CP932");
+
+struct TscDiagnostic {
+    std::string severity;
+    std::string message;
+    size_t line = 0; // One-based source line; zero means a whole-file diagnostic.
+};
+
+/// Run the same in-memory compiler without writing a GSC. Reports its first error.
+std::vector<TscDiagnostic> checkTsc(const std::string& tscText,
+                                  const std::string& encoding = "CP932");
 
 void restoreGscFromTscFile(const std::string& inputPath,
                            const std::string& outputPath,

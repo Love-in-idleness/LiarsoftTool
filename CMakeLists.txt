@@ -123,6 +123,7 @@ add_executable(liarsofttool src/cli_main.cpp)
 target_link_libraries(liarsofttool PRIVATE liarsofttool_updates)
 if(WIN32)
     target_sources(liarsofttool PRIVATE ${RESOURCE_OBJ})
+    target_link_libraries(liarsofttool PRIVATE shell32)
 endif()
 
 # ---- GUI target ----
@@ -191,6 +192,12 @@ if(BUILD_TESTING)
 
     add_executable(gsc_decompiler_test tests/gsc_decompiler_test.cpp)
     add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
+    add_executable(tsc_check_test tests/tsc_check_test.cpp)
+    target_link_libraries(tsc_check_test PRIVATE liarsofttool_core)
+    add_test(NAME tsc_check COMMAND tsc_check_test)
+    add_test(NAME tsc_check_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool> -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/tsc_check_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/tsc_check_test.cmake)
 
     add_executable(gui_common_test
         tests/gui_common_test.cpp src/gui_common.cpp)

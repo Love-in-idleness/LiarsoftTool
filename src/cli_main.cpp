@@ -2,11 +2,19 @@
 #include "encoding.h"
 #include "xflarchive.h"
 #include "update_check.h"
+#include "gsc_decompiler.h"
+#include "fileio.h"
 #include <iostream>
 #include <string>
 #include <vector>
 #include <filesystem>
 #include <charconv>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -26,6 +34,8 @@ static void printUsage(const char* prog) {
               << "      --gsc-to-txt       Extract translatable GSC text as TXT\n"
               << "      --vorbis-in-wav    Wrap Ogg in WAV instead of decoding to PCM\n"
               << "      --check-update     Check GitHub for a newer release (no conversion)\n"
+              << "      --check-tsc        Check TSC inputs without writing GSC\n"
+              << "      --diagnostics=json Machine-readable diagnostics for --check-tsc\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .tsc         Export structured TSC (default)\n"
@@ -46,6 +56,7 @@ static void printUsage(const char* prog) {
               << "  .exe  -> .gbk.exe/.cp1251.exe/.sjis.exe  Set EXE charset and line-break rules\n\n"
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
+              << "  " << prog << " --check-tsc --diagnostics=json scene.tsc\n"
               << "  " << prog << " -e cp932 scenario.gsc\n"
               << "  " << prog << " --gsc-to-txt -e gbk scenario.gsc output.txt\n"
               << "  " << prog << " -e cp932 -r original.gsc translation.txt\n"
@@ -91,7 +102,7 @@ static bool wildMatch(const std::string& text, const std::string& pattern) {
 }
 
 // Cross-platform glob: expand wildcard pattern using <filesystem>.
-static std::vector<std::string> globPattern(const std::string& pattern) {
+static std::vector<std::string> globPattern(const std::string& pattern, bool utf8 = false) {
     std::vector<std::string> results;
     bool hasWild = pattern.find_first_of("*?[") != std::string::npos;
 
@@ -102,9 +113,9 @@ static std::vector<std::string> globPattern(const std::string& pattern) {
     }
 
     // Separate directory and filename pattern
-    fs::path p(pattern);
+    fs::path p = utf8 ? fs::u8path(pattern) : fs::path(pattern);
     fs::path dir = p.parent_path();
-    std::string filePat = p.filename().string();
+    std::string filePat = utf8 ? p.filename().u8string() : p.filename().string();
 
     if (dir.empty()) dir = ".";
 
@@ -118,14 +129,62 @@ static std::vector<std::string> globPattern(const std::string& pattern) {
     for (const auto& entry : fs::directory_iterator(dir, ec)) {
         if (ec) break;
         if (!entry.is_regular_file() && !entry.is_directory()) continue;
-        std::string name = entry.path().filename().string();
+        std::string name = utf8 ? entry.path().filename().u8string() : entry.path().filename().string();
         if (wildMatch(name, filePat))
-            results.push_back(entry.path().string());
+            results.push_back(utf8 ? entry.path().u8string() : entry.path().string());
     }
 
     if (results.empty() && !hasWild)
         results.push_back(pattern);
     return results;
+}
+
+static std::string jsonString(const std::string& value) {
+    std::string result = "\"";
+    const char* hex = "0123456789abcdef";
+    for (const unsigned char c : value) {
+        if (c == '"' || c == '\\') { result += '\\'; result += char(c); }
+        else if (c < 32) { result += "\\u00"; result += hex[c >> 4]; result += hex[c & 15]; }
+        else result += char(c);
+    }
+    return result + '"';
+}
+
+static int checkInputs(const std::vector<std::string>& inputs, const std::string& encoding, bool json) {
+    bool failed = false, first = true;
+    if (json) std::cout << "{\"diagnostics\":[";
+    for (const auto& pattern : inputs) {
+        auto paths = globPattern(pattern, true);
+        if (paths.empty()) paths.push_back(pattern);
+        for (const auto& path : paths) {
+            std::vector<liarsoft::TscDiagnostic> diagnostics;
+            try {
+                if (liarsoft::conversion::extension(path) != ".tsc")
+                    throw std::runtime_error("--check-tsc requires a TSC file");
+                const auto bytes = liarsoft::readFile(fs::u8path(path));
+                diagnostics = liarsoft::checkTsc(std::string(bytes.begin(), bytes.end()), encoding);
+            } catch (const std::exception& error) {
+                diagnostics.push_back({"error", error.what(), 0});
+            }
+            for (const auto& diagnostic : diagnostics) {
+                failed = true;
+                if (json) {
+                    if (!first) std::cout << ',';
+                    first = false;
+                    std::cout << "{\"file\":" << jsonString(path)
+                              << ",\"severity\":" << jsonString(diagnostic.severity)
+                              << ",\"message\":" << jsonString(diagnostic.message)
+                              << ",\"line\":" << (diagnostic.line ? std::to_string(diagnostic.line) : "null")
+                              << ",\"column\":null}";
+                } else {
+                    std::cerr << path << (diagnostic.line ? ":" + std::to_string(diagnostic.line) : "")
+                              << ": " << diagnostic.severity << ": " << diagnostic.message << '\n';
+                }
+            }
+        }
+    }
+    if (json) std::cout << "]}\n";
+    return failed ? 1 : 0;
 }
 
 // ---- Core processing of a single input ----
@@ -161,7 +220,7 @@ static bool processOne(const std::string& inputPath,
     return true;
 }
 
-int main(int argc, char* argv[]) {
+static int runCli(int argc, char* argv[]) {
     std::string encoding = "CP932";
     std::string referencePath;
     std::vector<std::string> inputs;
@@ -173,6 +232,7 @@ int main(int argc, char* argv[]) {
     bool vorbisInWav = false;
     unsigned workers = 0;
     bool checkUpdate = false;
+    bool checkTsc = false, jsonDiagnostics = false;
 
     // Parse arguments
     int i = 1;
@@ -216,6 +276,10 @@ int main(int argc, char* argv[]) {
             vorbisInWav = true;
         } else if (arg == "--check-update") {
             checkUpdate = true;
+        } else if (arg == "--check-tsc") {
+            checkTsc = true;
+        } else if (arg == "--diagnostics=json") {
+            jsonDiagnostics = true;
         } else if (!arg.empty() && arg[0] == '-') {
             std::cerr << "Error: unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -226,6 +290,18 @@ int main(int argc, char* argv[]) {
         ++i;
     }
 
+    if (jsonDiagnostics && !checkTsc) {
+        std::cerr << "Error: --diagnostics=json requires --check-tsc\n";
+        return 1;
+    }
+    if (checkTsc) {
+        if (inputs.empty() || checkUpdate || !explicitOutput.empty() || !referencePath.empty() ||
+            recursive || packOnly || unpackOnly || vorbisInWav || !gscToTsc || workers) {
+            std::cerr << "Error: --check-tsc requires inputs and cannot be combined with conversion or update options\n";
+            return 1;
+        }
+        return checkInputs(inputs, encoding, jsonDiagnostics);
+    }
     if (checkUpdate) {
         if (!inputs.empty() || !explicitOutput.empty()) {
             std::cerr << "Error: --check-update cannot be combined with input/output paths\n";
@@ -309,4 +385,33 @@ int main(int argc, char* argv[]) {
         std::cerr << errors << " file(s) failed." << std::endl;
 
     return errors > 0 ? 1 : 0;
+}
+
+int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    // The new check API uses UTF-8 paths; existing conversion paths remain native.
+    bool checking = false;
+    for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--check-tsc") checking = true;
+    if (checking) {
+        int count = 0;
+        auto** wide = CommandLineToArgvW(GetCommandLineW(), &count);
+        if (!wide) { std::cerr << "Cannot read Unicode command line\n"; return 1; }
+        std::vector<std::string> arguments;
+        for (int i = 0; i < count; ++i) {
+            const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide[i], -1, nullptr, 0, nullptr, nullptr);
+            if (!size) { LocalFree(wide); std::cerr << "Invalid Unicode argument\n"; return 1; }
+            std::string value(size, '\0');
+            if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide[i], -1, value.data(), size, nullptr, nullptr)) {
+                LocalFree(wide); std::cerr << "Cannot decode Unicode argument\n"; return 1;
+            }
+            value.pop_back(); arguments.push_back(std::move(value));
+        }
+        LocalFree(wide);
+        std::vector<char*> pointers;
+        for (auto& value : arguments) pointers.push_back(value.data());
+        pointers.push_back(nullptr);
+        return runCli(count, pointers.data());
+    }
+#endif
+    return runCli(argc, argv);
 }
