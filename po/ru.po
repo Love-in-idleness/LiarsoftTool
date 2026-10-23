@@ -1,0 +1,179 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: LiarsoftTool 2.3.0\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Copy details"
+msgstr "Копировать подробности"
+
+msgid "Close"
+msgstr "Закрыть"
+
+msgid "Open releases"
+msgstr "Открыть выпуски"
+
+msgid "Could not open the link"
+msgstr "Не удалось открыть ссылку"
+
+msgid "Operation failed"
+msgstr "Ошибка операции"
+
+msgid "Please wait for the operation to finish."
+msgstr "Дождитесь завершения операции."
+
+msgid "Ready"
+msgstr "Готово"
+
+msgid "Unsupported input"
+msgstr "Неподдерживаемый файл"
+
+msgid "Converting…"
+msgstr "Преобразование…"
+
+msgid "Skipped"
+msgstr "Пропущено"
+
+msgid "OK (PCM retained)"
+msgstr "Готово (PCM сохранён)"
+
+msgid "OK"
+msgstr "Готово"
+
+msgid "Warning"
+msgstr "Предупреждение"
+
+msgid "Failed"
+msgstr "Ошибка"
+
+msgid "Error"
+msgstr "Ошибка"
+
+msgid "Input"
+msgstr "Вход"
+
+msgid "Output"
+msgstr "Выход"
+
+msgid "Completed with errors"
+msgstr "Завершено с ошибками"
+
+msgid "All done"
+msgstr "Всё готово"
+
+msgid "Completed with warnings"
+msgstr "Завершено с предупреждениями"
+
+msgid "Checking GitHub for updates…"
+msgstr "Проверка обновлений на GitHub…"
+
+msgid "Update check complete"
+msgstr "Проверка обновлений завершена"
+
+msgid "Update check failed"
+msgstr "Не удалось проверить обновления"
+
+msgid "A new version is available"
+msgstr "Доступна новая версия"
+
+msgid "No newer release is available"
+msgstr "Новых выпусков нет"
+
+msgid "Current"
+msgstr "Текущая версия"
+
+msgid "Latest"
+msgstr "Последняя версия"
+
+msgid "Output directory"
+msgstr "Каталог вывода"
+
+msgid "Reference GSC"
+msgstr "Исходный GSC"
+
+msgid "Select input"
+msgstr "Выберите файлы"
+
+msgid "Preferences"
+msgstr "Параметры"
+
+msgid "Appearance and language"
+msgstr "Оформление и язык"
+
+msgid "Follow system"
+msgstr "Как в системе"
+
+msgid "Light"
+msgstr "Светлая"
+
+msgid "Dark"
+msgstr "Тёмная"
+
+msgid "Theme"
+msgstr "Тема"
+
+msgid "System language"
+msgstr "Язык системы"
+
+msgid "Language (after restart)"
+msgstr "Язык (после перезапуска)"
+
+msgid "Conversion"
+msgstr "Преобразование"
+
+msgid "Resource encoding"
+msgstr "Кодировка ресурсов"
+
+msgid "Recursive"
+msgstr "Рекурсивно"
+
+msgid "Pack only"
+msgstr "Только упаковка"
+
+msgid "Unpack only"
+msgstr "Только распаковка"
+
+msgid "GSC → TXT (instead of TSC)"
+msgstr "GSC → TXT (вместо TSC)"
+
+msgid "Vorbis-in-WAV"
+msgstr "Vorbis внутри WAV"
+
+msgid "Threads (0 = automatic)"
+msgstr "Потоки (0 = автоматически)"
+
+msgid "Same as input"
+msgstr "Рядом с исходным файлом"
+
+msgid "Choose…"
+msgstr "Выбрать…"
+
+msgid "Reference GSC for TXT"
+msgstr "Исходный GSC для TXT"
+
+msgid "Check for updates"
+msgstr "Проверить обновления"
+
+msgid "Conversion tasks"
+msgstr "Задачи преобразования"
+
+msgid "Add files"
+msgstr "Добавить файлы"
+
+msgid "Add folder"
+msgstr "Добавить папку"
+
+msgid "Remove"
+msgstr "Убрать"
+
+msgid "Clear"
+msgstr "Очистить"
+
+msgid "Convert all"
+msgstr "Преобразовать всё"
+
+msgid "Could not read preferences"
+msgstr "Не удалось прочитать параметры"

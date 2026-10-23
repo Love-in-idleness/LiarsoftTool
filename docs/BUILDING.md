@@ -7,7 +7,7 @@
 在 MSYS2 的 UCRT64 终端中安装依赖，并在仓库根目录执行：
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg,curl}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -17,7 +17,7 @@ bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
 `build/windows-bundle/bin/liarsofttool-gui.exe`。
 分发完整的 `windows-bundle` 目录，不要只发送 EXE。
 
-只需要 CLI 时，配置阶段添加 `-DBUILD_GUI=OFF`，无需 GTKmm；
+只需要 CLI 时，配置阶段添加 `-DBUILD_GUI=OFF`，无需 GTK4/libadwaita；
 GUI 打包脚本不用于 CLI-only 构建。
 
 ## Linux 交叉编译
@@ -36,12 +36,12 @@ cmake -S . -B build/win -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/win -j2
 ```
 
-GUI 还需匹配的 GTKmm 开发库和 pkg-config 配置。
+GUI 还需匹配的 GTK4/libadwaita 开发库和 pkg-config 配置。
 所有编译器和库应使用同一目标及运行时；不要混用 UCRT64/MINGW64 或不同线程模型。
 
 ## GTK4 迁移检查（开发用）
 
-旧 GUI 尚未被这个检查程序替换。最小窗口使用 C++ 调用 GTK4/libadwaita 的 C API，
+正式 GUI 使用 C++ 调用 GTK4/libadwaita 的 C API。这个独立的最小窗口用于
 验证窗口创建、浅色／深色／系统主题切换及关闭；不提供转换功能。
 需要 GTK4 和 libadwaita 1.4 及以上。
 
@@ -62,8 +62,8 @@ and distribute the complete directory, including its libraries and resources.
 
 For CLI-only builds, add `-DBUILD_GUI=OFF`; the GUI packaging script is not needed.
 Cross-building from Linux requires Windows-target WebP, Vorbis/Ogg, libcurl 7.85 or newer and, for
-the GUI, GTKmm. Use a matching compiler, library stack and runtime throughout.
+the GUI, GTK4/libadwaita. Use a matching compiler, library stack and runtime throughout.
 
 The standalone `tests/gtk4` CMake project checks a GTK4/libadwaita C API window
-and the system/light/dark theme API; it is not the replacement GUI yet.
+and the system/light/dark theme API, independently of the production GUI.
 Use libadwaita 1.4 or newer, and an isolated, consistent UCRT64 toolchain on Windows.

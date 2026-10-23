@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(LiarsoftTool VERSION 2.2.4 LANGUAGES CXX)
+project(LiarsoftTool VERSION 2.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,22 +44,25 @@ if(NOT WIN32)
     find_package(Iconv REQUIRED)
 endif()
 
-# Both desktop platforms use the same GTKmm frontend; CLI-only builds need no GTK.
-option(BUILD_GUI "Build the GTKmm 3 GUI" ON)
+# Both desktop platforms use the GTK4/libadwaita C API from C++.
+option(BUILD_GUI "Build the GTK4/libadwaita GUI" ON)
 if(BUILD_GUI)
     find_package(PkgConfig REQUIRED)
-    pkg_check_modules(GTKMM REQUIRED IMPORTED_TARGET gtkmm-3.0)
-    if(MINGW)
-        include(CheckCXXSourceCompiles)
-        check_cxx_source_compiles("#include <bits/gthr.h>
-            #ifdef GCC_GTHR_WIN32_H
-            #error MSYS2 GTKmm requires the POSIX-thread C++ ABI
-            #endif
-            int main() { return 0; }" GTKMM_COMPILER_ABI_COMPATIBLE)
-        if(NOT GTKMM_COMPILER_ABI_COMPATIBLE)
-            message(FATAL_ERROR "Use a POSIX-thread MinGW compiler for GTKmm (e.g. g++-posix), or set BUILD_GUI=OFF")
-        endif()
-    endif()
+    pkg_check_modules(ADWAITA REQUIRED IMPORTED_TARGET libadwaita-1>=1.5 gtk4>=4.10)
+    find_package(Intl REQUIRED)
+    find_program(MSGFMT msgfmt REQUIRED)
+    foreach(language ru zh_CN)
+        set(catalog "${CMAKE_CURRENT_BINARY_DIR}/locale/${language}/LC_MESSAGES/liarsofttool.mo")
+        add_custom_command(OUTPUT "${catalog}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/locale/${language}/LC_MESSAGES"
+            COMMAND ${MSGFMT} --check -o "${catalog}" "${CMAKE_CURRENT_SOURCE_DIR}/po/${language}.po"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/po/${language}.po")
+        list(APPEND GUI_CATALOGS "${catalog}")
+        install(FILES "${catalog}" DESTINATION "share/locale/${language}/LC_MESSAGES")
+    endforeach()
+    add_custom_target(gui_translations ALL DEPENDS ${GUI_CATALOGS})
+    add_library(liarsofttool_gui_preferences STATIC src/gui_preferences.cpp)
+    target_link_libraries(liarsofttool_gui_preferences PUBLIC PkgConfig::ADWAITA Intl::Intl liarsofttool_core)
 endif()
 
 # Include directories
@@ -127,7 +130,8 @@ if(BUILD_GUI)
         src/gui.cpp
         src/gui_common.cpp
     )
-    target_link_libraries(liarsofttool-gui PRIVATE PkgConfig::GTKMM liarsofttool_updates)
+    target_link_libraries(liarsofttool-gui PRIVATE liarsofttool_gui_preferences liarsofttool_updates)
+    add_dependencies(liarsofttool-gui gui_translations)
     if(WIN32)
         set_target_properties(liarsofttool-gui PROPERTIES WIN32_EXECUTABLE TRUE)
         target_sources(liarsofttool-gui PRIVATE ${RESOURCE_OBJ})
@@ -191,7 +195,11 @@ if(BUILD_TESTING)
 
     if(BUILD_GUI)
         add_executable(gui_smoke_test tests/gui_smoke_test.cpp src/gui_common.cpp)
-        target_link_libraries(gui_smoke_test PRIVATE PkgConfig::GTKMM liarsofttool_updates)
+        target_link_libraries(gui_smoke_test PRIVATE liarsofttool_gui_preferences liarsofttool_updates)
+        add_dependencies(gui_smoke_test gui_translations)
+        foreach(language en ru zh_CN fr_FR)
+            add_test(NAME gui_language_${language} COMMAND gui_smoke_test ${language})
+        endforeach()
         if(WIN32)
             add_test(NAME gui_smoke COMMAND gui_smoke_test)
         else()
@@ -226,7 +234,7 @@ foreach(target liarsofttool liarsofttool-gui bmp_test encoding_test gscfile_test
                gsc_decompiler_test gui_common_test gui_smoke_test archive_test cg_decompress_test)
     if(TARGET ${target})
         target_link_libraries(${target} PRIVATE liarsofttool_core)
-        # GTKmm DLLs share the C++ runtime with the GUI.
+        # Keep the GUI and its dependencies on the same MinGW runtime.
         if(WIN32 AND NOT target STREQUAL "liarsofttool-gui" AND NOT target STREQUAL "gui_smoke_test")
             target_link_options(${target} PRIVATE -static-libgcc -static-libstdc++)
         endif()

@@ -27,12 +27,14 @@ mkdir -p "$destination/bin" "$destination/lib" "$destination/share"
 destination=$(cd "$destination" && pwd)
 cp "$build/liarsofttool.exe" "$build/liarsofttool-gui.exe" "$destination/bin/"
 cp "$prefix/bin/glib-compile-schemas.exe" "$prefix/bin/gdk-pixbuf-query-loaders.exe" "$prefix/bin/update-mime-database.exe" "$destination/bin/"
-for directory in lib/gdk-pixbuf-2.0 lib/gtk-3.0 share/glib-2.0 share/icons share/themes share/licenses share/fontconfig share/mime etc/fonts; do
+for directory in lib/gdk-pixbuf-2.0 lib/gtk-4.0 lib/gio/modules share/glib-2.0 share/icons share/themes share/licenses share/fontconfig share/mime share/locale etc/fonts; do
     if [[ -d "$prefix/$directory" ]]; then
         mkdir -p "$destination/$(dirname "$directory")"
         cp -R "$prefix/$directory" "$destination/$(dirname "$directory")/"
     fi
 done
+[[ -d "$build/locale" ]] || { echo "Missing GUI translations: $build/locale" >&2; exit 1; }
+cp -R "$build/locale" "$destination/share/"
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cp "$root/README.md" "$root/COPYING" "$destination/"
 mkdir -p "$destination/share/doc/LiarsoftTool"
@@ -54,6 +56,7 @@ for ((i=0; i<${#queue[@]}; ++i)); do
         case "${dll,,}" in
             api-ms-win-*|ext-ms-win-*|kernel32.dll|ntdll.dll|msvcrt.dll|ucrtbase.dll|\
             user32.dll|gdi32.dll|gdiplus.dll|opengl32.dll|dwrite.dll|dwmapi.dll|\
+            d3d11.dll|d3d12.dll|dxgi.dll|dcomp.dll|d2d1.dll|shcore.dll|propsys.dll|\
             imm32.dll|comctl32.dll|comdlg32.dll|usp10.dll|msimg32.dll|uxtheme.dll|\
             advapi32.dll|shell32.dll|shlwapi.dll|ole32.dll|oleaut32.dll|rpcrt4.dll|\
             ws2_32.dll|winmm.dll|setupapi.dll|cfgmgr32.dll|hid.dll|winspool.drv|\

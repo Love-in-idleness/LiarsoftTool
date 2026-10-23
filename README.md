@@ -49,13 +49,14 @@ GSC→TSC 是实验性功能，不是所有游戏都已适配。编辑前保留�
 
 ### 从源码编译
 
-需要 C++17 编译器、CMake、WebP、Vorbis/Ogg、libcurl 7.85 及以上；图形界面还需要 GTKmm 3。
-Windows 和 Linux 使用同一套 GUI。
+需要 C++17 编译器、CMake、WebP、Vorbis/Ogg、libcurl 7.85 及以上；图形界面还需要 GTK4 4.10、libadwaita 1.5 及以上和 gettext。
+Windows 和 Linux 使用同一套 GUI。首选项集中设置转换选项、主题和界面语言。
+主题可跟随系统或使用浅色、深色；界面支持中、英、俄语，手动选择后重启生效。
 
 Debian / Ubuntu：
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtkmm-3.0-dev
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -126,12 +127,14 @@ See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
 ### Building from source
 
 Requires a C++17 compiler, CMake, WebP, Vorbis/Ogg and libcurl 7.85 or newer. The GUI also requires
-GTKmm 3. Windows and Linux share the same frontend.
+GTK4 4.10, libadwaita 1.5 or newer, and gettext. Windows and Linux share the same frontend.
+Preferences contain conversion options, the system/light/dark theme and the interface
+language. English, Russian and Simplified Chinese are supported; language changes apply after restart.
 
 On Debian / Ubuntu:
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtkmm-3.0-dev
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -160,5 +163,5 @@ LiarsoftTool is licensed under GPLv3. Third-party components retain their own li
 - [stb](https://github.com/nothings/stb) — image loading and writing.
 - [WebP](https://chromium.googlesource.com/webm/libwebp/) — lossless WebP support.
 - [Ogg / Vorbis](https://xiph.org/vorbis/) — audio support; [license notices](docs/THIRD_PARTY_AUDIO_LICENSES.md).
-- [GTK / GTKmm](https://www.gtk.org/) — shared desktop interface.
+- [GTK4 / libadwaita](https://www.gtk.org/) — shared desktop interface.
 - [libcurl](https://curl.se/libcurl/) — HTTPS update checks.

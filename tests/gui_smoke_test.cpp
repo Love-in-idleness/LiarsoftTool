@@ -1,108 +1,119 @@
-// Exercise the actual GUI callbacks without a second test-only frontend.
+// Exercise production callbacks, with isolated configuration and no player data.
 #include "../src/gui.cpp"
 #include "fileio.h"
 #include <chrono>
 #include <filesystem>
 #include <stdexcept>
 
-int main(int argc, char* argv[]) {
-    Glib::init();
-#ifdef _WIN32
-    // Wine can inherit the host's X11-only backend preference.
-    Glib::setenv("GDK_BACKEND", "win32");
-#endif
+namespace {
+std::filesystem::path directory;
+std::string failure;
+int stage = 0;
+auto started = std::chrono::steady_clock::now();
+void require(bool value, const char* message) {
+    if (!value) throw std::runtime_error(message);
+}
+gboolean tick(gpointer) {
+    try {
+        require(std::chrono::steady_clock::now() - started < std::chrono::seconds(20), "GUI timeout");
+        if (!ui.window) return G_SOURCE_CONTINUE;
+        const auto input = directory / "scene.tsc";
+        if (stage == 0) {
+            if (const char* destination = g_getenv("LIARSOFT_GUI_CAPTURE")) {
+                auto* paintable = gtk_widget_paintable_new(GTK_WIDGET(ui.window));
+                auto* snapshot = gtk_snapshot_new();
+                gdk_paintable_snapshot(paintable, snapshot, gtk_widget_get_width(GTK_WIDGET(ui.window)),
+                                      gtk_widget_get_height(GTK_WIDGET(ui.window)));
+                auto* node = gtk_snapshot_free_to_node(snapshot);
+                if (!node) { g_object_unref(paintable); return G_SOURCE_CONTINUE; }
+                auto* texture = gsk_renderer_render_texture(gtk_native_get_renderer(GTK_NATIVE(ui.window)), node, nullptr);
+                require(gdk_texture_save_to_png(texture, destination), "window capture failed");
+                g_object_unref(texture); gsk_render_node_unref(node); g_object_unref(paintable);
+            }
+            require(options().encoding == "CP932" && options().gscToTsc && !options().recursive &&
+                !options().unpackOnly && !active(ui.packOnly) && !options().vorbisInWav &&
+                options().workers == 0, "conversion defaults changed");
+            for (unsigned value = 0; value < 3; ++value) {
+                ui.preferences.theme = value; theme(); savePreferences();
+                require(liarsoft::gui::loadPreferences().theme == value, "theme not saved");
+                const AdwColorScheme expected[] = {ADW_COLOR_SCHEME_DEFAULT, ADW_COLOR_SCHEME_FORCE_LIGHT, ADW_COLOR_SCHEME_FORCE_DARK};
+                require(adw_style_manager_get_color_scheme(adw_style_manager_get_default()) == expected[value], "theme not applied");
+            }
+            for (auto language : {"en", "ru", "zh_CN", ""}) {
+                ui.preferences.language = language; savePreferences();
+                require(liarsoft::gui::loadPreferences().language == language, "language not saved");
+            }
+            adw_dialog_present(ui.preferencesDialog, GTK_WIDGET(ui.window));
+            adw_dialog_close(ui.preferencesDialog);
+            adw_dialog_present(ui.preferencesDialog, GTK_WIDGET(ui.window));
+            adw_dialog_close(ui.preferencesDialog);
+            addFiles({display((directory / "image.bmp").string())});
+            gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.unpackOnly), TRUE);
+            require(ui.jobs[0].output == (directory / "image.bmp").string(), "BMP normalization output");
+            gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.unpackOnly), FALSE);
+            require(ui.jobs[0].output == (directory / "image.wcg").string(), "BMP packing output");
+            clearFiles();
+            addFiles({display(input.string())});
+            g_signal_emit_by_name(ui.convert, "clicked");
+            require(ui.busy && !gtk_widget_get_sensitive(ui.content) && closeWindow(nullptr, nullptr), "worker does not lock edits/close");
+            clearFiles(); addFiles({display(input.string())});
+            require(ui.jobs.size() == 1, "queue changed during conversion");
+            stage = 1;
+        } else if (!ui.busy && stage == 1) {
+            require(std::filesystem::exists(directory / "scene.gsc"), "conversion produced no GSC");
+            require(std::string(gtk_label_get_text(GTK_LABEL(ui.jobs[0].status))) == _("OK"), "conversion status");
+            require(gtk_widget_get_sensitive(ui.content) && !ui.worker.joinable() && !closeWindow(nullptr, nullptr), "worker not joined/unlocked");
+
+            gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.packOnly), TRUE);
+            gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.unpackOnly), TRUE);
+            convert(); stage = 2;
+        } else if (!ui.busy && stage == 2) {
+            require(std::string(gtk_label_get_text(GTK_LABEL(ui.jobs[0].status))) == _("Skipped"), "both operation filters should skip");
+            g_setenv("HTTPS_PROXY", "http://127.0.0.1:1", TRUE);
+            g_setenv("ALL_PROXY", "http://127.0.0.1:1", TRUE);
+            g_setenv("NO_PROXY", "", TRUE);
+            checkUpdate(); stage = 3;
+            require(ui.busy && closeWindow(nullptr, nullptr), "update not asynchronous");
+        } else if (!ui.busy && stage == 3 && ui.alert) {
+            require(std::string(gtk_label_get_text(GTK_LABEL(ui.status))) == _("Update check failed"), "offline error not reported");
+            adw_dialog_force_close(ADW_DIALOG(ui.alert));
+            gtk_window_destroy(ui.window); return G_SOURCE_REMOVE;
+        }
+    } catch (const std::exception& error) {
+        failure = error.what();
+        if (ui.window && !ui.busy) gtk_window_destroy(ui.window);
+        else if (ui.window) g_application_quit(G_APPLICATION(gtk_window_get_application(ui.window)));
+        return G_SOURCE_REMOVE;
+    }
+    return G_SOURCE_CONTINUE;
+}
+}
+
+int main(int argc, char** argv) {
     namespace fs = std::filesystem;
-    const auto directory = fs::temp_directory_path() / ("liarsoft-gtk-smoke-" +
+    directory = fs::temp_directory_path() / ("liarsoft-gtk4-" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(directory);
-    const auto input = directory / "scene.tsc";
-    const auto output = directory / "scene.gsc";
-    liarsoft::writeTextFileIfChanged(input.string(),
-        ";@gsc-byte-format modern-36\n;@gsc-schema modern\n*end\n");
-    bool started = false;
-    bool checkingUpdate = false;
-    std::string failure;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
-    Glib::signal_timeout().connect([&]() {
-        try {
-            if (!started) {
-                const auto bmp = directory / "image.bmp";
-                addFiles({liarsoft::gui::nativeTextToUtf8(bmp.string())}, "");
-                g_unpackOnlyCheck->set_active(true);
-                auto bmpRow = *g_store->children().begin();
-                if (bmpRow[g_columns.outputPath] != displayText(bmp.string()) ||
-                    bmpRow[g_columns.fileType] != "CodeX BMP -> BMP")
-                    throw std::runtime_error("GUI did not select BMP normalization");
-                g_unpackOnlyCheck->set_active(false);
-                if (bmpRow[g_columns.outputPath] != displayText((directory / "image.wcg").string()))
-                    throw std::runtime_error("GUI did not restore BMP packing");
-                onClear();
-                addFiles({liarsoft::gui::nativeTextToUtf8(input.string())}, "");
-                g_convertBtn->clicked();
-                if (!g_busy || g_mainBox->get_sensitive() || !onClose(nullptr))
-                    throw std::runtime_error("GUI does not lock edits/close during conversion");
-                onClear();
-                addFiles({liarsoft::gui::nativeTextToUtf8(input.string())}, "");
-                if (g_store->children().size() != 1)
-                    throw std::runtime_error("GUI queue changed during conversion");
-                started = true;
-            } else if (!g_busy) {
-                const auto row = *g_store->children().begin();
-                if (!fs::exists(output) || row[g_columns.status] != "OK" ||
-                    !g_mainBox->get_sensitive() || g_worker.joinable() || onClose(nullptr))
-                    throw std::runtime_error("GUI did not finish/join the conversion worker");
-                g_packOnlyCheck->set_active(true);
-                g_unpackOnlyCheck->set_active(true);
-                g_convertBtn->clicked();
-                // Verify skipped jobs use the same safe completion path.
-                Glib::signal_timeout().connect([&]() {
-                    if (g_busy) return true;
-                    if (checkingUpdate) {
-                        for (auto* window : Gtk::Window::list_toplevels()) {
-                            auto* dialog = dynamic_cast<Gtk::MessageDialog*>(window);
-                            if (!dialog || !dialog->get_visible()) continue;
-                            if (g_statusLabel->get_text() != "Update check failed." ||
-                                !g_mainBox->get_sensitive() || g_worker.joinable())
-                                failure = "GUI did not recover from an offline update check";
-                            dialog->response(Gtk::RESPONSE_CLOSE);
-                            g_window->hide();
-                            return false;
-                        }
-                        if (std::chrono::steady_clock::now() > deadline) {
-                            failure = "GUI update dialog timed out";
-                            g_window->hide();
-                            return false;
-                        }
-                        return true;
-                    }
-                    const auto finishedRow = *g_store->children().begin();
-                    if (finishedRow[g_columns.status] != "SKIPPED") {
-                        failure = "GUI operation filters did not skip the input";
-                        g_window->hide();
-                        return false;
-                    }
-                    Glib::setenv("HTTPS_PROXY", "http://127.0.0.1:1");
-                    Glib::setenv("ALL_PROXY", "http://127.0.0.1:1");
-                    Glib::setenv("NO_PROXY", "");
-                    checkingUpdate = true;
-                    g_updateBtn->clicked();
-                    if (!g_busy || g_mainBox->get_sensitive() || !onClose(nullptr))
-                        failure = "GUI did not start the update check in the background";
-                    return true;
-                }, 10);
-                return false;
-            }
-            if (std::chrono::steady_clock::now() > deadline)
-                throw std::runtime_error("GUI conversion timed out");
-        } catch (const std::exception& error) {
-            failure = error.what();
-            g_window->hide();
-            return false;
+    g_setenv("XDG_CONFIG_HOME", directory.string().c_str(), TRUE);
+    g_setenv("LANGUAGE", argc == 2 ? argv[1] : "en", TRUE);
+    if (argc == 2) {
+        const std::string language = liarsoft::gui::effectiveLanguage("");
+        liarsoft::gui::initializeTranslations(language, argv[0]);
+        const std::string expected = language == "ru" ? "Параметры" : language == "zh_CN" ? "首选项" : "Preferences";
+        if (_("Preferences") != expected) {
+            std::cerr << "language=" << language << " locale=" << std::setlocale(LC_MESSAGES, nullptr)
+                      << " catalogs=" << bindtextdomain("liarsofttool", nullptr)
+                      << " actual=" << _("Preferences") << " expected=" << expected << '\n';
+            require(false, "gettext language selection failed");
         }
-        return true;
-    }, 10);
+        fs::remove_all(directory); return 0;
+    }
+    liarsoft::writeTextFileIfChanged((directory / "scene.tsc").string(),
+        ";@gsc-byte-format modern-36\n;@gsc-schema modern\n*end\n");
+    g_timeout_add(10, tick, nullptr);
     const int result = runGui(argc, argv);
     fs::remove_all(directory);
     if (!failure.empty()) { std::cerr << failure << '\n'; return 1; }
+    std::cout << "OK: GTK4 conversion, filters, preferences, theme, language, offline update\n";
     return result;
 }

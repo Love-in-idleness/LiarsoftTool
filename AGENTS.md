@@ -9,7 +9,7 @@
 ## 实现边界
 
 - 本仓库负责归档、GSC/TSC、编码、图像、音频和 EXE；Ren'Py 代码放在 rscript2renpy。
-- CLI 和 Windows/Linux GTKmm GUI 调用公共转换模块，不另写一套转换路径。
+- CLI 和 Windows/Linux GTK4 GUI 调用公共转换模块，不另写一套转换路径。
 - 未知格式和引擎行为从原文件与 EXE 验证，不猜 opcode 或像素算法。
 - 原件只读，转换与往返测试使用副本或临时目录。
 - 保留 `test/`、`CodeXRScript/`、`res_ft/`、`ubai/` 等本机资料，不清理或提交素材。

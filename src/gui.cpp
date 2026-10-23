@@ -1,590 +1,439 @@
 #include "gui.h"
-#include <gtkmm.h>
-#include <iostream>
-#include <functional>
-#include <mutex>
-#include <thread>
-#include <utility>
-
 #include "gui_common.h"
+#include "gui_preferences.h"
 #include "conversion.h"
 #include "xflarchive.h"
 #include "update_check.h"
+#include <adwaita.h>
+#include <libintl.h>
+#include <functional>
+#include <iostream>
+#include <thread>
+#include <utility>
 
-// ---- Column record for the file list ----
-struct FileRecord : public Gtk::TreeModelColumnRecord {
-    Gtk::TreeModelColumn<Glib::ustring> inputPath;
-    Gtk::TreeModelColumn<Glib::ustring> outputPath;
-    Gtk::TreeModelColumn<Glib::ustring> fileType;
-    Gtk::TreeModelColumn<Glib::ustring> status;
+#define _(text) gettext(text)
 
-    FileRecord() { add(inputPath); add(outputPath); add(fileType); add(status); }
+namespace {
+struct Job {
+    std::string input, output;
+    GtkWidget *row, *outputLabel, *typeLabel, *status;
 };
+struct Gui {
+    GtkWindow* window = nullptr;
+    GtkWidget *content, *list, *convert, *status, *progress;
+    GtkWidget *encoding, *reference, *output, *recursive, *packOnly, *unpackOnly, *txt, *vorbis, *workers;
+    GtkWidget *preferencesButton, *updateButton;
+    AdwDialog* preferencesDialog = nullptr;
+    AdwAlertDialog* alert = nullptr;
+    liarsoft::gui::Preferences preferences;
+    std::vector<Job> jobs;
+    std::thread worker;
+    bool busy = false;
+} ui;
 
-static FileRecord g_columns;
-static Glib::RefPtr<Gtk::ListStore> g_store;
-static Gtk::ComboBoxText* g_encodingCombo = nullptr;
-static Gtk::Entry* g_refEntry = nullptr;
-static Gtk::Entry* g_outDirEntry = nullptr;
-static Gtk::CheckButton* g_recursiveCheck = nullptr;
-static Gtk::CheckButton* g_packOnlyCheck = nullptr;
-static Gtk::CheckButton* g_unpackOnlyCheck = nullptr;
-static Gtk::CheckButton* g_gscToTxtCheck = nullptr;
-static Gtk::CheckButton* g_vorbisInWavCheck = nullptr;
-static Gtk::SpinButton* g_workersSpin = nullptr;
-static Gtk::Button* g_convertBtn = nullptr;
-static Gtk::Button* g_updateBtn = nullptr;
-static Gtk::ProgressBar* g_progress = nullptr;
-static Gtk::Label* g_statusLabel = nullptr;
-static Gtk::Window* g_window = nullptr;
-static Gtk::Box* g_mainBox = nullptr;
-static bool g_busy = false;
-static std::thread g_worker;
-
-// Only the main thread touches GTK; Dispatcher is safe to emit from the worker.
-struct GuiUpdates {
-    Glib::Dispatcher dispatcher;
-    std::mutex mutex;
-    std::vector<std::function<void()>> pending;
-
-    void post(std::function<void()> update) {
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            pending.push_back(std::move(update));
-        }
-        dispatcher.emit();
-    }
-
-    void drain() {
-        std::vector<std::function<void()>> updates;
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            updates.swap(pending);
-        }
-        for (auto& update : updates) update();
-    }
-};
-static GuiUpdates* g_updates = nullptr;
-
-static bool onClose(GdkEventAny*) {
-    if (g_busy) g_statusLabel->set_text("Please wait for the current operation to finish before closing.");
-    return g_busy;
-}
-
-static std::string corePath(const Glib::ustring& path) {
-    return liarsoft::gui::nativePathFromUtf8(path.raw());
-}
-
-static Glib::ustring displayText(const std::string& text) {
-    return liarsoft::gui::nativeTextToUtf8(text);
-}
-
-static void showInputError(const std::exception& error) {
-    Gtk::MessageDialog dialog(*g_window, displayText(error.what()), false,
-                              Gtk::MESSAGE_ERROR, Gtk::BUTTONS_CLOSE, true);
-    dialog.run();
-}
-
-static void showDiagnostics(const std::string& report, bool hasErrors) {
-    Gtk::Dialog dialog(hasErrors ? "Completed with errors" : "Completed with warnings",
-                       *g_window, true);
-    dialog.set_default_size(680, 400);
-    Gtk::ScrolledWindow scroll;
-    scroll.set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
-    Gtk::TextView text;
-    text.set_editable(false);
-    text.set_wrap_mode(Gtk::WRAP_WORD_CHAR);
-    text.get_buffer()->set_text(displayText(report));
-    scroll.add(text);
-    dialog.get_content_area()->pack_start(scroll);
-    auto* copy = dialog.add_button("Copy details", 1);
-    dialog.add_button("Close", Gtk::RESPONSE_CLOSE);
-    dialog.show_all_children();
-    while (dialog.run() == 1) {
-        auto clipboard = Gtk::Clipboard::get();
-        clipboard->set_text(displayText(report));
-        clipboard->store();
-        copy->set_label("Copied! Copy again");
-    }
-}
-
-struct ConversionJob {
-    std::string inputPath;
-    std::string outputPath;
-    Gtk::TreeModel::Path rowPath;
-};
-
-// ---- Add files to the list ----
-static void addFiles(const std::vector<std::string>& paths, const std::string& outDir) {
-    if (g_busy) return;
-    const bool gscToTsc = !g_gscToTxtCheck || !g_gscToTxtCheck->get_active();
-    const std::string encoding = g_encodingCombo ?
-        g_encodingCombo->get_active_id() : "CP932";
-    for (const auto& p : paths) {
-        try {
-            const std::string input = liarsoft::gui::nativePathFromUtf8(p);
-            if (!liarsoft::conversion::isSupported(input)) continue;
-            const auto output = liarsoft::conversion::guessOutput(
-                input, liarsoft::gui::nativePathFromUtf8(outDir), gscToTsc, encoding,
-                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active());
-            auto row = *(g_store->append());
-            row[g_columns.inputPath]  = p;
-            row[g_columns.outputPath] = displayText(output);
-            row[g_columns.fileType]   = liarsoft::conversion::guessType(
-                input, gscToTsc, encoding,
-                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active());
-            row[g_columns.status]     = "Ready";
-        } catch (const std::exception& error) { showInputError(error); }
-    }
-}
-
-// ---- Conversion worker thread ----
-static void convertAll(std::vector<ConversionJob> jobs,
-                       const std::string& encoding, const std::string& refPath,
-                       bool recursive, bool packOnly, bool unpackOnly,
-                       bool gscToTsc, bool vorbisInWav, unsigned workers) {
-    int total = jobs.size();
-    int done = 0;
-    int totalWarnings = 0;
-    bool hasErrors = false;
-    std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
-    const liarsoft::conversion::ConversionOptions options{
-        encoding, refPath, recursive, gscToTsc, unpackOnly, vorbisInWav, workers};
-
-    for (const auto& job : jobs) {
-        const std::string& in = job.inputPath;
-        const std::string& out = job.outputPath;
-        const auto& rowPath = job.rowPath;
-        int processingNumber = done + 1;
-        try {
-            if (!liarsoft::matchesOperationMode(in, packOnly, unpackOnly,
-                                                recursive)) {
-                done++;
-                g_updates->post([rowPath, done, total]() {
-                    auto row = g_store->get_iter(rowPath);
-                    if (row) (*row)[g_columns.status] = "SKIPPED";
-                    g_progress->set_fraction(static_cast<double>(done) / total);
-                    g_statusLabel->set_text(
-                        Glib::ustring::format("Done ", done, " of ", total));
-                });
-                continue;
-            }
-
-            g_updates->post([rowPath, done, total, processingNumber]() {
-                auto row = g_store->get_iter(rowPath);
-                if (row) (*row)[g_columns.status] = "Processing...";
-                double frac = static_cast<double>(done) / total;
-                g_progress->set_fraction(frac);
-                g_statusLabel->set_text(
-                    Glib::ustring::format("Processing ", processingNumber, " of ", total));
-            });
-
-            const auto result = liarsoft::conversion::convert(in, out, options);
-            const auto& warnings = result.warnings;
-
-            for (const auto& warning : warnings)
-                std::cerr << "Warning: " << warning << std::endl;
-            totalWarnings += static_cast<int>(warnings.size());
-            for (const auto& warning : warnings)
-                diagnostics.push_back({false, in, out, warning});
-            std::string rowStatus = warnings.empty()
-                ? (result.retainedPcm ? "OK (PCM retained)" : "OK") : "WARN (" + std::to_string(warnings.size()) + ")";
-            std::string detail = warnings.empty() ? "" : warnings.front();
-            done++;
-            g_updates->post([rowPath, done, total, rowStatus, detail]() {
-                auto row = g_store->get_iter(rowPath);
-                if (row) (*row)[g_columns.status] = rowStatus;
-                double frac = static_cast<double>(done) / total;
-                g_progress->set_fraction(frac);
-                if (detail.empty())
-                    g_statusLabel->set_text(
-                        Glib::ustring::format("Done ", done, " of ", total));
-                else
-                    g_statusLabel->set_text(displayText("Warning: " + detail));
-            });
-        } catch (const std::exception& e) {
-            done++;
-            std::string err = e.what();
-            hasErrors = true;
-            diagnostics.push_back({true, in, out, err});
-            g_updates->post([rowPath, done, total, err]() {
-                auto row = g_store->get_iter(rowPath);
-                if (row) (*row)[g_columns.status] = displayText("FAILED: " + err);
-                double frac = static_cast<double>(done) / total;
-                g_progress->set_fraction(frac);
-                g_statusLabel->set_text(
-                    Glib::ustring::format("Error on file ", done, " of ", total));
-            });
-        }
-    }
-
-    const std::string report = liarsoft::gui::formatDiagnostics(diagnostics);
-    g_updates->post([totalWarnings, hasErrors, report]() {
-        g_worker.join();
-        g_busy = false;
-        g_mainBox->set_sensitive(true);
-        g_progress->set_fraction(1.0);
-        g_statusLabel->set_text(hasErrors ? "Completed with errors." : totalWarnings == 0
-            ? "All done."
-            : Glib::ustring::format("Done with ", totalWarnings, " warning(s)."));
-        if (!report.empty()) showDiagnostics(report, hasErrors);
-        g_convertBtn->set_sensitive(true);
+static void post(std::function<void()> callback) {
+    // Always dispatch on the GTK thread, even before its main loop starts.
+    g_idle_add_full(G_PRIORITY_DEFAULT, [](gpointer data) -> gboolean {
+        (*static_cast<std::function<void()>*>(data))();
+        return G_SOURCE_REMOVE;
+    }, new std::function<void()>(std::move(callback)), [](gpointer data) {
+        delete static_cast<std::function<void()>*>(data);
     });
 }
-
-// ---- Update output paths when output dir changes ----
-static void updateOutputPaths() {
-    if (g_busy) return;
-    try {
-        std::string outDir = corePath(g_outDirEntry->get_text());
-        const bool gscToTsc = !g_gscToTxtCheck || !g_gscToTxtCheck->get_active();
-        const std::string encoding = g_encodingCombo ?
-            g_encodingCombo->get_active_id() : "CP932";
-        for (auto& child : g_store->children()) {
-            const std::string input = corePath(
-                static_cast<Glib::ustring>(child[g_columns.inputPath]));
-            child[g_columns.outputPath] = displayText(liarsoft::conversion::guessOutput(
-                input, outDir, gscToTsc, encoding,
-                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active()));
-            child[g_columns.fileType] = liarsoft::conversion::guessType(
-                input, gscToTsc, encoding,
-                g_unpackOnlyCheck && g_unpackOnlyCheck->get_active());
+static std::string display(const std::string& text) {
+    return liarsoft::gui::nativeTextToUtf8(text);
+}
+static std::string path(GtkWidget* entry) {
+    return liarsoft::gui::nativePathFromUtf8(gtk_editable_get_text(GTK_EDITABLE(entry)));
+}
+static bool active(GtkWidget* widget) { return gtk_check_button_get_active(GTK_CHECK_BUTTON(widget)); }
+static GtkWidget* label(const char* text, bool expand = false) {
+    auto* widget = gtk_label_new(text);
+    gtk_label_set_xalign(GTK_LABEL(widget), 0);
+    gtk_label_set_ellipsize(GTK_LABEL(widget), PANGO_ELLIPSIZE_MIDDLE);
+    gtk_widget_set_hexpand(widget, expand);
+    return widget;
+}
+static void margins(GtkWidget* widget, int size) {
+    gtk_widget_set_margin_start(widget, size); gtk_widget_set_margin_end(widget, size);
+    gtk_widget_set_margin_top(widget, size); gtk_widget_set_margin_bottom(widget, size);
+}
+static GtkWidget* button(const char* text, GCallback callback, gpointer data = nullptr) {
+    auto* widget = gtk_button_new_with_label(text);
+    g_signal_connect(widget, "clicked", callback, data);
+    return widget;
+}
+static void report(const char* heading, const std::string& details, bool releases = false) {
+    auto* dialog = adw_alert_dialog_new(heading, nullptr);
+    ui.alert = ADW_ALERT_DIALOG(dialog);
+    auto* text = gtk_text_view_new();
+    gtk_text_view_set_editable(GTK_TEXT_VIEW(text), FALSE);
+    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(text), GTK_WRAP_WORD_CHAR);
+    gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(text)), details.c_str(), -1);
+    auto* scroll = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(scroll), 440);
+    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(scroll), 160);
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), text);
+    adw_alert_dialog_set_extra_child(ui.alert, scroll);
+    adw_alert_dialog_add_response(ui.alert, "copy", _("Copy details"));
+    adw_alert_dialog_add_response(ui.alert, "close", _("Close"));
+    if (releases) adw_alert_dialog_add_response(ui.alert, "releases", _("Open releases"));
+    adw_alert_dialog_set_close_response(ui.alert, "close");
+    g_signal_connect(dialog, "response", reinterpret_cast<GCallback>(+[](AdwAlertDialog* dialog, const char* response, gpointer) {
+        if (std::string(response) == "copy") {
+            auto* scroll = adw_alert_dialog_get_extra_child(dialog);
+            auto* view = gtk_scrolled_window_get_child(GTK_SCROLLED_WINDOW(scroll));
+            auto* buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
+            GtkTextIter begin, end;
+            gtk_text_buffer_get_bounds(buffer, &begin, &end);
+            auto* text = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+            gdk_clipboard_set_text(gtk_widget_get_clipboard(GTK_WIDGET(ui.window)), text);
+            g_free(text);
+        } else if (std::string(response) == "releases") {
+            GError* error = nullptr;
+            if (!g_app_info_launch_default_for_uri(liarsoft::LatestReleaseUrl, nullptr, &error)) {
+                const std::string message = error->message;
+                g_error_free(error);
+                post([message] { report(_("Could not open the link"), message); });
+            }
         }
-    } catch (const std::exception& error) { showInputError(error); }
+        ui.alert = nullptr;
+    }), nullptr);
+    adw_dialog_present(dialog, GTK_WIDGET(ui.window));
 }
-
-// ---- File chooser dialog ----
-static void onAddFiles(Gtk::Window* parent) {
-    auto dialog = Gtk::FileChooserDialog("Select Files",
-        Gtk::FILE_CHOOSER_ACTION_OPEN);
-    dialog.set_transient_for(*parent);
-    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
-    dialog.add_button("Open", Gtk::RESPONSE_OK);
-    dialog.set_select_multiple(true);
-
-    auto filterAll = Gtk::FileFilter::create();
-    filterAll->set_name("All Supported");
-    filterAll->add_pattern("*.gsc"); filterAll->add_pattern("*.tsc");
-    filterAll->add_pattern("*.txt");
-    filterAll->add_pattern("*.xfl"); filterAll->add_pattern("*.lwg");
-    filterAll->add_pattern("*.wcg"); filterAll->add_pattern("*.lim");
-    filterAll->add_pattern("*.webp");
-    filterAll->add_pattern("*.wav"); filterAll->add_pattern("*.ogg");
-    filterAll->add_pattern("*.exe");
-    filterAll->add_pattern("*.png"); filterAll->add_pattern("*.jpg");
-    filterAll->add_pattern("*.jpeg"); filterAll->add_pattern("*.bmp");
-    dialog.add_filter(filterAll);
-
-    if (dialog.run() == Gtk::RESPONSE_OK) {
-        std::string outDir = g_outDirEntry->get_text();
-        for (const auto& f : dialog.get_filenames())
-            addFiles({f}, outDir);
-    }
+static void inputError(const std::exception& error) { report(_("Operation failed"), display(error.what())); }
+static void sensitive() {
+    gtk_widget_set_sensitive(ui.content, !ui.busy);
+    gtk_widget_set_sensitive(ui.preferencesButton, !ui.busy);
+    gtk_widget_set_sensitive(ui.updateButton, !ui.busy);
+    gtk_widget_set_sensitive(ui.convert, !ui.busy && !ui.jobs.empty());
+    if (ui.preferencesDialog) gtk_widget_set_sensitive(GTK_WIDGET(ui.preferencesDialog), !ui.busy);
 }
-
-// ---- Choose output directory ----
-static void onChooseOutDir(Gtk::Window* parent) {
-    auto dialog = Gtk::FileChooserDialog("Select Output Directory",
-        Gtk::FILE_CHOOSER_ACTION_SELECT_FOLDER);
-    dialog.set_transient_for(*parent);
-    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
-    dialog.add_button("Select", Gtk::RESPONSE_OK);
-
-    if (dialog.run() == Gtk::RESPONSE_OK) {
-        g_outDirEntry->set_text(dialog.get_filename());
-        updateOutputPaths();
-    }
+static void busy(bool value) { ui.busy = value; sensitive(); }
+static gboolean closeWindow(GtkWindow*, gpointer) {
+    if (ui.busy) gtk_label_set_text(GTK_LABEL(ui.status), _("Please wait for the operation to finish."));
+    return ui.busy;
 }
-
-// ---- Choose reference GSC ----
-static void onChooseRef(Gtk::Window* parent) {
-    auto dialog = Gtk::FileChooserDialog("Select Reference GSC",
-        Gtk::FILE_CHOOSER_ACTION_OPEN);
-    dialog.set_transient_for(*parent);
-    dialog.add_button("Cancel", Gtk::RESPONSE_CANCEL);
-    dialog.add_button("Open", Gtk::RESPONSE_OK);
-    auto filter = Gtk::FileFilter::create();
-    filter->set_name("GSC Files");
-    filter->add_pattern("*.gsc");
-    dialog.add_filter(filter);
-
-    if (dialog.run() == Gtk::RESPONSE_OK)
-        g_refEntry->set_text(dialog.get_filename());
+static liarsoft::conversion::ConversionOptions options() {
+    const char* encodings[] = {"CP932", "GBK", "CP1251"};
+    return {encodings[gtk_drop_down_get_selected(GTK_DROP_DOWN(ui.encoding))], path(ui.reference),
+        active(ui.recursive), !active(ui.txt), active(ui.unpackOnly), active(ui.vorbis),
+        static_cast<unsigned>(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ui.workers)))};
 }
-
-// ---- Drag & drop handler ----
-static void onDragDataReceived(
-    const Glib::RefPtr<Gdk::DragContext>& context, int, int,
-    const Gtk::SelectionData& sel, guint, guint time) {
-    if (g_busy) { context->drag_finish(false, false, time); return; }
-    auto uris = sel.get_uris();
-    std::vector<std::string> paths;
+static void updateOutputs() {
+    if (ui.busy) return;
     try {
-        for (const auto& uri : uris) {
-            auto path = Glib::filename_from_uri(uri);
-            paths.push_back(path);
+        const auto opt = options();
+        const auto directory = path(ui.output);
+        for (auto& job : ui.jobs) {
+            job.output = liarsoft::conversion::guessOutput(job.input, directory, opt.gscToTsc, opt.encoding, opt.unpackOnly);
+            gtk_label_set_text(GTK_LABEL(job.outputLabel), display(job.output).c_str());
+            gtk_widget_set_tooltip_text(job.outputLabel, display(job.output).c_str());
+            gtk_label_set_text(GTK_LABEL(job.typeLabel), liarsoft::conversion::guessType(
+                job.input, opt.gscToTsc, opt.encoding, opt.unpackOnly).c_str());
         }
-        std::string outDir = g_outDirEntry->get_text();
-        addFiles(paths, outDir);
-        context->drag_finish(true, false, time);
-    } catch (const std::exception& error) {
-        context->drag_finish(false, false, time);
-        showInputError(error);
+    } catch (const std::exception& error) { inputError(error); }
+}
+static void addFiles(const std::vector<std::string>& paths) {
+    if (ui.busy) return;
+    for (const auto& value : paths) {
+        try {
+            const auto input = liarsoft::gui::nativePathFromUtf8(value);
+            if (!liarsoft::conversion::isSupported(input)) {
+                report(_("Unsupported input"), value); continue;
+            }
+            auto* row = gtk_list_box_row_new();
+            auto* box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+            margins(box, 12);
+            gtk_box_append(GTK_BOX(box), label(value.c_str()));
+            auto* output = label("");
+            gtk_widget_add_css_class(output, "dim-label");
+            gtk_box_append(GTK_BOX(box), output);
+            auto* footer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+            auto* type = label("", true);
+            auto* status = label(_("Ready"));
+            gtk_box_append(GTK_BOX(footer), type); gtk_box_append(GTK_BOX(footer), status);
+            gtk_box_append(GTK_BOX(box), footer);
+            gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), box);
+            gtk_list_box_append(GTK_LIST_BOX(ui.list), row);
+            ui.jobs.push_back({input, "", row, output, type, status});
+        } catch (const std::exception& error) { inputError(error); }
     }
+    updateOutputs(); sensitive();
 }
-
-// ---- Clear list ----
-static void onClear() {
-    if (g_busy) return;
-    g_store->clear();
-    g_progress->set_fraction(0.0);
-    g_statusLabel->set_text("Ready.");
+static void clearFiles() {
+    if (ui.busy) return;
+    for (const auto& job : ui.jobs) gtk_list_box_remove(GTK_LIST_BOX(ui.list), job.row);
+    ui.jobs.clear(); sensitive();
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ui.progress), 0);
+    gtk_label_set_text(GTK_LABEL(ui.status), _("Ready"));
 }
-
-// ---- Remove selected ----
-static void onRemoveSelected(Gtk::TreeView* treeView) {
-    if (g_busy) return;
-    auto sel = treeView->get_selection();
-    if (auto it = sel->get_selected()) {
-        g_store->erase(it);
-    }
-}
-
-static void onCheckUpdate() {
-    if (g_busy) return;
-    g_busy = true;
-    g_mainBox->set_sensitive(false);
-    g_statusLabel->set_text("Checking GitHub for updates...");
+static void convert() {
+    if (ui.busy || ui.jobs.empty()) return;
     try {
-        g_worker = std::thread([]() {
+        const auto opt = options();
+        const bool packOnly = active(ui.packOnly);
+        const auto jobs = ui.jobs;
+        busy(true);
+        gtk_label_set_text(GTK_LABEL(ui.status), _("Converting…"));
+        ui.worker = std::thread([opt, packOnly, jobs] {
+            std::vector<liarsoft::gui::ConversionDiagnostic> diagnostics;
+            bool errors = false;
+            size_t done = 0;
+            for (const auto& job : jobs) {
+                std::string status;
+                try {
+                    if (!liarsoft::matchesOperationMode(job.input, packOnly, opt.unpackOnly, opt.recursive))
+                        status = _("Skipped");
+                    else {
+                        const auto result = liarsoft::conversion::convert(job.input, job.output, opt);
+                        status = result.warnings.empty() ? (result.retainedPcm ? _("OK (PCM retained)") : _("OK")) : _("Warning");
+                        for (const auto& warning : result.warnings) {
+                            diagnostics.push_back({false, job.input, job.output, warning});
+                            std::cerr << "Warning: " << warning << '\n';
+                        }
+                    }
+                } catch (const std::exception& error) {
+                    errors = true; status = _("Failed");
+                    diagnostics.push_back({true, job.input, job.output, error.what()});
+                }
+                const double fraction = static_cast<double>(++done) / jobs.size();
+                post([job, status, fraction] {
+                    gtk_label_set_text(GTK_LABEL(job.status), status.c_str());
+                    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(ui.progress), fraction);
+                });
+            }
+            // Localize framing; preserve the complete core/system diagnostics.
+            std::string details;
+            for (const auto& item : diagnostics) details += std::string(item.error ? _("Error") : _("Warning")) +
+                "\n" + _("Input") + ": " + display(item.inputPath) + "\n" + _("Output") + ": " +
+                display(item.outputPath) + "\n" + display(item.message) + "\n\n";
+            post([errors, details] {
+                ui.worker.join(); busy(false);
+                gtk_label_set_text(GTK_LABEL(ui.status), errors ? _("Completed with errors") :
+                    details.empty() ? _("All done") : _("Completed with warnings"));
+                if (!details.empty()) report(errors ? _("Completed with errors") : _("Completed with warnings"), details);
+            });
+        });
+    } catch (const std::exception& error) { busy(false); inputError(error); }
+}
+static void checkUpdate() {
+    if (ui.busy) return;
+    busy(true);
+    gtk_label_set_text(GTK_LABEL(ui.status), _("Checking GitHub for updates…"));
+    try {
+        ui.worker = std::thread([] {
             liarsoft::UpdateInfo info{};
             std::string error;
             try { info = liarsoft::checkForUpdate(); }
             catch (const std::exception& exception) { error = exception.what(); }
-            g_updates->post([info, error]() {
-                g_worker.join();
-                g_busy = false;
-                g_mainBox->set_sensitive(true);
-                g_statusLabel->set_text(error.empty() ? "Update check complete." : "Update check failed.");
-                if (!error.empty()) {
-                    showInputError(std::runtime_error(error));
-                    return;
-                }
-                Gtk::MessageDialog dialog(*g_window,
-                    info.available ? "A new version is available." : "No newer release is available.",
-                    false, Gtk::MESSAGE_INFO, Gtk::BUTTONS_CLOSE, true);
-                dialog.set_title("Check for updates");
-                dialog.set_secondary_text(std::string("Current: ") + liarsoft::CurrentVersion +
-                                          "\nLatest: " + info.latestVersion);
-                dialog.add_button("Open releases", 1);
-                if (dialog.run() == 1) {
-                    try { Gio::AppInfo::launch_default_for_uri(liarsoft::LatestReleaseUrl); }
-                    catch (const Glib::Error& exception) {
-                        showInputError(std::runtime_error(exception.what()));
-                    }
-                }
+            post([info, error] {
+                ui.worker.join(); busy(false);
+                gtk_label_set_text(GTK_LABEL(ui.status), error.empty() ? _("Update check complete") : _("Update check failed"));
+                if (!error.empty()) report(_("Update check failed"), display(error));
+                else report(info.available ? _("A new version is available") : _("No newer release is available"),
+                    std::string(_("Current")) + ": " + liarsoft::CurrentVersion + "\n" + _("Latest") + ": " + info.latestVersion, true);
             });
         });
-    } catch (const std::exception& error) {
-        g_busy = false;
-        g_mainBox->set_sensitive(true);
-        g_statusLabel->set_text("Update check failed.");
-        showInputError(error);
-    }
+    } catch (const std::exception& error) { busy(false); inputError(error); }
+}
+enum class Choose { Files, Folder, Output, Reference };
+static void choose(Choose purpose) {
+    auto* dialog = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dialog, purpose == Choose::Output ? _("Output directory") :
+        purpose == Choose::Reference ? _("Reference GSC") : _("Select input"));
+    auto* context = new Choose(purpose);
+    auto callback = +[](GObject* object, GAsyncResult* result, gpointer data) {
+        const auto purpose = *static_cast<Choose*>(data);
+        delete static_cast<Choose*>(data);
+        auto* dialog = GTK_FILE_DIALOG(object);
+        GError* error = nullptr;
+        std::vector<std::string> paths;
+        auto append = [&paths](GFile* file) {
+            if (!file) return;
+            auto* filename = g_file_get_path(file);
+            if (filename) { paths.emplace_back(filename); g_free(filename); }
+            g_object_unref(file);
+        };
+        if (purpose == Choose::Files) {
+            auto* files = gtk_file_dialog_open_multiple_finish(dialog, result, &error);
+            if (files) {
+                for (guint i = 0; i < g_list_model_get_n_items(files); ++i)
+                    append(G_FILE(g_list_model_get_item(files, i)));
+                g_object_unref(files);
+            }
+        } else if (purpose == Choose::Reference)
+            append(gtk_file_dialog_open_finish(dialog, result, &error));
+        else append(gtk_file_dialog_select_folder_finish(dialog, result, &error));
+        if (error) {
+            if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED) &&
+                !g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) report(_("Operation failed"), error->message);
+            g_error_free(error);
+        }
+        if (!paths.empty()) {
+            if (purpose == Choose::Output || purpose == Choose::Reference)
+                gtk_editable_set_text(GTK_EDITABLE(purpose == Choose::Output ? ui.output : ui.reference), paths[0].c_str());
+            else addFiles(paths);
+        }
+        g_object_unref(object);
+    };
+    if (purpose == Choose::Files) gtk_file_dialog_open_multiple(dialog, ui.window, nullptr, callback, context);
+    else if (purpose == Choose::Reference) gtk_file_dialog_open(dialog, ui.window, nullptr, callback, context);
+    else gtk_file_dialog_select_folder(dialog, ui.window, nullptr, callback, context);
+}
+static void theme() {
+    const AdwColorScheme schemes[] = {ADW_COLOR_SCHEME_DEFAULT, ADW_COLOR_SCHEME_FORCE_LIGHT, ADW_COLOR_SCHEME_FORCE_DARK};
+    adw_style_manager_set_color_scheme(adw_style_manager_get_default(), schemes[ui.preferences.theme]);
+}
+static void savePreferences() {
+    try { liarsoft::gui::savePreferences(ui.preferences); }
+    catch (const std::exception& error) { inputError(error); }
+}
+static void addRow(AdwPreferencesGroup* group, const char* title, GtkWidget* widget, GtkWidget* extra = nullptr) {
+    auto* row = adw_action_row_new();
+    adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), title);
+    gtk_widget_set_valign(widget, GTK_ALIGN_CENTER);
+    adw_action_row_add_suffix(ADW_ACTION_ROW(row), widget);
+    if (extra) adw_action_row_add_suffix(ADW_ACTION_ROW(row), extra);
+    adw_action_row_set_activatable_widget(ADW_ACTION_ROW(row), widget);
+    adw_preferences_group_add(group, row);
+}
+static GtkWidget* check(AdwPreferencesGroup* group, const char* title) {
+    auto* widget = gtk_check_button_new();
+    gtk_accessible_update_property(GTK_ACCESSIBLE(widget), GTK_ACCESSIBLE_PROPERTY_LABEL, title, -1);
+    addRow(group, title, widget);
+    return widget;
+}
+static void buildPreferences() {
+    ui.preferencesDialog = ADW_DIALOG(adw_preferences_dialog_new());
+    g_object_ref_sink(ui.preferencesDialog);
+    adw_dialog_set_title(ui.preferencesDialog, _("Preferences"));
+    auto* page = adw_preferences_page_new();
+    adw_preferences_dialog_add(ADW_PREFERENCES_DIALOG(ui.preferencesDialog), ADW_PREFERENCES_PAGE(page));
+    auto* group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
+    adw_preferences_group_set_title(group, _("Appearance and language"));
+    adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), group);
+    const char* themes[] = {_("Follow system"), _("Light"), _("Dark"), nullptr};
+    auto* appearance = gtk_drop_down_new_from_strings(themes);
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(appearance), ui.preferences.theme);
+    addRow(group, _("Theme"), appearance);
+    g_signal_connect(appearance, "notify::selected", reinterpret_cast<GCallback>(+[](GObject* object, GParamSpec*, gpointer) {
+        ui.preferences.theme = gtk_drop_down_get_selected(GTK_DROP_DOWN(object)); theme(); savePreferences();
+    }), nullptr);
+    const char* languages[] = {_("System language"), "English", "Русский", "简体中文", nullptr};
+    auto* language = gtk_drop_down_new_from_strings(languages);
+    gtk_drop_down_set_selected(GTK_DROP_DOWN(language), ui.preferences.language == "en" ? 1 :
+        ui.preferences.language == "ru" ? 2 : ui.preferences.language == "zh_CN" ? 3 : 0);
+    addRow(group, _("Language (after restart)"), language);
+    g_signal_connect(language, "notify::selected", reinterpret_cast<GCallback>(+[](GObject* object, GParamSpec*, gpointer) {
+        const char* values[] = {"", "en", "ru", "zh_CN"};
+        ui.preferences.language = values[gtk_drop_down_get_selected(GTK_DROP_DOWN(object))]; savePreferences();
+    }), nullptr);
+    group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
+    adw_preferences_group_set_title(group, _("Conversion"));
+    adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), group);
+    const char* encodings[] = {"CP932 / Windows-31J", "GBK", "CP1251", nullptr};
+    ui.encoding = gtk_drop_down_new_from_strings(encodings);
+    addRow(group, _("Resource encoding"), ui.encoding);
+    ui.recursive = check(group, _("Recursive"));
+    ui.packOnly = check(group, _("Pack only"));
+    ui.unpackOnly = check(group, _("Unpack only"));
+    ui.txt = check(group, _("GSC → TXT (instead of TSC)"));
+    ui.vorbis = check(group, _("Vorbis-in-WAV"));
+    ui.workers = gtk_spin_button_new_with_range(0, liarsoft::MaxConversionWorkers, 1);
+    addRow(group, _("Threads (0 = automatic)"), ui.workers);
+    ui.output = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(ui.output), _("Same as input"));
+    addRow(group, _("Output directory"), ui.output, button(_("Choose…"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { choose(Choose::Output); })));
+    ui.reference = gtk_entry_new();
+    addRow(group, _("Reference GSC for TXT"), ui.reference, button(_("Choose…"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { choose(Choose::Reference); })));
+    for (auto* widget : {ui.output, ui.reference})
+        g_signal_connect(widget, "changed", reinterpret_cast<GCallback>(+[](GtkEditable*, gpointer) { updateOutputs(); }), nullptr);
+    for (auto* widget : {ui.unpackOnly, ui.txt})
+        g_signal_connect(widget, "toggled", reinterpret_cast<GCallback>(+[](GtkCheckButton*, gpointer) { updateOutputs(); }), nullptr);
+    g_signal_connect(ui.encoding, "notify::selected", reinterpret_cast<GCallback>(+[](GObject*, GParamSpec*, gpointer) { updateOutputs(); }), nullptr);
+}
+static void activate(GtkApplication* app, gpointer) {
+    if (ui.window) { gtk_window_present(ui.window); return; }
+    ui.window = GTK_WINDOW(adw_application_window_new(app));
+    gtk_window_set_title(ui.window, (std::string("LiarsoftTool ") + liarsoft::CurrentVersion).c_str());
+    gtk_window_set_default_size(ui.window, 960, 680);
+    g_signal_connect(ui.window, "close-request", G_CALLBACK(closeWindow), nullptr);
+    auto* toolbar = ADW_TOOLBAR_VIEW(adw_toolbar_view_new());
+    auto* header = ADW_HEADER_BAR(adw_header_bar_new());
+    ui.preferencesButton = button(_("Preferences"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) {
+        if (!ui.busy) adw_dialog_present(ui.preferencesDialog, GTK_WIDGET(ui.window));
+    }));
+    ui.updateButton = button(_("Check for updates"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { checkUpdate(); }));
+    adw_header_bar_pack_start(header, ui.updateButton);
+    adw_header_bar_pack_end(header, ui.preferencesButton);
+    adw_toolbar_view_add_top_bar(toolbar, GTK_WIDGET(header));
+    adw_application_window_set_content(ADW_APPLICATION_WINDOW(ui.window), GTK_WIDGET(toolbar));
+    ui.content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+    margins(ui.content, 18);
+    adw_toolbar_view_set_content(toolbar, ui.content);
+    auto* heading = label(_("Conversion tasks"));
+    gtk_widget_add_css_class(heading, "title-2");
+    gtk_box_append(GTK_BOX(ui.content), heading);
+    auto* actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_box_append(GTK_BOX(actions), button(_("Add files"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { choose(Choose::Files); })));
+    gtk_box_append(GTK_BOX(actions), button(_("Add folder"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { choose(Choose::Folder); })));
+    gtk_box_append(GTK_BOX(actions), button(_("Remove"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) {
+        if (ui.busy) return;
+        auto* selected = gtk_list_box_get_selected_row(GTK_LIST_BOX(ui.list));
+        for (auto it = ui.jobs.begin(); it != ui.jobs.end(); ++it) if (it->row == GTK_WIDGET(selected)) {
+            gtk_list_box_remove(GTK_LIST_BOX(ui.list), it->row); ui.jobs.erase(it); break;
+        }
+        sensitive();
+    })));
+    gtk_box_append(GTK_BOX(actions), button(_("Clear"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { clearFiles(); })));
+    auto* spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0); gtk_widget_set_hexpand(spacer, TRUE);
+    gtk_box_append(GTK_BOX(actions), spacer);
+    ui.convert = button(_("Convert all"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { convert(); }));
+    gtk_widget_add_css_class(ui.convert, "suggested-action");
+    gtk_box_append(GTK_BOX(actions), ui.convert);
+    gtk_box_append(GTK_BOX(ui.content), actions);
+    auto* scroll = gtk_scrolled_window_new();
+    gtk_widget_set_vexpand(scroll, TRUE);
+    ui.list = gtk_list_box_new();
+    gtk_widget_add_css_class(ui.list, "boxed-list");
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroll), ui.list);
+    gtk_box_append(GTK_BOX(ui.content), scroll);
+    ui.progress = gtk_progress_bar_new();
+    gtk_box_append(GTK_BOX(ui.content), ui.progress);
+    ui.status = label(_("Ready"));
+    gtk_box_append(GTK_BOX(ui.content), ui.status);
+    auto* drop = gtk_drop_target_new(GDK_TYPE_FILE_LIST, GDK_ACTION_COPY);
+    g_signal_connect(drop, "drop", reinterpret_cast<GCallback>(+[](GtkDropTarget*, const GValue* value, double, double, gpointer) -> gboolean {
+        if (ui.busy) return FALSE;
+        std::vector<std::string> paths;
+        for (auto* item = gdk_file_list_get_files(static_cast<GdkFileList*>(g_value_get_boxed(value))); item; item = item->next) {
+            auto* filename = g_file_get_path(G_FILE(item->data));
+            if (filename) { paths.emplace_back(filename); g_free(filename); }
+        }
+        addFiles(paths); return TRUE;
+    }), nullptr);
+    gtk_widget_add_controller(ui.content, GTK_EVENT_CONTROLLER(drop));
+    buildPreferences(); theme(); sensitive();
+    gtk_window_present(ui.window);
+}
 }
 
-// ---- Main GUI entry point ----
 int runGui(int argc, char* argv[]) {
-    auto app = Gtk::Application::create(argc, argv, "io.github.liarsofttool",
-                                        Gio::APPLICATION_NON_UNIQUE);
-    GuiUpdates updates;
-    g_updates = &updates;
-    updates.dispatcher.connect(sigc::mem_fun(updates, &GuiUpdates::drain));
-
-    Gtk::Window window;
-    g_window = &window;
-    window.set_title(std::string("LiarsoftTool ") + liarsoft::CurrentVersion);
-    window.set_default_size(800, 500);
-    window.signal_delete_event().connect(sigc::ptr_fun(&onClose));
-
-    // ---- Layout ----
-    auto mainBox = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_VERTICAL, 4));
-    g_mainBox = mainBox;
-    mainBox->property_margin() = 8;
-
-    // --- Top bar ---
-    auto topBar = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 8));
-    auto encLabel = Gtk::manage(new Gtk::Label("Encoding:"));
-    g_encodingCombo = Gtk::manage(new Gtk::ComboBoxText());
-    g_encodingCombo->append("CP932", "CP932 / Windows-31J (Japanese)");
-    g_encodingCombo->append("GBK", "GBK (Chinese)");
-    g_encodingCombo->append("CP1251", "CP1251 (Cyrillic / English)");
-    g_encodingCombo->set_active(0);
-
-    auto refLabel = Gtk::manage(new Gtk::Label("Reference:"));
-    g_refEntry = Gtk::manage(new Gtk::Entry());
-    g_refEntry->set_placeholder_text("Reference GSC file for TXT injection");
-    g_refEntry->set_width_chars(20);
-    auto refBtn = Gtk::manage(new Gtk::Button("..."));
-    refBtn->signal_clicked().connect([&]() { onChooseRef(&window); });
-
-    topBar->pack_start(*encLabel, false, false);
-    topBar->pack_start(*g_encodingCombo, false, false);
-    topBar->pack_start(*refLabel, false, false);
-    topBar->pack_start(*g_refEntry, false, false);
-    topBar->pack_start(*refBtn, false, false);
-    mainBox->pack_start(*topBar, false, false);
-
-    auto optionsBar = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 8));
-    g_recursiveCheck = Gtk::manage(new Gtk::CheckButton("Recursive"));
-    g_recursiveCheck->set_tooltip_text(
-        "Recursively pack/unpack archives and convert their resources");
-    g_packOnlyCheck = Gtk::manage(new Gtk::CheckButton("Pack only"));
-    g_unpackOnlyCheck = Gtk::manage(new Gtk::CheckButton("Unpack only"));
-    g_unpackOnlyCheck->set_tooltip_text(
-        "Only decode resources; normalize CodeX inverse-alpha BMPs to standard BMP V4");
-    g_gscToTxtCheck = Gtk::manage(new Gtk::CheckButton("GSC → TXT"));
-    g_gscToTxtCheck->set_tooltip_text(
-        "Generate legacy TXT instead of structured TSC when decoding GSC files");
-    g_gscToTxtCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
-    g_unpackOnlyCheck->signal_toggled().connect(sigc::ptr_fun(&updateOutputPaths));
-    g_encodingCombo->signal_changed().connect(sigc::ptr_fun(&updateOutputPaths));
-    optionsBar->pack_start(*g_recursiveCheck, false, false);
-    optionsBar->pack_start(*g_packOnlyCheck, false, false);
-    optionsBar->pack_start(*g_unpackOnlyCheck, false, false);
-    optionsBar->pack_start(*g_gscToTxtCheck, false, false);
-    g_vorbisInWavCheck = Gtk::manage(new Gtk::CheckButton("Vorbis-in-WAV"));
-    g_vorbisInWavCheck->set_tooltip_text(
-        "Keep compressed Vorbis in WAV instead of decoding to 16-bit PCM, including recursive packing. "
-        "Neither mode requires an original WAV file.");
-    optionsBar->pack_start(*g_vorbisInWavCheck, false, false);
-    mainBox->pack_start(*optionsBar, false, false);
-
-    auto workersBar = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 8));
-    auto workersLabel = Gtk::manage(new Gtk::Label("Threads (0 = auto):"));
-    g_workersSpin = Gtk::manage(new Gtk::SpinButton());
-    g_workersSpin->set_range(0, liarsoft::MaxConversionWorkers);
-    g_workersSpin->set_increments(1, 4);
-    g_workersSpin->set_numeric(true);
-    g_workersSpin->set_value(0);
-    g_workersSpin->set_tooltip_text("Recursive resource conversion: 0 = auto (up to 4), 1 = serial. More threads use more memory.");
-    workersBar->pack_start(*workersLabel, false, false);
-    workersBar->pack_start(*g_workersSpin, false, false);
-    g_updateBtn = Gtk::manage(new Gtk::Button("Check for updates"));
-    g_updateBtn->set_tooltip_text("Contact GitHub only when clicked; never download or install automatically");
-    g_updateBtn->signal_clicked().connect(sigc::ptr_fun(&onCheckUpdate));
-    workersBar->pack_end(*g_updateBtn, false, false);
-    mainBox->pack_start(*workersBar, false, false);
-
-    // --- File list ---
-    auto scrolled = Gtk::manage(new Gtk::ScrolledWindow());
-    scrolled->set_hexpand(true);
-    scrolled->set_vexpand(true);
-
-    g_store = Gtk::ListStore::create(g_columns);
-    auto treeView = Gtk::manage(new Gtk::TreeView(g_store));
-    treeView->append_column("Input", g_columns.inputPath);
-    treeView->append_column("Output", g_columns.outputPath);
-    treeView->append_column("Type", g_columns.fileType);
-    treeView->append_column("Status", g_columns.status);
-    // Input + Output split remaining space 50/50
-    treeView->get_column(0)->set_expand(true);
-    treeView->get_column(1)->set_expand(true);
-    // Type + Status fixed width, rightmost; Type wider than Status
-    treeView->get_column(2)->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
-    treeView->get_column(2)->set_fixed_width(140);
-    treeView->get_column(3)->set_sizing(Gtk::TREE_VIEW_COLUMN_FIXED);
-    treeView->get_column(3)->set_fixed_width(96);
-
-    // Drag & drop
-    std::vector<Gtk::TargetEntry> targets; targets.emplace_back("text/uri-list");
-    treeView->drag_dest_set(targets, Gtk::DEST_DEFAULT_ALL, Gdk::ACTION_COPY);
-    treeView->signal_drag_data_received().connect(sigc::ptr_fun(&onDragDataReceived));
-
-    scrolled->add(*treeView);
-    mainBox->pack_start(*scrolled, true, true);
-
-    // --- Bottom bar ---
-    auto bottomBar = Gtk::manage(new Gtk::Box(Gtk::ORIENTATION_HORIZONTAL, 6));
-
-    auto addBtn = Gtk::manage(new Gtk::Button("Add Files"));
-    addBtn->signal_clicked().connect([&]() { onAddFiles(&window); });
-    auto removeBtn = Gtk::manage(new Gtk::Button("Remove"));
-    removeBtn->signal_clicked().connect([tv = treeView]() { onRemoveSelected(tv); });
-    auto clearBtn = Gtk::manage(new Gtk::Button("Clear"));
-    clearBtn->signal_clicked().connect(sigc::ptr_fun(&onClear));
-
-    auto outLabel = Gtk::manage(new Gtk::Label("Out Dir:"));
-    g_outDirEntry = Gtk::manage(new Gtk::Entry());
-    g_outDirEntry->set_placeholder_text("Same as input (default)");
-    g_outDirEntry->set_width_chars(15);
-    g_outDirEntry->signal_changed().connect(sigc::ptr_fun(&updateOutputPaths));
-    auto outBtn = Gtk::manage(new Gtk::Button("..."));
-    outBtn->signal_clicked().connect([&]() { onChooseOutDir(&window); });
-
-    g_convertBtn = Gtk::manage(new Gtk::Button("Convert All"));
-    g_convertBtn->set_sensitive(false);
-    g_convertBtn->signal_clicked().connect([&]() {
-        if (g_busy) return;
-        try {
-            std::string enc = g_encodingCombo->get_active_id();
-            std::string ref = corePath(g_refEntry->get_text());
-            bool recursive = g_recursiveCheck->get_active();
-            bool packOnly = g_packOnlyCheck->get_active();
-            bool unpackOnly = g_unpackOnlyCheck->get_active();
-            bool gscToTsc = !g_gscToTxtCheck->get_active();
-            bool vorbisInWav = g_vorbisInWavCheck->get_active();
-            g_workersSpin->update();
-            const unsigned workers = g_workersSpin->get_value_as_int();
-            std::vector<ConversionJob> jobs;
-            for (const auto& child : g_store->children()) {
-                jobs.push_back({
-                    corePath(static_cast<Glib::ustring>(child[g_columns.inputPath])),
-                    corePath(static_cast<Glib::ustring>(child[g_columns.outputPath])),
-                    g_store->get_path(child)});
-            }
-            if (jobs.empty()) return;
-            g_busy = true;
-            mainBox->set_sensitive(false);
-            g_worker = std::thread(convertAll, std::move(jobs), enc, ref, recursive,
-                                  packOnly, unpackOnly, gscToTsc, vorbisInWav, workers);
-        } catch (const std::exception& error) {
-            g_busy = false;
-            mainBox->set_sensitive(true);
-            showInputError(error);
-        }
-    });
-
-    bottomBar->pack_start(*addBtn, false, false);
-    bottomBar->pack_start(*removeBtn, false, false);
-    bottomBar->pack_start(*clearBtn, false, false);
-    bottomBar->pack_start(*outLabel, false, false);
-    bottomBar->pack_start(*g_outDirEntry, false, false);
-    bottomBar->pack_start(*outBtn, false, false);
-    bottomBar->pack_end(*g_convertBtn, false, false);
-    mainBox->pack_start(*bottomBar, false, false);
-
-    // --- Progress bar ---
-    g_progress = Gtk::manage(new Gtk::ProgressBar());
-    g_progress->set_show_text(false);
-    mainBox->pack_start(*g_progress, false, false);
-
-    g_statusLabel = Gtk::manage(new Gtk::Label("Ready. Drag files or click Add Files."));
-    mainBox->pack_start(*g_statusLabel, false, false);
-
-    // Enable convert button when there are files
-    g_store->signal_row_inserted().connect([&](const Gtk::TreeModel::Path&,
-                                                const Gtk::TreeModel::iterator&) {
-        g_convertBtn->set_sensitive(g_store->children().size() > 0);
-    });
-    g_store->signal_row_deleted().connect([&](const Gtk::TreeModel::Path&) {
-        g_convertBtn->set_sensitive(g_store->children().size() > 0);
-    });
-
-    window.add(*mainBox);
-    window.show_all();
-
-    app->run(window);
-    if (g_worker.joinable()) g_worker.join();
-    return 0;
+#ifdef _WIN32
+    g_setenv("GDK_BACKEND", "win32", TRUE);
+#endif
+    std::string settingsError;
+    try { ui.preferences = liarsoft::gui::loadPreferences(); }
+    catch (const std::exception& error) { settingsError = error.what(); }
+    liarsoft::gui::initializeTranslations(liarsoft::gui::effectiveLanguage(ui.preferences.language), argv[0]);
+    auto* app = adw_application_new("io.github.LiarsoftTool", G_APPLICATION_NON_UNIQUE);
+    g_signal_connect(app, "activate", G_CALLBACK(activate), nullptr);
+    if (!settingsError.empty()) post([settingsError] { report(_("Could not read preferences"), settingsError); });
+    const int result = g_application_run(G_APPLICATION(app), argc, argv);
+    if (ui.worker.joinable()) ui.worker.join();
+    if (ui.preferencesDialog) { g_object_unref(ui.preferencesDialog); ui.preferencesDialog = nullptr; }
+    g_object_unref(app);
+    ui.window = nullptr;
+    return result;
 }

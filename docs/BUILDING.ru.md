@@ -7,7 +7,7 @@
 Установите зависимости в терминале MSYS2 UCRT64 и выполните из корня репозитория:
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,gtkmm3,libwebp,libvorbis,libogg,curl}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -17,7 +17,7 @@ bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
 `build/windows-bundle/bin/liarsofttool-gui.exe`. Передавайте весь каталог
 `windows-bundle`, а не отдельный EXE.
 
-Для сборки только CLI добавьте `-DBUILD_GUI=OFF`; GTKmm тогда не нужен.
+Для сборки только CLI добавьте `-DBUILD_GUI=OFF`; GTK4/libadwaita тогда не нужны.
 Скрипт упаковки GUI для такой сборки не используется.
 
 ## Кросс-компиляция из Linux
@@ -36,13 +36,13 @@ cmake -S . -B build/win -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/win -j2
 ```
 
-GUI также требует соответствующих библиотек GTKmm и конфигурации pkg-config.
+GUI также требует соответствующих библиотек GTK4/libadwaita и конфигурации pkg-config.
 Компилятор и библиотеки должны использовать один целевой ABI и CRT.
 Не смешивайте UCRT64/MINGW64 или разные модели потоков.
 
 ## Проверка миграции на GTK4
 
-Это отдельный тест, а не замена существующего GUI. C++ вызывает C API GTK4/libadwaita
+Рабочий GUI вызывает C API GTK4/libadwaita из C++. Отдельный тест проверяет API
 для проверки создания окна, системной/светлой/тёмной темы и закрытия.
 Преобразования файлов в тесте нет. Нужны GTK4 и libadwaita 1.4 или новее.
 
