@@ -13,8 +13,8 @@ To port a game to Ren'Py, use it with
 
 ## Getting started
 
-On Windows, extract the complete release package and run
-`bin/liarsofttool-gui.exe`. Keep the bundled files together.
+Windows provides separate compressed, single-file GUI and CLI executables.
+Download the one you need and run it directly; no extraction is required.
 On Linux, run `liarsofttool-gui`. The command-line program is `liarsofttool`.
 
 Work on a copy of your game resources. Output normally goes beside the input
@@ -46,7 +46,7 @@ export it first, then add it to Conversion tasks. Standalone files can be added 
 
 Images support zoom and transparency. Audio supports playback, pause, seeking and
 volume. Audio previews need a GTK media backend and GStreamer Ogg/Vorbis plugins;
-the complete Windows bundle includes them.
+the Windows GUI executable includes them.
 
 ## Command-line help
 

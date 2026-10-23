@@ -13,13 +13,30 @@ cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
 ```
 
-Каталог назначения ещё не должен существовать. Запускайте
-`build/windows-bundle/bin/liarsofttool-gui.exe`. Передавайте весь каталог
-`windows-bundle`, а не отдельный EXE.
+Каталог назначения ещё не должен существовать. Это промежуточный каталог библиотек;
+для проверки запускайте `build/windows-bundle/bin/liarsofttool-gui.exe`.
 Сохраняйте плагины GStreamer и их сканер: они нужны для предпросмотра аудио.
 
 Для сборки только CLI добавьте `-DBUILD_GUI=OFF`; GTK4/libadwaita тогда не нужны.
 Скрипт упаковки GUI для такой сборки не используется.
+
+## Однофайловые выпуски Windows
+
+Установите [Enigma Virtual Box](https://www.enigmaprotector.com/en/downloads.html).
+Python 3.9+ и GNU objdump нужны для упаковки промежуточного каталога в отдельные EXE для CLI и GUI.
+Пользователю устанавливать упаковщик не требуется.
+
+```bash
+python tools/pack_windows.py build/windows-bundle build/windows-single "C:/Program Files/Enigma Virtual Box/enigmavbconsole.exe"
+python tests/test_windows_pack.py
+```
+
+Каталог вывода ещё не должен существовать. Публикуйте `liarsofttool.exe` и `liarsofttool-gui.exe`
+отдельно, а не одним ZIP. Включены сжатие и поддержка дочерних медиапроцессов GUI;
+CLI содержит только собственные библиотеки. После упаковки проверьте преобразование,
+три языка, изображения и звук: самого появления EXE недостаточно.
+
+В Linux тот же скрипт работает через установленный Wine; пути преобразует `winepath`.
 
 ## Кросс-компиляция из Linux
 
