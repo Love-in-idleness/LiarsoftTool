@@ -15,9 +15,28 @@ cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
 ```
 
-The bundle destination must not exist. Launch `build/windows-bundle/bin/liarsofttool-gui.exe`.
-Distribute the complete directory, not just the EXE. Keep GStreamer plugins and its scanner with GTK for audio previews.
+The bundle destination must not exist. This is an intermediate runtime directory;
+launch `build/windows-bundle/bin/liarsofttool-gui.exe` to check the build.
+Keep GStreamer plugins and its scanner with GTK for audio previews.
 For CLI-only builds add `-DBUILD_GUI=OFF`; GTK4/libadwaita and the GUI bundler are not needed.
+
+## Single-file Windows releases
+
+Install [Enigma Virtual Box](https://www.enigmaprotector.com/en/downloads.html).
+Use Python 3.9+ and GNU objdump to package the intermediate directory into separate CLI and GUI executables.
+The packer is a build tool; users do not need it installed.
+
+```bash
+python tools/pack_windows.py build/windows-bundle build/windows-single "C:/Program Files/Enigma Virtual Box/enigmavbconsole.exe"
+python tests/test_windows_pack.py
+```
+
+The output directory must not exist. Publish `liarsofttool.exe` and `liarsofttool-gui.exe`
+separately, not together in a ZIP. Compression and GUI media subprocess support are enabled;
+the CLI includes only its own runtime libraries. Test conversion, all three languages, images and audio
+after packing; producing an EXE alone is not enough.
+
+Linux build hosts can use the same script with Wine installed; paths are converted with `winepath`.
 
 ## Cross-building from Linux
 

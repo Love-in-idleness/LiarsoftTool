@@ -12,7 +12,7 @@ LiarsoftTool 用于处理 CodeX RScript 引擎游戏的资源，支持封包解�
 
 ## 开始使用
 
-Windows 用户解压完整发行包后运行 `bin/liarsofttool-gui.exe`，不要只复制 EXE。
+Windows 分别提供 GUI、CLI 两个压缩单文件 EXE，下载所需程序即可运行，无需解压。
 Linux 用户运行 `liarsofttool-gui`；命令行程序为 `liarsofttool`。
 
 先复制一份游戏资源再操作。生成文件默认写在输入文件旁，重建可能覆盖同名文件。
@@ -41,7 +41,7 @@ GUI 和 CLI 默认都将 GSC 转成 TSC。只需要提取文本时，GUI 勾选 
 独立文件可直接加入转换任务。
 
 图片支持缩放和透明背景。音频可播放、暂停、拖动进度和调节音量。
-音频预览需要 GTK 媒体后端及 GStreamer 的 Ogg/Vorbis 插件；Windows 完整包已包含。
+音频预览需要 GTK 媒体后端及 GStreamer 的 Ogg/Vorbis 插件；Windows GUI 已内置。
 
 ## 命令行帮助
 

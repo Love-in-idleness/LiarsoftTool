@@ -13,13 +13,30 @@ cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
 ```
 
-打包目标目录必须尚不存在。运行
-`build/windows-bundle/bin/liarsofttool-gui.exe`。
-分发完整的 `windows-bundle` 目录，不要只发送 EXE。
-GStreamer 插件和扫描器用于音频预览，打包时须与 GTK 一同保留。
+打包目标目录必须尚不存在。`windows-bundle` 是中间运行库目录，
+可运行其中的 `bin/liarsofttool-gui.exe` 检查构建。
+GStreamer 插件和扫描器用于音频预览，须与 GTK 一同保留。
 
 只需要 CLI 时，配置阶段添加 `-DBUILD_GUI=OFF`，无需 GTK4/libadwaita；
 GUI 打包脚本不用于 CLI-only 构建。
+
+## Windows 单文件发布
+
+安装 [Enigma Virtual Box](https://www.enigmaprotector.com/en/downloads.html)，
+使用 Python 3.9+ 与 GNU objdump 将上述中间目录分别封装为 CLI、GUI。
+封装工具只用于构建，不需要安装在用户电脑上。
+
+```bash
+python tools/pack_windows.py build/windows-bundle build/windows-single "C:/Program Files/Enigma Virtual Box/enigmavbconsole.exe"
+python tests/test_windows_pack.py
+```
+
+输出目录必须尚不存在。分别发布其中的 `liarsofttool.exe`、
+`liarsofttool-gui.exe`，不再把两个程序合成 ZIP。
+脚本开启压缩并保留 GUI 的媒体子进程支持；CLI 仅包含自己的运行库。
+封装后仍须验证转换、三语界面、图片与音频预览，不能只检查 EXE 是否生成。
+
+Linux 构建机也可使用本脚本，需在当前环境准备 Wine；路径由 `winepath` 转换。
 
 ## Linux 交叉编译
 
