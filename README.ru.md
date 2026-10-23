@@ -1,4 +1,6 @@
-# LiarsoftTool · [中文 / English](README.md) | Русский
+# LiarsoftTool
+
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
 
 LiarsoftTool обрабатывает ресурсы игр на CodeX RScript, включая произведения
 Liar-soft и raiL-soft. Программа упаковывает и распаковывает архивы,
@@ -65,7 +67,7 @@ liarsofttool -h
 GSC → TSC — экспериментальная функция; поддерживаются не все игры.
 Сохраните оригинальный GSC и не удаляйте автоматически созданные метки
 и метаданные TSC. Команды описаны в
-[справочнике TSC](docs/GSC_OPCODE_REFERENCE.en.md).
+[справочнике TSC](docs/GSC_OPCODE_REFERENCE.ru.md).
 
 ## Сборка из исходников
 
@@ -91,11 +93,10 @@ cmake --build build -j2
 
 ## Другие материалы
 
-[Расширение TSC для VS Code](tsc-vscode/README.ru.md) предлагает подсветку,
-проверку и компиляцию. Оно разрабатывается отдельно в этой ветке и собирается
-в локальный VSIX, без публикации в Marketplace.
+[Расширение TSC для VS Code](tsc-vscode/README.ru.md) предоставляет подсветку, проверку и компиляцию.
+Оно поддерживается только в `codex/tsc-vscode` и собирается в локальный VSIX, без публикации в Marketplace.
 
-[Документация](docs/README.md) · [План развития](docs/ROADMAP.ru.md)
+[Документация](docs/README.ru.md) · [План развития](docs/ROADMAP.ru.md)
 
 Используйте ресурсы игр, которыми вы владеете на законных основаниях.
 Успешное преобразование не гарантирует совместимость с любой версией движка;
@@ -103,6 +104,14 @@ cmake --build build -j2
 
 ## Лицензия и благодарности
 
-LiarsoftTool распространяется по GPLv3. Лицензии и сведения о сторонних
-компонентах сохранены в [основном README](README.md#license-and-credits)
-и [уведомлениях для аудиобиблиотек](docs/THIRD_PARTY_AUDIO_LICENSES.md).
+LiarsoftTool распространяется по GPLv3. Сторонние компоненты сохраняют свои лицензии.
+
+- [RaiLTools](https://github.com/EusthEnoptEron/RaiLTools) — исследование архивов и сценариев.
+- [arc_unpacker](https://github.com/vn-tools/arc_unpacker) — распаковка изображений, GPLv3.
+- [GARbro](https://github.com/crskycode/GARbro) — образец кодирования WCG.
+- [stb](https://github.com/nothings/stb) — чтение и запись изображений.
+- [WebP](https://chromium.googlesource.com/webm/libwebp/) — WebP без потерь.
+- [Ogg / Vorbis](https://xiph.org/vorbis/) — аудио; [лицензии](docs/THIRD_PARTY_AUDIO_LICENSES.md).
+- [GTK4 / libadwaita](https://www.gtk.org/) — общий интерфейс.
+- [GStreamer](https://gstreamer.freedesktop.org/) — аудиопросмотр через GTK.
+- [libcurl](https://curl.se/libcurl/) — проверка обновлений HTTPS.

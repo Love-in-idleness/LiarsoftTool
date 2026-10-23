@@ -1,6 +1,6 @@
 # CodeX TSC
 
-[中文](README.md) · [English](README.en.md) · Русский
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
 
 Подсветка, диагностика существующим компилятором и сборка GSC для текущего формата
 TSC LiarsoftTool. Расширение находится в ветке `codex/tsc-vscode` и не опубликовано
@@ -46,5 +46,5 @@ npm run package -- --out ../build/liarsofttool-tsc-0.1.0.vsix
 ```
 
 `LIARSOFTTOOL_PATH` выбирает локальный компилятор для тестов. См.
-[интерфейс диагностики](../docs/TSC_DIAGNOSTICS.ru.md) и
-[справочник TSC](../docs/GSC_OPCODE_REFERENCE.en.md). Лицензия — GPLv3.
+[интерфейс диагностики](https://github.com/Love-in-idleness/LiarsoftTool/blob/master/docs/TSC_DIAGNOSTICS.ru.md) и
+[справочник TSC](https://github.com/Love-in-idleness/LiarsoftTool/blob/master/docs/GSC_OPCODE_REFERENCE.ru.md). Лицензия — GPLv3.

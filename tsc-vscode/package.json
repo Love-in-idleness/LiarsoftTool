@@ -32,6 +32,6 @@
       }
     }
   },
-  "scripts": {"test": "node --test test/*.test.js", "package": "vsce package --no-dependencies"},
+  "scripts": {"test": "node --test test/*.test.js", "package": "vsce package --no-dependencies --baseContentUrl https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/tsc-vscode/tsc-vscode"},
   "devDependencies": {"@vscode/vsce": "4.0.0"}
 }

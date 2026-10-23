@@ -1,6 +1,6 @@
 # План развития
 
-[中文 / English](ROADMAP.md) · [Главная страница](../README.md)
+[中文](ROADMAP.zh.md) | [English](ROADMAP.en.md) | [Русский](ROADMAP.ru.md)
 
 ## Порядок работ
 

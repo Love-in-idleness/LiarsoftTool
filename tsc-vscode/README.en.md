@@ -1,6 +1,6 @@
 # CodeX TSC
 
-[中文](README.md) · English · [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
 
 Highlighting, compiler-backed diagnostics and GSC compilation for the current
 LiarsoftTool TSC format. This extension lives on `codex/tsc-vscode` and is not
@@ -45,5 +45,5 @@ npm run package -- --out ../build/liarsofttool-tsc-0.1.0.vsix
 ```
 
 Set `LIARSOFTTOOL_PATH` to select the local test compiler. See the
-[diagnostics interface](../docs/TSC_DIAGNOSTICS.md#english) and
-[TSC reference](../docs/GSC_OPCODE_REFERENCE.en.md). Licensed under GPLv3.
+[diagnostics interface](https://github.com/Love-in-idleness/LiarsoftTool/blob/master/docs/TSC_DIAGNOSTICS.en.md) and
+[TSC reference](https://github.com/Love-in-idleness/LiarsoftTool/blob/master/docs/GSC_OPCODE_REFERENCE.en.md). Licensed under GPLv3.
