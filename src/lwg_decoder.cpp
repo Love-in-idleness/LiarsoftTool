@@ -1,3 +1,4 @@
+#include "archive_index.h"
 #include "lwg_decoder.h"
 #include "encoding.h"
 #include "fileio.h"
@@ -28,10 +29,6 @@ static std::string normalized(const fs::path& path) {
 
 static std::string encodeName(const std::string& utf8, const std::string& enc) {
     return convertEncoding(utf8, "UTF-8", enc);
-}
-
-static std::string decodeName(const std::string& raw, const std::string& enc) {
-    return convertEncoding(raw, enc, "UTF-8");
 }
 
 // Layer names are XML text, not markup (e.g. Photoshop's </Layer set>).
@@ -91,60 +88,18 @@ bool LwgDecoder::isRecognized(const std::vector<uint8_t>& data) {
 
 LwgDecoder::Archive LwgDecoder::decode(const std::vector<uint8_t>& data,
                                         const std::string& encoding) {
-    if (!isRecognized(data))
-        throw std::runtime_error("Not a valid LWG archive");
-
-    size_t pos = MAGIC_SIZE;
-    size_t limit = data.size();
-    auto readU32 = [&]() -> uint32_t {
-        if (pos > limit || limit - pos < 4)
-            throw std::runtime_error("LWG: truncated table field");
-        uint32_t v = uint32_t(data[pos]) | (uint32_t(data[pos+1])<<8) |
-                     (uint32_t(data[pos+2])<<16) | (uint32_t(data[pos+3])<<24);
-        pos += 4; return v;
-    };
-    auto readI32 = [&]() -> int32_t {
-        uint32_t v = readU32(); return static_cast<int32_t>(v);
-    };
-
+    const auto index = readArchiveIndex(data, encoding);
+    if (index.format != "LWG") throw std::runtime_error("Not a valid LWG archive");
     Archive archive;
-    // NOTE: original format has Height BEFORE Width!
-    archive.height = readU32();
-    archive.width  = readU32();
-
-    uint32_t fileCount = readU32();
-    pos += 4; // skip unknown
-    uint32_t tableSize = readU32();
-    if (tableSize > data.size() - 28 || fileCount > tableSize / 18)
-        throw std::runtime_error("LWG: invalid table size or entry count");
-    limit = pos + tableSize;
-    const size_t dataStart = limit + 4;
-
-    for (uint32_t i = 0; i < fileCount; ++i) {
-        if (pos > limit || limit - pos < 18)
-            throw std::runtime_error("LWG: truncated table entry");
+    archive.width = index.width;
+    archive.height = index.height;
+    for (const auto& item : index.entries) {
         LwgEntry entry;
-        entry.x    = readI32();
-        entry.y    = readI32();
-        entry.flag = data[pos++];
-        uint32_t offset = readU32();
-        entry.size = readU32();
-        uint8_t nameLen = data[pos++];
-        if (nameLen > limit - pos)
-            throw std::runtime_error("LWG: filename extends past the table");
-
-        std::string rawName(data.begin() + static_cast<ptrdiff_t>(pos),
-                            data.begin() + static_cast<ptrdiff_t>(pos + nameLen));
-        pos += nameLen;
-        entry.name = decodeName(rawName, encoding);
-
-        if (offset > data.size() - dataStart ||
-            entry.size > data.size() - dataStart - offset)
-            throw std::runtime_error("LWG: data out of bounds: " + entry.name);
-        const size_t fileOff = dataStart + offset;
-        entry.data.assign(data.begin() + static_cast<ptrdiff_t>(fileOff),
-                          data.begin() + static_cast<ptrdiff_t>(fileOff + entry.size));
-
+        entry.name = item.name;
+        entry.x = item.x; entry.y = item.y; entry.flag = item.flag;
+        entry.size = static_cast<uint32_t>(item.size);
+        entry.data.assign(data.begin() + static_cast<ptrdiff_t>(item.offset),
+                          data.begin() + static_cast<ptrdiff_t>(item.offset + item.size));
         archive.entries.push_back(std::move(entry));
     }
     return archive;

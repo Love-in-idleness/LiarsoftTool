@@ -293,8 +293,7 @@ const std::unordered_map<uint16_t, std::string>& schemasFor(
 
 class ParsedGsc {
 public:
-    explicit ParsedGsc(const std::string& inputPath) : path(inputPath) {
-        const auto data = readFile(inputPath);
+    ParsedGsc(const std::vector<uint8_t>& data, const std::string& inputPath) : path(inputPath) {
         if (data.size() < 28) fail("shorter than the GSC header");
         const uint32_t headerLength = readU32(data, 4);
         if (headerLength == 28) {
@@ -1184,10 +1183,10 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
 
 } // namespace
 
-static std::string decompileListing(const std::string& inputPath,
+static std::string decompileListing(const std::vector<uint8_t>& data, const std::string& inputPath,
                                     const std::string& encoding,
                                     std::vector<std::string>* warnings) {
-    const ParsedGsc gsc(inputPath);
+    const ParsedGsc gsc(data, inputPath);
     const auto instructions = gsc.instructions();
     const auto labels = gsc.jumpTargets();
     std::vector<std::string> lines = {
@@ -1238,8 +1237,13 @@ static std::string decompileListing(const std::string& inputPath,
 std::string decompileGsc(const std::string& inputPath, const std::string& encoding,
                          std::vector<std::string>* warnings) {
     const auto raw = readFile(inputPath);
+    return decompileGscBytes(raw, encoding, warnings, inputPath);
+}
+
+std::string decompileGscBytes(const std::vector<uint8_t>& raw, const std::string& encoding,
+                         std::vector<std::string>* warnings, const std::string& sourceName) {
     try {
-        return decompileListing(inputPath, encoding, warnings);
+        return decompileListing(raw, sourceName, encoding, warnings);
     } catch (const std::exception& e) {
         std::string message = e.what();
         std::replace(message.begin(), message.end(), '\n', ' ');

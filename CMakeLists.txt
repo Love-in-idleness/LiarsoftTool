@@ -93,6 +93,7 @@ endif()
 
 # Compile the conversion core once for the CLI, GUI and test executables.
 add_library(liarsofttool_core STATIC
+    src/archive_index.cpp
     src/conversion.cpp
     src/bmp_normalizer.cpp
     src/bigendian.cpp
@@ -215,6 +216,9 @@ if(BUILD_TESTING)
 
     add_executable(archive_test tests/archive_test.cpp)
     add_test(NAME archive COMMAND archive_test ${CMAKE_CURRENT_BINARY_DIR}/archive_test_data)
+    add_executable(archive_index_test tests/archive_index_test.cpp)
+    target_link_libraries(archive_index_test PRIVATE liarsofttool_core)
+    add_test(NAME archive_index COMMAND archive_index_test)
 
     add_executable(cg_decompress_test tests/cg_decompress_test.cpp)
     add_test(NAME cg_decompress COMMAND cg_decompress_test)

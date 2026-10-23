@@ -1,3 +1,4 @@
+#include "archive_index.h"
 #include "xflarchive.h"
 #include "bigendian.h"
 #include "bmp_normalizer.h"
@@ -447,58 +448,18 @@ XflArchive XflArchive::fromFile(const std::string& path, const std::string& enc)
 }
 
 XflArchive XflArchive::fromBytes(const std::vector<uint8_t>& data, const std::string& enc) {
+    const auto index = readArchiveIndex(data, enc);
+    if (index.format != "XFL") throw std::runtime_error("Not a valid XFL archive");
     XflArchive archive;
     archive.encoding = enc;
-    BigEndianReader reader(data); // Note: reader class now uses LE (despite name)
-
-    // Read header
-    uint32_t magic = static_cast<uint32_t>(reader.readInt32());
-    if (magic != 0x0001424C) {
-        throw std::runtime_error("Not a valid XFL archive (bad magic number)");
-    }
-
-    int32_t tableSize = reader.readInt32();
-    int32_t fileCount = reader.readInt32();
-
-    if (fileCount < 0 || tableSize < 0) {
-        throw std::runtime_error("Corrupt XFL archive header");
-    }
-    if (static_cast<size_t>(tableSize) > reader.remaining() ||
-        fileCount > tableSize / 40)
-        throw std::runtime_error("Corrupt XFL table size or entry count");
-    const size_t dataStart = 12 + static_cast<size_t>(tableSize);
-
-    // Read chunk table
-    for (int32_t i = 0; i < fileCount; ++i) {
+    for (const auto& item : index.entries) {
+        checkArchiveName(item.name);
         XflEntry entry;
-
-        // Read fixed-width filename (0x20 = 32 bytes)
-        std::vector<uint8_t> nameBytes = reader.readBytes(0x20);
-        if (std::find(nameBytes.begin(), nameBytes.end(), 0) == nameBytes.end())
-            throw std::runtime_error("XFL filename is not null-terminated");
-        entry.fileName = decodeFileName(nameBytes, enc);
-        checkArchiveName(entry.fileName);
-
-        // Read offset and size
-        int32_t offset = reader.readInt32();
-        int32_t size = reader.readInt32();
-
-        if (size < 0 || offset < 0) {
-            throw std::runtime_error("Corrupt XFL entry: negative offset or file size");
-        }
-
-        // Read file data (offset is relative to start of data section)
-        // The data section starts after header + table
-        if (static_cast<size_t>(offset) > data.size() - dataStart ||
-            static_cast<size_t>(size) > data.size() - dataStart - offset) {
-            throw std::runtime_error("Corrupt XFL entry: data offset out of bounds");
-        }
-        entry.data.assign(data.begin() + static_cast<ptrdiff_t>(dataStart + offset),
-                          data.begin() + static_cast<ptrdiff_t>(dataStart + offset + size));
-
+        entry.fileName = item.name;
+        entry.data.assign(data.begin() + static_cast<ptrdiff_t>(item.offset),
+                          data.begin() + static_cast<ptrdiff_t>(item.offset + item.size));
         archive.entries.push_back(std::move(entry));
     }
-
     return archive;
 }
 

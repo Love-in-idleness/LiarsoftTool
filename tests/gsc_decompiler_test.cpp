@@ -101,6 +101,8 @@ int main(int argc, char** argv) {
     const auto temp = std::filesystem::temp_directory_path() / "liarsofttool_gsc_decompiler_test.gsc";
     save(temp, modern);
     const auto listing = liarsoft::decompileGsc(temp.string());
+    if (liarsoft::decompileGscBytes(modern, "CP932", nullptr, temp.string()) != listing)
+        throw std::runtime_error("In-memory GSC decompilation differs from file decompilation");
     if (listing.find(";@gsc-code") != std::string::npos ||
         listing.find(";@gsc-string") != std::string::npos ||
         listing.find(";@gsc-instruction") != std::string::npos ||

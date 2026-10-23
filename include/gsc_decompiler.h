@@ -14,6 +14,12 @@ std::string decompileGsc(const std::string& inputPath,
                          const std::string& encoding = "CP932",
                          std::vector<std::string>* warnings = nullptr);
 
+/// Read-only, in-memory counterpart; sourceName is used only in diagnostics/listing comments.
+std::string decompileGscBytes(const std::vector<uint8_t>& data,
+                         const std::string& encoding = "CP932",
+                         std::vector<std::string>* warnings = nullptr,
+                         const std::string& sourceName = "memory.gsc");
+
 /// Return warnings for recovered noncanonical input after writing the listing.
 std::vector<std::string> decompileGscToFile(const std::string& inputPath,
                         const std::string& outputPath,
