@@ -1,6 +1,6 @@
 # LiarsoftTool
 
-[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 ![LiarsoftTool](image.png)
 
@@ -76,7 +76,7 @@ See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
 Requires a C++17 compiler, CMake, WebP, Vorbis/Ogg and libcurl 7.85 or newer. The GUI also requires
 GTK4 4.10, libadwaita 1.5 or newer, and gettext. Windows and Linux share the same frontend.
 Preferences contain conversion options, the system/light/dark theme and the interface
-language. English, Russian and Simplified Chinese are supported; language changes apply after restart.
+language. English, Russian, Simplified Chinese and Japanese are supported; language changes apply after restart.
 
 On Debian / Ubuntu:
 

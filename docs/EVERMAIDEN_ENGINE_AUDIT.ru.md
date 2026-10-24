@@ -1,6 +1,6 @@
 # Техническая справка: ресурсы и движок Evermaiden
 
-[中文](EVERMAIDEN_ENGINE_AUDIT.zh.md) | [English](EVERMAIDEN_ENGINE_AUDIT.en.md) | [Русский](EVERMAIDEN_ENGINE_AUDIT.ru.md)
+[中文](EVERMAIDEN_ENGINE_AUDIT.zh.md) | [English](EVERMAIDEN_ENGINE_AUDIT.en.md) | [Русский](EVERMAIDEN_ENGINE_AUDIT.ru.md) | [日本語](EVERMAIDEN_ENGINE_AUDIT.ja.md)
 
 [Документация](README.ru.md) · [Руководство](../README.ru.md)
 

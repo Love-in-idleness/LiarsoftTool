@@ -1,6 +1,6 @@
 # 文档目录
 
-[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 [返回主说明](../README.zh.md)
 

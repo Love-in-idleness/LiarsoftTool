@@ -1,6 +1,6 @@
 # 开发参考：CannonBall 资源与引擎
 
-[中文](CANNONBALL_ENGINE_AUDIT.zh.md) | [English](CANNONBALL_ENGINE_AUDIT.en.md) | [Русский](CANNONBALL_ENGINE_AUDIT.ru.md)
+[中文](CANNONBALL_ENGINE_AUDIT.zh.md) | [English](CANNONBALL_ENGINE_AUDIT.en.md) | [Русский](CANNONBALL_ENGINE_AUDIT.ru.md) | [日本語](CANNONBALL_ENGINE_AUDIT.ja.md)
 
 [返回文档目录](README.zh.md)
 
