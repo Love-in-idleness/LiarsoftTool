@@ -12,7 +12,7 @@ Forest and SevenBridge are regression samples, not an admission list.
 
 ## Getting started
 
-Keep the built `RScriptLauncher.exe`, `RScriptHost.dll`, and feature DLLs in the same directory.
+Keep the built `RScriptLauncher.exe`, `RScriptHost.dll`, `kinsoku.json`, and feature DLLs in the same directory.
 They do not need to be placed in the game directory. Open the launcher:
 
 1. Select the game EXE in **Game executable**.
@@ -70,6 +70,19 @@ Japanese, and Russian text. Supplementary characters such as emoji and general c
 Distinct characters outside CP932 share at most 1880 glyph-mapping slots; slots already used by the original game
 reduce the available capacity. Install fonts containing the required characters: successful resource loading does not ensure glyph coverage.
 
+### Line-breaking rules
+
+When Unicode is enabled, the launcher reads [kinsoku.json](kinsoku.json) beside its own EXE.
+`no_line_start` lists characters forbidden at the start of a line, such as `。）」`;
+`no_line_end` lists characters forbidden at the end, such as `（「`.
+The supplied rules cover common Chinese/Japanese punctuation, small kana, ASCII punctuation and directional quotes;
+edit them to suit the translation. The two sets must not overlap. Use UTF-8, at most 64 KiB, and BMP characters only.
+
+Use `--kinsoku "custom rules.json"` on the command line to select another file; an explicit file is always checked.
+Missing or invalid configuration prevents game startup. Without Unicode or this option, no rules file is required.
+The rules feed the original engine's line-breaking decisions: they do not insert newlines into scripts
+or implement the full Unicode UAX #14 algorithm.
+
 The glyph dictionary is stored at:
 
 ```text
@@ -91,6 +104,8 @@ Logs and dictionaries go to the user data directory, not the original resources.
 Files hooks `CreateFileA`, `ReadFile`, `SetFilePointer`, `GetFileSize`, and `CloseHandle`
 in the EXE's ordinary import table. Unicode uses ANSI GDI glyph, text, and measurement APIs,
 with CP932 character recognition local to the game module; system regional settings are unchanged.
+Unicode line-break rules also require a recognized complete shared classifier; otherwise initialization fails.
+The 32-bit bridge requires SSE support.
 
 Missing required APIs, damaged imports, and existing hook conflicts prevent initialization with an error.
 Delay imports, dynamically obtained functions, other DLLs' own reads, file enumeration, mapping,

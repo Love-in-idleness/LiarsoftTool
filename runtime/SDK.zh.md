@@ -46,6 +46,12 @@ DLL 的 `DllMain` 会早于 ABI 检查执行，因此 ABI 检查不是安全沙�
 `game_module`、游戏路径、资源目录及日志用于普通扩展。
 `set_engine_api`／`get_engine_api` 是内置模块的私有桥接，不是稳定的公共资源接口，第三方扩展不要依赖。
 
+`kinsoku_json` 是 ABI 1 上下文末尾追加的可选 UTF-8 JSON；未加载配置时为空指针。
+读取前检查 `context->size` 是否覆盖该字段，例如
+`context->size >= offsetof(RScriptHostContext, kinsoku_json) + sizeof(context->kinsoku_json)`。
+只检查所需字段的最小大小，不要求上下文大小恰好相等，以便接受同一 ABI 的后续追加字段。
+字符串仍是借用数据；需要保留时自行复制。宿主只在校验通过后传入配置，格式见 [kinsoku.json](kinsoku.json)。
+
 ## 扩展与测试
 
 在同一目录的 CMake 中已提供 `RScriptLogExample` 目标。

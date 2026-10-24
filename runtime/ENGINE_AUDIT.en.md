@@ -6,7 +6,8 @@
 
 ## Scope
 
-Integration resolves API names in PE imports, without game names, EXE allowlists, or fixed addresses.
+File and GDI integration resolves PE import names; line-break integration recognizes a complete shared classifier.
+Neither uses game names, EXE allowlists, or fixed addresses.
 Forest and SevenBridge validate shared file and text paths. Addresses below are evidence, not runtime
 selection conditions: VAs use the preferred image base unless marked as import-slot RVAs.
 No proprietary DLL code or game assets are included.
@@ -110,6 +111,23 @@ The dictionary is safely written to user data before a script is delivered, keep
 restarts for saves and history. This is not replacement of unencodable characters with `?`.
 It is also not a full Unicode layout engine: at most 1880 extra BMP characters, minus native usage,
 with no supplementary-plane support or general complex shaping.
+
+## UTF-8 line-break rules
+
+SevenBridge's `0x43e450` writes character classes to the layout array after drawing:
+`0` ordinary, `1` no line start, `2` no line end. `0x43e540–0x43e798` compares `SI`;
+branches converge at `0x43e7cc` and `0x43e7b3`, with the ordinary path at `0x43e79a`.
+REA evidence: `ev_f04c03afdea665d7bdadec40a14e679ddbec0d74637f99ddd47b90b02e821f43`.
+
+[native_kinsoku.cpp](src/native_kinsoku.cpp) validates full ASCII/CP932 comparison groups,
+conditional jumps, and common targets, for immediate and `MOV EAX / CMP SI, AX` forms.
+The in-process bridge aligns the stack, saves registers, flags and FPU/SIMD state, restores the Unicode character from its glyph token,
+and uses [kinsoku.json](kinsoku.json). Native packed values that do not decode as one character retain
+their original classification. Unicode initialization fails if no classifier is recognized.
+No EXE on disk or TSC line breaks are changed.
+
+These are customizable character-based start/end restrictions, not full [Unicode UAX #14](https://www.unicode.org/reports/tr14/).
+New instruction forms require extending the shared recognizer and tests, not game address tables.
 
 ## What Albatross demonstrates
 

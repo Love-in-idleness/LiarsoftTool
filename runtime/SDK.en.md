@@ -47,6 +47,13 @@ Ordinary extensions can use `game_module`, the game path, resource directory, an
 `set_engine_api` / `get_engine_api` are a private bridge between built-ins, not a stable public resource interface;
 third-party extensions must not depend on them.
 
+`kinsoku_json` is an optional UTF-8 JSON string appended to the ABI 1 context; it is null when no configuration was loaded.
+Before reading it, check that `context->size` covers the field, for example
+`context->size >= offsetof(RScriptHostContext, kinsoku_json) + sizeof(context->kinsoku_json)`.
+Check the minimum size you need, not exact equality, so later appended fields in the same ABI remain compatible.
+The string is borrowed; copy it if needed later. The host validates it before passing it to plugins;
+see [kinsoku.json](kinsoku.json) for its format.
+
 ## Extending and testing
 
 The runtime CMake project includes the `RScriptLogExample` target.
