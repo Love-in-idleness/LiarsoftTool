@@ -322,13 +322,14 @@ static void buildPreferences() {
     g_signal_connect(appearance, "notify::selected", reinterpret_cast<GCallback>(+[](GObject* object, GParamSpec*, gpointer) {
         ui.preferences.theme = gtk_drop_down_get_selected(GTK_DROP_DOWN(object)); theme(); savePreferences();
     }), nullptr);
-    const char* languages[] = {_("System language"), "English", "Русский", "简体中文", nullptr};
+    const char* languages[] = {_("System language"), "English", "Русский", "简体中文", "日本語", nullptr};
     auto* language = gtk_drop_down_new_from_strings(languages);
     gtk_drop_down_set_selected(GTK_DROP_DOWN(language), ui.preferences.language == "en" ? 1 :
-        ui.preferences.language == "ru" ? 2 : ui.preferences.language == "zh_CN" ? 3 : 0);
+        ui.preferences.language == "ru" ? 2 : ui.preferences.language == "zh_CN" ? 3 :
+        ui.preferences.language == "ja" ? 4 : 0);
     addRow(group, _("Language (after restart)"), language);
     g_signal_connect(language, "notify::selected", reinterpret_cast<GCallback>(+[](GObject* object, GParamSpec*, gpointer) {
-        const char* values[] = {"", "en", "ru", "zh_CN"};
+        const char* values[] = {"", "en", "ru", "zh_CN", "ja"};
         ui.preferences.language = values[gtk_drop_down_get_selected(GTK_DROP_DOWN(object))]; savePreferences();
     }), nullptr);
     group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());

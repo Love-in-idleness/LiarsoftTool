@@ -22,7 +22,7 @@ Preferences loadPreferences() {
         auto* language = g_key_file_get_string(key, "Interface", "Language", nullptr);
         if (language) { result.language = language; g_free(language); }
         if (result.theme > 2) result.theme = 0;
-        if (result.language != "en" && result.language != "ru" && result.language != "zh_CN")
+        if (result.language != "en" && result.language != "ru" && result.language != "zh_CN" && result.language != "ja")
             result.language.clear();
     }
     g_key_file_unref(key);
@@ -54,17 +54,19 @@ std::string effectiveLanguage(const std::string& preference) {
         const std::string name(*names);
         if (name.compare(0, 2, "zh") == 0) return "zh_CN";
         if (name.compare(0, 2, "ru") == 0) return "ru";
+        if (name.compare(0, 2, "ja") == 0) return "ja";
         if (name.compare(0, 2, "en") == 0) return "en";
     }
     return "en";
 }
 
 void initializeTranslations(const std::string& language, const char* executable) {
+    const auto requested = language == "zh_CN" ? "zh_CN.UTF-8" : language == "ru" ? "ru_RU.UTF-8" :
+        language == "ja" ? "ja_JP.UTF-8" : "en_US.UTF-8";
     std::setlocale(LC_ALL, "");
     // glibc also suppresses gettext in C.UTF-8; use a message locale when available.
     const auto* locale = std::setlocale(LC_MESSAGES, nullptr);
     if (!locale || std::string(locale).compare(0, 1, "C") == 0 || std::string(locale) == "POSIX") {
-        const auto requested = language == "zh_CN" ? "zh_CN.UTF-8" : language == "ru" ? "ru_RU.UTF-8" : "en_US.UTF-8";
         if (!std::setlocale(LC_MESSAGES, requested))
             std::setlocale(LC_MESSAGES, "en_US.UTF-8");
     }
@@ -74,9 +76,9 @@ void initializeTranslations(const std::string& language, const char* executable)
     _putenv_s("LANGUAGE", language.c_str());
     // On Windows libintl resolves LC_ALL before its emulated LC_MESSAGES locale.
     _putenv_s("LC_ALL", "");
-    _putenv_s("LC_MESSAGES", language == "zh_CN" ? "zh_CN.UTF-8" : language == "ru" ? "ru_RU.UTF-8" : "en_US.UTF-8");
+    _putenv_s("LC_MESSAGES", requested);
     g_unsetenv("LC_ALL");
-    g_setenv("LC_MESSAGES", language == "zh_CN" ? "zh_CN.UTF-8" : language == "ru" ? "ru_RU.UTF-8" : "en_US.UTF-8", TRUE);
+    g_setenv("LC_MESSAGES", requested, TRUE);
 #endif
     namespace fs = std::filesystem;
     auto directory = fs::absolute(fs::u8path(executable)).parent_path();
