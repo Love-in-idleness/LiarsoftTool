@@ -22,8 +22,10 @@ static void printUsage(const char* prog) {
     std::cout << "LiarsoftTool " << liarsoft::CurrentVersion << " - Liar-soft visual novel resource converter\n"
               << "Usage: " << prog << " [options] <input...> [output]\n\n"
               << "Options:\n"
-              << "  -e, --encoding <enc>  Text encoding (default: cp932 / Windows-31J)\n"
-              << "                        Supported: cp932, gbk, gb18030, big5/cp950, cp949, cp1250-cp1258, utf-8\n"
+              << "  -e, --encoding <enc>  Text encoding (default: auto detects GSC input)\n"
+              << "                        Supported: auto, cp932, gbk, gb18030, big5/cp950, cp949, cp1250-cp1258, utf-8\n"
+              << "                        Choose an explicit encoding for packing/GSC output.\n"
+              << "                        Auto uses CP932 for archive names and other legacy text.\n"
               << "  -r, --reference <path> Reference GSC file for TXT injection\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
               << "  -R, --recursive        Recursively pack/unpack and convert resources\n"
@@ -56,7 +58,8 @@ static void printUsage(const char* prog) {
               << "\n"
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
-              << "  " << prog << " --check-tsc --diagnostics=json scene.tsc\n"
+              << "  " << prog << " --check-tsc --diagnostics=json -e cp932 scene.tsc\n"
+              << "  " << prog << " scenario.gsc           # auto-detect input text encoding\n"
               << "  " << prog << " -e cp932 scenario.gsc\n"
               << "  " << prog << " --gsc-to-txt -e gbk scenario.gsc output.txt\n"
               << "  " << prog << " -e cp932 -r original.gsc translation.txt\n"
@@ -218,7 +221,7 @@ static bool processOne(const std::string& inputPath,
 }
 
 static int runCli(int argc, char* argv[]) {
-    std::string encoding = "CP932";
+    std::string encoding = "auto";
     std::string referencePath;
     std::vector<std::string> inputs;
     std::string explicitOutput;
@@ -295,6 +298,10 @@ static int runCli(int argc, char* argv[]) {
         if (inputs.empty() || checkUpdate || !explicitOutput.empty() || !referencePath.empty() ||
             recursive || packOnly || unpackOnly || vorbisInWav || !gscToTsc || workers) {
             std::cerr << "Error: --check-tsc requires inputs and cannot be combined with conversion or update options\n";
+            return 1;
+        }
+        if (encoding == "auto") {
+            std::cerr << "Error: --check-tsc requires an explicit target encoding (-e)\n";
             return 1;
         }
         return checkInputs(inputs, encoding, jsonDiagnostics);

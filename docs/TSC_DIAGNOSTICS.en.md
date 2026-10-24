@@ -7,7 +7,7 @@
 For editor and tool authors. User commands and options are documented by `liarsofttool -h`.
 
 `--check-tsc` runs the same compiler in memory without writing GSC. It accepts multiple inputs and currently reports
-one error per failing file. Exit status is 0 on success, 1 on errors. Target encoding is configurable;
+one error per failing file. Exit status is 0 on success, 1 on errors. Specify the target encoding with `-e` (`auto` is not accepted);
 output, conversion and update-check options cannot be combined with checking.
 
 `--diagnostics=json` writes to stdout:

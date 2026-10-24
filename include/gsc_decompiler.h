@@ -8,6 +8,11 @@
 
 namespace liarsoft {
 
+/// Guess from validated GSC string sections only. Throws if inconclusive;
+/// guesses and indistinguishable encodings are reported through warnings.
+std::string detectGscEncoding(const std::vector<uint8_t>& data,
+                             std::vector<std::string>* warnings = nullptr);
+
 /// Produce an annotated, UTF-8 TSC listing from a CodeX GSC file.
 /// Verified commands are emitted as TSC while unknown semantics remain
 /// offset-annotated comments.

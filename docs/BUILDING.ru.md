@@ -7,7 +7,7 @@
 Установите зависимости в терминале MSYS2 UCRT64 и выполните из корня репозитория:
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl,gstreamer,gst-plugins-base,gst-plugins-good}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,uchardet,curl,gstreamer,gst-plugins-base,gst-plugins-good}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -40,7 +40,7 @@ CLI содержит только собственные библиотеки. �
 
 ## Кросс-компиляция из Linux
 
-Подготовьте Windows-версии WebP, Vorbis/Ogg, libcurl 7.85 или новее и инструменты MinGW.
+Подготовьте Windows-версии WebP, Vorbis/Ogg, статическую библиотеку uchardet, libcurl 7.85 или новее и инструменты MinGW.
 Задайте расположение целевых библиотек через `CMAKE_PREFIX_PATH` либо параметры
 поиска библиотек CMake. Не связывайте программу с библиотеками Linux.
 

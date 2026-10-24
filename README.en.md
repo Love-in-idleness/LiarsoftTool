@@ -26,12 +26,15 @@ and rebuilding may overwrite files with the same name.
 In the GUI:
 
 1. Add files or folders, or drag them into the window.
-2. Select the resource encoding in Preferences: usually CP932 for Japanese or GBK for Chinese patches.
+2. Encoding defaults to `auto` for GSC detection. Select an encoding manually if the result is ambiguous or looks wrong: usually CP932 for Japanese or GBK for Chinese patches.
 3. Set Recursive, Pack only or Unpack only as needed, then check Conversion tasks and output paths.
 4. Start conversion. Use **Copy details** to copy a complete error report.
 
 Both the GUI and CLI export GSC to TSC by default.
 Enable **GSC→TXT** in the GUI to extract translation text.
+
+Detection also applies to GSC previews. Short text may be inconclusive; ASCII cannot identify the original encoding. Check the result.
+Packing, checking or creating GSC requires an explicit encoding. In `auto`, archive names and other legacy text still use CP932.
 
 Click **Check for updates** to check manually and open the GitHub releases page.
 The application never connects on startup or downloads and installs updates automatically.
@@ -75,7 +78,7 @@ See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
 
 ## Building from source
 
-Requires a C++17 compiler, CMake, WebP, Vorbis/Ogg and libcurl 7.85 or newer. The GUI also requires
+Requires a C++17 compiler, CMake, WebP, Vorbis/Ogg, uchardet (including its static library) and libcurl 7.85 or newer. The GUI also requires
 GTK4 4.10, libadwaita 1.5 or newer, and gettext. Windows and Linux share the same frontend.
 Preferences contain conversion options, the system/light/dark theme and the interface
 language. English, Russian, Simplified Chinese and Japanese are supported; language changes apply after restart.
@@ -83,7 +86,7 @@ language. English, Russian, Simplified Chinese and Japanese are supported; langu
 On Debian / Ubuntu:
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -113,3 +116,4 @@ LiarsoftTool is licensed under GPLv3. Third-party components retain their own li
 - [GTK4 / libadwaita](https://www.gtk.org/) — shared desktop interface.
 - [GStreamer](https://gstreamer.freedesktop.org/) — audio previews through GTK's media backend.
 - [libcurl](https://curl.se/libcurl/) — HTTPS update checks.
+- [uchardet](https://www.freedesktop.org/wiki/Software/uchardet/) — GSC encoding detection; [license notices](docs/THIRD_PARTY_UCHARDET_LICENSES.md). Statically linked, unmodified 0.0.8 [source](https://deb.debian.org/debian/pool/main/u/uchardet/uchardet_0.0.8.orig.tar.xz), used under GPLv2 or later.

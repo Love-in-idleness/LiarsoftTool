@@ -9,7 +9,7 @@
 Install dependencies in an MSYS2 UCRT64 terminal and run from the repository root:
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl,gstreamer,gst-plugins-base,gst-plugins-good}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,uchardet,curl,gstreamer,gst-plugins-base,gst-plugins-good}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -40,7 +40,7 @@ Linux build hosts can use the same script with Wine installed; paths are convert
 
 ## Cross-building from Linux
 
-Prepare Windows-target WebP, Vorbis/Ogg, libcurl 7.85 or newer and a MinGW toolchain.
+Prepare Windows-target WebP, Vorbis/Ogg, a static uchardet library, libcurl 7.85 or newer and a MinGW toolchain.
 Select target libraries through `CMAKE_PREFIX_PATH` or corresponding CMake variables; do not link host Linux libraries.
 
 CLI example:

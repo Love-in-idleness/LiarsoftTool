@@ -217,8 +217,8 @@ int main(int argc, char** argv) {
         fs::last_write_time(original, fs::file_time_type::clock::now() - std::chrono::hours(48));
         const auto originalTime = fs::last_write_time(original);
         const ConversionOptions options;
-        if (options.encoding != "CP932")
-            throw std::runtime_error("Default GUI encoding differs from CLI CP932");
+        if (options.encoding != "auto")
+            throw std::runtime_error("Default GUI encoding differs from CLI auto");
         convert(original.string(), webp.string(), options);
         const auto time = fs::last_write_time(webp);
         if (time != originalTime)
@@ -303,6 +303,7 @@ int main(int argc, char** argv) {
         liarsoft::writeTextFileIfChanged(unrelated.string(), "user file");
         const auto unrelatedTime = fs::last_write_time(unrelated);
         ConversionOptions unpack;
+        unpack.encoding = "CP932";
         unpack.recursive = true;
         unpack.gscToTsc = true;
         unpack.workers = 2;
@@ -384,6 +385,7 @@ int main(int argc, char** argv) {
         const auto recoveryOutput = recoveryDirectory / "stale.tsc";
         liarsoft::writeFileIfChanged(recoveryInput.string(), staleGsc);
         ConversionOptions recoveryOptions;
+        recoveryOptions.encoding = "CP932";
         recoveryOptions.gscToTsc = true;
         const auto recoveredWarnings = convert(
             recoveryInput.string(), recoveryOutput.string(), recoveryOptions).warnings;

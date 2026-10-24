@@ -7,7 +7,7 @@
 MSYS2 の UCRT64 ターミナルで依存ライブラリを導入し、リポジトリのルートで実行します。
 
 ```bash
-pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,curl,gstreamer,gst-plugins-base,gst-plugins-good}
+pacman -S mingw-w64-ucrt-x86_64-{gcc,cmake,make,pkgconf,libadwaita,gettext-tools,libwebp,libvorbis,libogg,uchardet,curl,gstreamer,gst-plugins-base,gst-plugins-good}
 cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 bash tools/bundle_windows.sh build build/windows-bundle /ucrt64
@@ -32,7 +32,7 @@ EXE の生成確認だけでなく、変換、GUI の四言語、設定保存、
 
 ## Linux からクロスビルドする
 
-Windows 用 WebP、Vorbis/Ogg、libcurl 7.85 以降と MinGW を用意します。`CMAKE_PREFIX_PATH` または CMake の各ライブラリ変数で対象ライブラリを指定し、Linux ホスト用ライブラリをリンクしないでください。
+Windows 用 WebP、Vorbis/Ogg、uchardet の静的ライブラリ、libcurl 7.85 以降と MinGW を用意します。`CMAKE_PREFIX_PATH` または CMake の各ライブラリ変数で対象ライブラリを指定し、Linux ホスト用ライブラリをリンクしないでください。
 
 CLI の例:
 

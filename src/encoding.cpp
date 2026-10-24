@@ -30,6 +30,7 @@ std::string normalizeEncodingName(const std::string& encoding) {
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     lower.erase(std::remove_if(lower.begin(), lower.end(),
         [](char c) { return c == '-' || c == '_' || c == ' '; }), lower.end());
+    if (lower == "auto") return "auto";
     if (lower == "cp932" || lower == "932" || lower == "windows31j" ||
         lower == "windows932" || lower == "shiftjis" || lower == "sjis" || lower == "ms932")
         return "CP932";

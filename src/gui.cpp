@@ -118,7 +118,8 @@ static gboolean closeWindow(GtkWindow*, gpointer) {
     return working;
 }
 static liarsoft::conversion::ConversionOptions options() {
-    return {liarsoft::supportedEncodings().at(gtk_drop_down_get_selected(GTK_DROP_DOWN(ui.encoding))), path(ui.reference),
+    const auto index = gtk_drop_down_get_selected(GTK_DROP_DOWN(ui.encoding));
+    return {index ? liarsoft::supportedEncodings().at(index - 1) : "auto", path(ui.reference),
         active(ui.recursive), !active(ui.txt), active(ui.unpackOnly), active(ui.vorbis),
         static_cast<unsigned>(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ui.workers)))};
 }
@@ -336,9 +337,11 @@ static void buildPreferences() {
     adw_preferences_group_set_title(group, _("Conversion"));
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), group);
     auto* encodings = gtk_string_list_new(nullptr);
+    gtk_string_list_append(encodings, _("Auto (GSC input)"));
     for (const auto& encoding : liarsoft::supportedEncodings()) gtk_string_list_append(encodings, encoding.c_str());
     ui.encoding = gtk_drop_down_new(G_LIST_MODEL(encodings), nullptr);
     addRow(group, _("Resource encoding"), ui.encoding);
+    gtk_widget_set_tooltip_text(ui.encoding, _("Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."));
     ui.recursive = check(group, _("Recursive"));
     ui.packOnly = check(group, _("Pack only"));
     ui.unpackOnly = check(group, _("Unpack only"));

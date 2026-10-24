@@ -1,5 +1,6 @@
 #include "archive_index.h"
 #include "xflarchive.h"
+#include "conversion.h"
 #include "bigendian.h"
 #include "bmp_normalizer.h"
 #include "gscfile.h"
@@ -319,6 +320,7 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
     }
 
     std::vector<fs::path> archives;
+    const auto archiveEncoding = normalizeEncodingName(encoding) == "auto" ? "CP932" : encoding;
     for (const auto& entry : fs::directory_iterator(directory)) {
         if (entry.is_symlink() || !entry.is_regular_file()) continue;
         auto ext = lower(entry.path().extension().string());
@@ -336,11 +338,11 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
         }
         try {
             if (lower(archivePath.extension().string()) == ".xfl") {
-                XflArchive::fromFile(archivePath.string(), encoding)
+                XflArchive::fromFile(archivePath.string(), archiveEncoding)
                     .extractToDirectory(target.string(), fs::last_write_time(archivePath));
             } else {
-                auto archive = LwgDecoder::decode(readFile(archivePath), encoding);
-                LwgDecoder::extractToDirectory(archive, target.string(), encoding,
+                auto archive = LwgDecoder::decode(readFile(archivePath), archiveEncoding);
+                LwgDecoder::extractToDirectory(archive, target.string(), archiveEncoding,
                                                fs::last_write_time(archivePath));
             }
         } catch (const std::exception& e) {
@@ -369,16 +371,11 @@ static void unpackDirectory(const fs::path& directory, const std::string& encodi
             if (ext == ".bmp") target = source;
             try {
                 if (ext == ".gsc") {
-                    if (gscToTsc) {
-                        const auto recovered = decompileGscToFile(
-                            source.string(), target.string(), encoding);
-                        group.warnings.insert(group.warnings.end(),
-                                              recovered.begin(), recovered.end());
-                    } else {
-                        auto gsc = GscFile::fromFile(source.string(), encoding);
-                        TransFile::fromGsc(gsc).save(target.string());
-                        copyModificationTime(source.string(), target.string());
-                    }
+                    conversion::ConversionOptions options;
+                    options.encoding = encoding;
+                    options.gscToTsc = gscToTsc;
+                    const auto result = conversion::convert(source.string(), target.string(), options);
+                    group.warnings.insert(group.warnings.end(), result.warnings.begin(), result.warnings.end());
                 } else if (ext == ".wcg") {
                     wcgSavePng(wcgDecode(readFile(source)), target.string());
                     copyModificationTime(source.string(), target.string());

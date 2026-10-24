@@ -71,7 +71,8 @@ void setText(GtkWidget* widget, const std::string& text) {
 }
 std::string encoding(Browser* b) {
     const auto choice = gtk_drop_down_get_selected(GTK_DROP_DOWN(b->encoding));
-    return supportedEncodings().at(choice ? choice - 1 : gtk_drop_down_get_selected(b->baseEncoding));
+    const auto index = choice ? choice - 1 : gtk_drop_down_get_selected(b->baseEncoding);
+    return index ? supportedEncodings().at(index - 1) : "auto";
 }
 std::string hexPage(const ResourceSource& source, uint64_t offset) {
     const auto bytes = source.read(offset, static_cast<size_t>(std::min(HexPageSize, source.size() - offset)));
@@ -265,12 +266,13 @@ void request(Browser* b, RequestKind kind, Node node, size_t depth, const fs::pa
                         " y=" + std::to_string(node.metadata->y) + " flag=" + std::to_string(node.metadata->flag);
                     const auto header = source.read(0, static_cast<size_t>(std::min<uint64_t>(4, source.size())));
                     if (input->kind == RequestKind::Open && header.size() == 4 && header[0] == 'L' && (header[1] == 'B' || header[1] == 'G') && header[2] == 1 && header[3] == 0) {
-                        const auto index = readArchiveIndex(source, input->encoding);
+                        const auto archiveEncoding = input->encoding == "auto" ? "CP932" : input->encoding;
+                        const auto index = readArchiveIndex(source, archiveEncoding);
                         for (const auto& entry : index.entries)
                             result->nodes.push_back({entry.name, node.file, source.subrange(entry.offset, entry.size),
                                 index.format == "LWG" ? std::optional<ArchiveEntryInfo>(entry) : std::nullopt, false, true});
                         result->details = index.format + " · " + std::to_string(index.entries.size()) + " " + B_("entries");
-                        result->details += " · " + input->encoding;
+                        result->details += " · " + archiveEncoding;
                         if (index.format == "LWG") result->details += " · " + std::to_string(index.width) + " × " + std::to_string(index.height);
                     } else {
                         result->hex = hexPage(source, input->offset);
@@ -280,7 +282,7 @@ void request(Browser* b, RequestKind kind, Node node, size_t depth, const fs::pa
                             const auto& preview = result->preview;
                             result->details += " · " + (preview.format.empty() ? B_("Unknown type") : preview.format);
                             if (preview.kind == PreviewKind::Text) result->details += " · " +
-                                (preview.format == "GSC" ? input->encoding + " → " : "") + preview.encoding;
+                                preview.encoding + (preview.format == "GSC" ? " → UTF-8" : "");
                             if (preview.kind == PreviewKind::Image) result->details += " · " +
                                 std::to_string(preview.image.width) + " × " + std::to_string(preview.image.height);
                         }
@@ -376,6 +378,7 @@ GtkWidget* createResourceBrowser(GtkWindow* parent, GtkDropDown* resourceEncodin
     gtk_widget_set_sensitive(b->back, FALSE); gtk_box_append(GTK_BOX(actions), b->back);
     auto* choices = gtk_string_list_new(nullptr);
     gtk_string_list_append(choices, B_("Resource setting"));
+    gtk_string_list_append(choices, B_("Auto (GSC input)"));
     for (const auto& encoding : supportedEncodings()) gtk_string_list_append(choices, encoding.c_str());
     b->encoding = gtk_drop_down_new(G_LIST_MODEL(choices), nullptr);
     gtk_widget_set_tooltip_text(b->encoding, B_("Text and archive filename encoding"));

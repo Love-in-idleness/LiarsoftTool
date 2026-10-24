@@ -6,6 +6,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
 find_package(CURL 7.85 REQUIRED)
 
+# Keep detection inside both executables, without another runtime DLL/SO.
+find_path(UCHARDET_INCLUDE_DIR uchardet/uchardet.h)
+find_library(UCHARDET_LIBRARY NAMES "${CMAKE_STATIC_LIBRARY_PREFIX}uchardet${CMAKE_STATIC_LIBRARY_SUFFIX}")
+if(NOT UCHARDET_INCLUDE_DIR OR NOT UCHARDET_LIBRARY)
+    message(FATAL_ERROR "uchardet development files, including its static library, are required")
+endif()
+add_library(Uchardet::uchardet STATIC IMPORTED)
+set_target_properties(Uchardet::uchardet PROPERTIES
+    IMPORTED_LOCATION "${UCHARDET_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${UCHARDET_INCLUDE_DIR}")
+
 # libvorbisfile provides the same PCM decoder on Linux and Windows.
 find_path(VORBIS_INCLUDE_DIR vorbis/vorbisfile.h)
 find_path(OGG_INCLUDE_DIR ogg/ogg.h)
@@ -125,7 +136,7 @@ add_library(liarsofttool_core STATIC
     src/stb_impl.cpp
     src/stb_image_impl.cpp
 )
-target_link_libraries(liarsofttool_core PUBLIC WebP::webp Vorbis::file Threads::Threads)
+target_link_libraries(liarsofttool_core PUBLIC WebP::webp Vorbis::file Threads::Threads Uchardet::uchardet)
 if(NOT WIN32)
     target_link_libraries(liarsofttool_core PUBLIC Iconv::Iconv)
 endif()
@@ -159,7 +170,8 @@ endif()
 
 # Install
 install(TARGETS liarsofttool DESTINATION bin)
-install(FILES docs/THIRD_PARTY_AUDIO_LICENSES.md DESTINATION share/doc/LiarsoftTool)
+install(FILES docs/THIRD_PARTY_AUDIO_LICENSES.md docs/THIRD_PARTY_UCHARDET_LICENSES.md
+    DESTINATION share/doc/LiarsoftTool)
 if(BUILD_GUI)
     install(TARGETS liarsofttool-gui DESTINATION bin)
 endif()
@@ -187,6 +199,13 @@ if(BUILD_TESTING)
 
     add_executable(gscfile_test tests/gscfile_test.cpp)
     add_test(NAME gscfile COMMAND gscfile_test)
+    add_executable(gsc_encoding_test tests/gsc_encoding_test.cpp)
+    target_link_libraries(gsc_encoding_test PRIVATE liarsofttool_core)
+    add_test(NAME gsc_encoding COMMAND gsc_encoding_test)
+    add_test(NAME gsc_encoding_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool> -DFIXTURES=$<TARGET_FILE:gsc_encoding_test>
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/gsc_encoding_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/gsc_encoding_test.cmake)
 
     add_executable(fileio_test tests/fileio_test.cpp)
     add_test(NAME fileio COMMAND fileio_test)

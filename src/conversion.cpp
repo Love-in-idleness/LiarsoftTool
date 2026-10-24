@@ -9,6 +9,7 @@
 // #include "exe_patch.h" // EXE conversion is disabled; retained for reference.
 #include "bmp_normalizer.h"
 #include "fileio.h"
+#include "encoding.h"
 #include "gsc_decompiler.h"
 #include "gscfile.h"
 #include "lim_decoder.h"
@@ -110,6 +111,11 @@ ConversionResult convert(const std::string& inputPath,
     if (options.workers > liarsoft::MaxConversionWorkers)
         throw std::runtime_error("Worker count must be between 0 and 64");
     const std::string ext = extension(inputPath);
+    const bool automatic = liarsoft::normalizeEncodingName(options.encoding) == "auto";
+    const auto encoding = automatic ? std::string("CP932") : options.encoding;
+    if (automatic && (ext == ".tsc" || ext == ".txt" ||
+        (fs::is_directory(inputPath) && !options.unpackOnly)))
+        throw std::runtime_error("Choose an explicit resource encoding for packing or GSC output; auto only detects input text");
     ConversionResult result;
     auto& warnings = result.warnings;
 
@@ -122,11 +128,18 @@ ConversionResult convert(const std::string& inputPath,
                 inputPath, outputPath, options.encoding, options.recursive,
                 options.vorbisInWav, options.workers);
     } else if (ext == ".gsc") {
-        if (options.gscToTsc)
-            warnings = liarsoft::decompileGscToFile(inputPath, outputPath, options.encoding);
-        else {
+        const auto data = liarsoft::readFile(inputPath);
+        const auto encoding = automatic
+            ? liarsoft::detectGscEncoding(data, &warnings) : options.encoding;
+        for (auto& warning : warnings) warning = inputPath + ": " + warning;
+        if (options.gscToTsc) {
+            const auto text = liarsoft::decompileGscBytes(data, encoding, &warnings, inputPath);
+            liarsoft::writeFileIfChanged(outputPath,
+                reinterpret_cast<const uint8_t*>(text.data()), text.size());
+            liarsoft::copyModificationTime(inputPath, outputPath);
+        } else {
             liarsoft::TransFile::fromGsc(
-                liarsoft::GscFile::fromFile(inputPath, options.encoding)).save(outputPath);
+                liarsoft::GscFile::fromBytes(data, encoding)).save(outputPath);
             liarsoft::copyModificationTime(inputPath, outputPath);
         }
     } else if (ext == ".tsc") {
@@ -137,16 +150,16 @@ ConversionResult convert(const std::string& inputPath,
         liarsoft::TransFile::fromFile(inputPath)
             .toGsc(reference, options.encoding).save(outputPath);
     } else if (ext == ".xfl") {
-        liarsoft::XflArchive::fromFile(inputPath, options.encoding)
+        liarsoft::XflArchive::fromFile(inputPath, encoding)
             .extractToDirectory(outputPath, fs::last_write_time(inputPath));
         if (options.recursive)
             warnings = liarsoft::unpackDirectoryRecursively(
                 outputPath, options.encoding, options.gscToTsc, options.workers);
     } else if (ext == ".lwg") {
         const auto archive = liarsoft::LwgDecoder::decode(
-            liarsoft::readFile(inputPath), options.encoding);
+            liarsoft::readFile(inputPath), encoding);
         liarsoft::LwgDecoder::extractToDirectory(
-            archive, outputPath, options.encoding, fs::last_write_time(inputPath));
+            archive, outputPath, encoding, fs::last_write_time(inputPath));
         if (options.recursive)
             warnings = liarsoft::unpackDirectoryRecursively(
                 outputPath, options.encoding, options.gscToTsc, options.workers);

@@ -30,15 +30,15 @@ gboolean tick(gpointer) {
                 require(gdk_texture_save_to_png(texture, destination), "window capture failed");
                 g_object_unref(texture); gsk_render_node_unref(node); g_object_unref(paintable);
             }
-            require(options().encoding == "CP932" && options().gscToTsc && !options().recursive &&
+            require(options().encoding == "auto" && options().gscToTsc && !options().recursive &&
                 !options().unpackOnly && !active(ui.packOnly) && !options().vorbisInWav &&
                 options().workers == 0, "conversion defaults changed");
             for (guint index = 0; index < liarsoft::supportedEncodings().size(); ++index) {
-                gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), index);
+                gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), index + 1);
                 require(options().encoding == liarsoft::supportedEncodings()[index],
                         "Conversion encoding index is incorrect");
             }
-            gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), 0);
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), 1);
             for (unsigned value = 0; value < 3; ++value) {
                 ui.preferences.theme = value; theme(); savePreferences();
                 require(liarsoft::gui::loadPreferences().theme == value, "theme not saved");

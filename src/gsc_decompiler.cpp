@@ -2,6 +2,7 @@
 
 #include "encoding.h"
 #include "fileio.h"
+#include <uchardet/uchardet.h>
 
 #include <algorithm>
 #include <cctype>
@@ -10,6 +11,7 @@
 #include <iomanip>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -299,19 +301,20 @@ const std::unordered_map<uint16_t, std::string>& schemasFor(
 
 class ParsedGsc {
 public:
-    ParsedGsc(const std::vector<uint8_t>& data, const std::string& inputPath) : path(inputPath) {
+    ParsedGsc(const std::vector<uint8_t>& data, const std::string& inputPath,
+              bool decodeInstructions = true) : path(inputPath) {
         if (data.size() < 28) fail("shorter than the GSC header");
         const uint32_t headerLength = readU32(data, 4);
         if (headerLength == 28) {
             earlyVmEncoding = true;
             parseLegacy(data);
-            selectSchema({InstructionSchema::Early, InstructionSchema::EarlyShortSelect,
+            if (decodeInstructions) selectSchema({InstructionSchema::Early, InstructionSchema::EarlyShortSelect,
                           InstructionSchema::PreCodeX,
                           InstructionSchema::RScript18,
                           InstructionSchema::RScript19, InstructionSchema::Modern});
         } else if (headerLength == 36) {
             parseModern(data);
-            selectSchema({InstructionSchema::Modern, InstructionSchema::RScript19,
+            if (decodeInstructions) selectSchema({InstructionSchema::Modern, InstructionSchema::RScript19,
                           InstructionSchema::RScript18, InstructionSchema::Early,
                           InstructionSchema::EarlyShortSelect,
                           InstructionSchema::PreCodeX});
@@ -429,6 +432,16 @@ public:
     }
 
     size_t dataBlockCount() const { return indexB.size() / 4; }
+
+    std::vector<std::string> encodedStrings() const {
+        std::vector<std::string> result;
+        const auto count = legacyStrings.empty() ? indexA.size() / 4 : legacyStrings.size();
+        for (size_t i = 0; i < count; ++i) {
+            const auto bytes = stringBytes(i);
+            result.emplace_back(bytes.begin(), bytes.end());
+        }
+        return result;
+    }
 
     fs::path path;
     std::vector<uint8_t> code;
@@ -1197,6 +1210,62 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
 }
 
 } // namespace
+
+std::string detectGscEncoding(const std::vector<uint8_t>& data,
+                              std::vector<std::string>* warnings) {
+    const auto strings = ParsedGsc(data, "GSC encoding detection", false).encodedStrings();
+    auto valid = [&](const std::string& encoding) {
+        try {
+            for (const auto& text : strings) convertEncoding(text, encoding, "UTF-8", true);
+            return true;
+        } catch (const std::runtime_error&) { return false; }
+    };
+    std::string sample;
+    size_t nonAscii = 0;
+    for (const auto& text : strings) {
+        const auto count = std::count_if(text.begin(), text.end(), [](unsigned char c) { return c >= 128; });
+        nonAscii += count;
+        // Exclude resource names and other ASCII-only strings from statistics.
+        if (count && sample.size() < 65536) {
+            sample += text.substr(0, 65536 - sample.size());
+            sample += '\n';
+        }
+    }
+    auto report = [&](const std::string& encoding, const std::string& reason) {
+        if (warnings) warnings->push_back("GSC input encoding: " + encoding + ". " + reason);
+        return encoding;
+    };
+    if (!nonAscii)
+        return report("CP932", "ASCII-only text; original encoding cannot be determined.");
+    if (valid("UTF-8"))
+        return report("UTF-8", "Valid UTF-8 text; override manually if the text looks wrong.");
+
+    std::unique_ptr<uchardet, decltype(&uchardet_delete)> detector(uchardet_new(), uchardet_delete);
+    if (!detector || uchardet_handle_data(detector.get(), sample.data(), sample.size()))
+        throw std::runtime_error("GSC encoding detector failed");
+    uchardet_data_end(detector.get());
+    const std::string guessed = uchardet_get_charset(detector.get());
+    std::string encoding = normalizeEncodingName(guessed);
+    if (guessed == "EUC-KR") encoding = "CP949";
+    if (guessed == "ISO-8859-1") encoding = "CP1252";
+    if (encoding == "GB18030" && valid("GBK")) encoding = "GBK";
+    const auto& supported = supportedEncodings();
+    const bool supportedGuess = std::find(supported.begin(), supported.end(), encoding) != supported.end();
+    if (nonAscii < 32 || !supportedGuess || !valid(encoding)) {
+        std::string candidates;
+        for (const auto& candidate : supported) {
+            if (valid(candidate)) candidates += (candidates.empty() ? "" : ", ") + candidate;
+        }
+        throw std::runtime_error("Cannot reliably detect GSC input encoding" +
+            (guessed.empty() ? std::string() : " (uchardet: " + guessed + ")") +
+            ". Choose an encoding manually. Decodable candidates (not proof): " +
+            (candidates.empty() ? "none" : candidates));
+    }
+    // GBK is a subset of GB18030; shared bytes cannot identify the original label.
+    if ((encoding == "GB18030" || encoding == "GBK") && valid("GBK"))
+        return report("GBK", "GBK/GB18030 are indistinguishable for these strings; override manually if needed.");
+    return report(encoding, "Statistical guess, validated for every string; override manually if the text looks wrong.");
+}
 
 static std::string decompileListing(const std::vector<uint8_t>& data, const std::string& inputPath,
                                     const std::string& encoding,
