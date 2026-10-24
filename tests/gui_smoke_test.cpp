@@ -101,10 +101,20 @@ int main(int argc, char** argv) {
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(directory);
     g_setenv("XDG_CONFIG_HOME", directory.string().c_str(), TRUE);
+    g_setenv("XDG_CACHE_HOME", directory.string().c_str(), TRUE);
     g_setenv("LANGUAGE", argc == 2 ? argv[1] : "en", TRUE);
     if (argc == 2) {
         const std::string language = liarsoft::gui::effectiveLanguage("");
-        liarsoft::gui::initializeTranslations(language, argv[0]);
+        const bool standalone = g_getenv("LIARSOFT_TEST_EMBEDDED") != nullptr;
+        const std::string executable = standalone ? (directory / "standalone/gui").string() : argv[0];
+        liarsoft::gui::initializeTranslations(language, executable.c_str());
+        if (standalone) {
+            const auto catalog = directory / "liarsofttool/locale" / language / "LC_MESSAGES/liarsofttool.mo";
+            require(fs::is_regular_file(catalog), "standalone catalog not installed");
+            const auto modified = fs::last_write_time(catalog);
+            liarsoft::gui::initializeTranslations(language, executable.c_str());
+            require(fs::last_write_time(catalog) == modified, "unchanged catalog was rewritten");
+        }
         const std::string expected = language == "ru" ? "Параметры" : language == "zh_CN" ? "首选项" :
             language == "ja" ? "設定" : "Preferences";
         require(language == (std::string(argv[1]).compare(0, 2, "ja") == 0 ? "ja" :

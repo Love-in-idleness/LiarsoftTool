@@ -1,0 +1,7 @@
+file(WRITE "${OUTPUT}" "#include <string_view>\nstatic std::string_view embeddedCatalog(const std::string& language) {\n")
+foreach(language ru zh_CN ja)
+    file(READ "${CATALOG_DIR}/${language}/LC_MESSAGES/liarsofttool.mo" bytes HEX)
+    string(REGEX REPLACE "(..)" "\\\\x\\1" bytes "${bytes}")
+    file(APPEND "${OUTPUT}" "if (language == \"${language}\") {\nstatic const char data[] = \"${bytes}\";\nreturn {data, sizeof(data) - 1};\n}\n")
+endforeach()
+file(APPEND "${OUTPUT}" "return {};\n}\n")

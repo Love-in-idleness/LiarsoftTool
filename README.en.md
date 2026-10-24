@@ -16,7 +16,9 @@ To port a game to Ren'Py, use it with
 
 Windows provides separate compressed, single-file GUI and CLI executables.
 Download the one you need and run it directly; no extraction is required.
-On Linux, run `liarsofttool-gui`. The command-line program is `liarsofttool`.
+Linux provides separate GUI and CLI binaries. Grant execute permission after downloading; no extraction is needed.
+The GUI includes its translations but still requires the system libraries listed below.
+Source builds produce `liarsofttool-gui` and the command-line program `liarsofttool`.
 
 Work on a copy of your game resources. Output normally goes beside the input
 and rebuilding may overwrite files with the same name.

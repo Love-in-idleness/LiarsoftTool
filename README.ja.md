@@ -10,7 +10,9 @@ Ren'Py への移植には、[rscript2renpy](https://github.com/Love-in-idleness/
 
 ## 使い始める
 
-Windows 版は GUI と CLI をそれぞれ圧縮済みの単一 EXE で配布します。必要な方をダウンロードして実行してください。展開は不要です。Linux 版の GUI は `liarsofttool-gui`、CLI は `liarsofttool` です。
+Windows 版は GUI と CLI をそれぞれ圧縮済みの単一 EXE で配布します。必要な方をダウンロードして実行してください。展開は不要です。
+Linux 版も GUI・CLI の独立バイナリーです。ダウンロード後に実行権限を付けてください。GUI は翻訳を内蔵しますが、以下のシステムライブラリは必要です。
+ソースからのビルドでは GUI は `liarsofttool-gui`、CLI は `liarsofttool` です。
 
 作業前にゲームリソースをコピーしてください。出力先の既定値は入力ファイルと同じ場所です。再変換で同名ファイルが上書きされることがあります。
 

@@ -7,6 +7,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
+#ifdef LIARSOFT_EMBEDDED_CATALOGS
+#include "gui_catalogs.h"
+#endif
 
 namespace liarsoft::gui {
 static std::string settingsPath() {
@@ -84,6 +87,18 @@ void initializeTranslations(const std::string& language, const char* executable)
     auto directory = fs::absolute(fs::u8path(executable)).parent_path();
     auto catalogs = directory / "locale";
     if (!fs::is_directory(catalogs)) catalogs = directory.parent_path() / "share/locale";
+#ifdef LIARSOFT_EMBEDDED_CATALOGS
+    if (!fs::is_regular_file(catalogs / language / "LC_MESSAGES/liarsofttool.mo")) {
+        const auto contents = embeddedCatalog(language);
+        if (!contents.empty()) {
+            // gettext needs a directory even when the executable carries its catalogs.
+            catalogs = fs::u8path(g_get_user_cache_dir()) / "liarsofttool/locale";
+            const auto path = catalogs / language / "LC_MESSAGES/liarsofttool.mo";
+            fs::create_directories(path.parent_path());
+            writeFileIfChanged(path.string(), reinterpret_cast<const uint8_t*>(contents.data()), contents.size());
+        }
+    }
+#endif
     bindtextdomain("liarsofttool", catalogs.u8string().c_str());
     bind_textdomain_codeset("liarsofttool", "UTF-8");
     textdomain("liarsofttool");

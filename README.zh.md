@@ -14,7 +14,9 @@ LiarsoftTool 用于处理 CodeX RScript 引擎游戏的资源，支持封包解�
 ## 开始使用
 
 Windows 分别提供 GUI、CLI 两个压缩单文件 EXE，下载所需程序即可运行，无需解压。
-Linux 用户运行 `liarsofttool-gui`；命令行程序为 `liarsofttool`。
+Linux 分别提供 GUI、CLI 独立二进制文件，下载后赋予执行权限即可运行，无需解压。
+GUI 内置语言文件，仍需安装下文列出的系统运行库。
+从源码构建时，GUI 程序为 `liarsofttool-gui`，命令行程序为 `liarsofttool`。
 
 先复制一份游戏资源再操作。生成文件默认写在输入文件旁，重建可能覆盖同名文件。
 

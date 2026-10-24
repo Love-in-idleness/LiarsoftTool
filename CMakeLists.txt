@@ -63,6 +63,18 @@ if(BUILD_GUI)
     add_custom_target(gui_translations ALL DEPENDS ${GUI_CATALOGS})
     add_library(liarsofttool_gui_preferences STATIC src/gui_preferences.cpp)
     target_link_libraries(liarsofttool_gui_preferences PUBLIC PkgConfig::ADWAITA Intl::Intl liarsofttool_core)
+    if(NOT WIN32)
+        set(embedded_catalogs "${CMAKE_CURRENT_BINARY_DIR}/gui_catalogs.h")
+        add_custom_command(OUTPUT "${embedded_catalogs}"
+            COMMAND ${CMAKE_COMMAND}
+                "-DCATALOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/locale"
+                "-DOUTPUT=${embedded_catalogs}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_gui_catalogs.cmake"
+            DEPENDS ${GUI_CATALOGS} "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_gui_catalogs.cmake")
+        target_sources(liarsofttool_gui_preferences PRIVATE "${embedded_catalogs}")
+        target_include_directories(liarsofttool_gui_preferences PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+        target_compile_definitions(liarsofttool_gui_preferences PRIVATE LIARSOFT_EMBEDDED_CATALOGS)
+    endif()
 endif()
 
 # Include directories
@@ -222,6 +234,12 @@ if(BUILD_TESTING)
         foreach(language en ru zh_CN ja ja_JP fr_FR)
             add_test(NAME gui_language_${language} COMMAND gui_smoke_test ${language})
         endforeach()
+        if(NOT WIN32)
+            foreach(language ru zh_CN ja)
+                add_test(NAME gui_standalone_${language} COMMAND ${CMAKE_COMMAND} -E env
+                    LIARSOFT_TEST_EMBEDDED=1 $<TARGET_FILE:gui_smoke_test> ${language})
+            endforeach()
+        endif()
         if(WIN32)
             add_test(NAME gui_smoke COMMAND gui_smoke_test)
             add_test(NAME gui_browser COMMAND gui_browser_test)
