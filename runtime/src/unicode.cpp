@@ -95,7 +95,7 @@ std::string GlyphTokens::encode(std::string_view text) {
         // shortcut: the original glyph renderer consumes one UTF-16 unit; add
         // shaping and glyph-index delivery before accepting supplementary text.
         if (cp > 0xffff)
-            throw std::runtime_error("Forest Unicode renderer does not support supplementary characters");
+            throw std::runtime_error("Unicode renderer does not support supplementary characters");
         Character character{char16_t(cp), {}};
         const std::string scalar(text.substr(start, offset - start));
         const auto cached = nativeEncoding_.find(character.cp);
@@ -128,7 +128,7 @@ std::string GlyphTokens::encode(std::string_view text) {
         available += !reserved[slot] && !glyphs_[slot];
     for (const auto cp : required) needed += tokens_.find(cp) == tokens_.end();
     if (needed > available)
-        throw std::runtime_error("Forest Unicode glyph-token capacity exhausted (1880 slots)");
+        throw std::runtime_error("Unicode glyph-token capacity exhausted (1880 slots)");
 
     std::string output;
     output.reserve(text.size());

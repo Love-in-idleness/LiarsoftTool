@@ -5,6 +5,7 @@
 #include "stb_image_write.h"
 #include "wav_ogg.h"
 #include "wcg_decoder.h"
+#include "xflarchive.h"
 #include "../../tests/vorbis_fixture.h"
 #include <chrono>
 #include <iostream>
@@ -74,6 +75,22 @@ int main() {
 
         const std::string header = ";@gsc-byte-format modern-36\n;@gsc-schema modern\n";
         const auto nativeScript = restoreGscFromTsc(header + "*end\n");
+        const auto originalRoot = root / "original";
+        fs::create_directory(originalRoot);
+        XflArchive scripts;
+        scripts.encoding = "CP932";
+        const auto legacyScript = restoreGscFromTsc(";@gsc-byte-format legacy-28\n;@gsc-schema early\n*end\n");
+        scripts.entries.push_back({"2100.gsc", legacyScript});
+        scripts.save((originalRoot / "chapterset.xfl").u8string());
+        rejected([&] { validateScriptOverride(nativeScript, originalRoot, "chapterset/2100.gsc"); });
+        validateScriptOverride(legacyScript, originalRoot, "chapterset/2100.gsc");
+        validateScriptOverride(nativeScript, originalRoot, "chapterset/2101.gsc");
+        scripts.entries[0].data = nativeScript;
+        scripts.save((originalRoot / "chapterset.xfl").u8string());
+        validateScriptOverride(nativeScript, originalRoot, "chapterset/2100.gsc");
+        fs::create_directory(originalRoot / "chapterset");
+        writeFileIfChanged((originalRoot / "chapterset" / "2100.gsc").u8string(), legacyScript);
+        rejected([&] { validateScriptOverride(nativeScript, originalRoot, "chapterset/2100.gsc"); });
         writeFileIfChanged((root / "scr" / "2100.gsc").u8string(), nativeScript);
         const std::string unicodeScript = header + "*font 1 0 0 0 0 \"日本中文Русский😀\"\n*end\n";
         text(root / "scr" / "2100.tsc", unicodeScript);

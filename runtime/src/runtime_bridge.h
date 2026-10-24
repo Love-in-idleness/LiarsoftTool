@@ -14,7 +14,7 @@ struct RScriptBuffer {
 
 enum RScriptResourceKind { RScriptScript, RScriptImage, RScriptAudio, RScriptComponent };
 
-struct RScriptForestBridge {
+struct RScriptRuntimeBridge {
     uint32_t size;
     uint32_t version;
     void* game_module;
@@ -26,8 +26,8 @@ struct RScriptForestBridge {
         uint32_t utf8, RScriptBuffer* output, const char** error);
 };
 
-inline RScriptForestBridge* forestBridge(const RScriptHostContext* context) {
+inline RScriptRuntimeBridge* runtimeBridge(const RScriptHostContext* context) {
     if (!context || context->size < sizeof(*context) || !context->get_engine_api) return nullptr;
-    auto* bridge = static_cast<RScriptForestBridge*>(context->get_engine_api());
-    return bridge && bridge->size == sizeof(*bridge) && bridge->version == 1 ? bridge : nullptr;
+    auto* bridge = static_cast<RScriptRuntimeBridge*>(context->get_engine_api());
+    return bridge && bridge->size == sizeof(*bridge) && bridge->version == 2 ? bridge : nullptr;
 }

@@ -5,8 +5,8 @@
 
 namespace liarsoft::runtime {
 
-void installForestTextHooks(void* gameModule, GlyphTokens& tokens,
+void installEngineTextHooks(void* gameModule, GlyphTokens& tokens,
                             void (RSCRIPT_CALL *log)(uint32_t, const char*));
-void removeForestTextHooks();
+void removeEngineTextHooks();
 
 } // namespace liarsoft::runtime

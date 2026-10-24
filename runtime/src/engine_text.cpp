@@ -1,11 +1,11 @@
-#include "forest_text.h"
+#include "engine_text.h"
+#include "imports.h"
 
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include <array>
 #include <cstring>
 #include <cwchar>
 #include <stdexcept>
@@ -13,6 +13,7 @@
 namespace liarsoft::runtime {
 namespace {
 
+// Static observations, not runtime address selectors:
 // Forest.exe SHA256 8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56.
 // REA ev_fc508a2faf06272d66027cd66c50c6adc18f7c7bc34f4f2e6610ed0f3f809290:
 // 0x4453e0 rasterizes one DBCS glyph. REA ev_d824fba2c4320774bb4093626dadf3312428296a0939d40fd2e5ad4823d4aeda:
@@ -26,12 +27,15 @@ decltype(&GetGlyphOutlineA) originalGlyph = nullptr;
 decltype(&TextOutA) originalTextOut = nullptr;
 decltype(&GetTextExtentPoint32A) originalExtent = nullptr;
 
-struct ImportPatch { void** slot = nullptr; void* original = nullptr; };
-std::array<ImportPatch, 4> patches;
+std::vector<ImportPatch> patches;
+decltype(&IsDBCSLeadByteEx) originalLead = nullptr;
 
 // The static CRT initializes its DBCS table from GetACP before game scripts run.
 // REA ev_17e895a8bdb39082341c3f9bdb782e5e4ef09b18431096f0819b17088726f365.
 UINT WINAPI engineCodepage() { return 932; }
+BOOL WINAPI engineLead(UINT codepage, BYTE value) {
+    return originalLead(codepage == CP_ACP || codepage == CP_THREAD_ACP ? 932 : codepage, value);
+}
 
 void report(const char* error) {
     if (logger) logger(RSCRIPT_LOG_ERROR, error);
@@ -91,7 +95,7 @@ DWORD WINAPI unicodeGlyph(HDC dc, UINT character, UINT format, LPGLYPHMETRICS me
                 if (result != GDI_ERROR) return result;
                 report("GetGlyphOutlineW could not rasterize a Unicode glyph");
             } catch (const std::exception& error) { report(error.what()); }
-            // Forest checks zero, not GDI_ERROR, before allocating the bitmap.
+            // Verified legacy renderers test zero, not GDI_ERROR, before allocation.
             if (metrics) *metrics = {};
             return 0;
         }
@@ -125,71 +129,35 @@ BOOL WINAPI unicodeExtent(HDC dc, LPCSTR text, int count, LPSIZE size) {
     } catch (const std::exception& error) { report(error.what()); return FALSE; }
 }
 
-void patchImport(ImportPatch& patch, uint8_t* base, size_t rva, const char* name, void* replacement,
-                 const wchar_t* library = L"gdi32.dll") {
-    void* expected = reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(library), name));
-    auto** slot = reinterpret_cast<void**>(base + rva);
-    if (!expected || *slot != expected)
-        throw std::runtime_error(std::string("Unexpected Forest GDI import: ") + name);
-    DWORD protection;
-    if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &protection))
-        throw std::runtime_error("Cannot write a Forest GDI import slot");
-    patch.slot = slot;
-    patch.original = *slot;
-    InterlockedExchangePointer(slot, replacement);
-    DWORD ignored;
-    if (!VirtualProtect(slot, sizeof(void*), protection, &ignored))
-        throw std::runtime_error("Cannot restore Forest GDI import-slot protection");
+template<class Function> void patchImport(void* module, const char* name, Function hook, Function& original) {
+    void* address = hookImport(module, name, reinterpret_cast<void*>(hook), patches);
+    std::memcpy(&original, &address, sizeof(original));
 }
 
 } // namespace
 
-void installForestTextHooks(void* module, GlyphTokens& tokens,
+void installEngineTextHooks(void* module, GlyphTokens& tokens,
                             void (RSCRIPT_CALL *log)(uint32_t, const char*)) {
-    static_assert(sizeof(void*) == 4 && sizeof(wchar_t) == 2, "Forest text hooks require x86 Windows");
-    if (activeTokens) throw std::runtime_error("Forest Unicode hooks are already installed");
-    auto* base = static_cast<uint8_t*>(module);
-    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
-    if (!base || dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 || dos->e_lfanew > 4096)
-        throw std::runtime_error("Invalid Forest executable image");
-    const auto* pe = reinterpret_cast<const IMAGE_NT_HEADERS32*>(base + dos->e_lfanew);
-    if (pe->Signature != IMAGE_NT_SIGNATURE || pe->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
-        pe->OptionalHeader.SizeOfImage < 0x59188)
-        throw std::runtime_error("Unsupported Forest executable image");
-    const unsigned char glyphCall[] = {0xff, 0x15, 0x38, 0x90, 0x45, 0x00};
-    const unsigned char walker[] = {0x66, 0x0f, 0xb6, 0x02, 0x66, 0x0f, 0xb6, 0x52, 0x01,
-                                   0xc1, 0xe0, 0x08, 0x03, 0xc2};
-    if (std::memcmp(base + 0x45542, glyphCall, sizeof(glyphCall)) ||
-        std::memcmp(base + 0x38836, walker, sizeof(walker)))
-        throw std::runtime_error("Forest text code does not match the verified executable");
+    static_assert(sizeof(wchar_t) == 2, "Text hooks require Windows UTF-16");
+    if (activeTokens) throw std::runtime_error("Unicode hooks are already installed");
     logger = log;
     activeTokens = &tokens;
-    originalGlyph = reinterpret_cast<decltype(originalGlyph)>(*reinterpret_cast<void**>(base + 0x59038));
-    originalTextOut = reinterpret_cast<decltype(originalTextOut)>(*reinterpret_cast<void**>(base + 0x59024));
-    originalExtent = reinterpret_cast<decltype(originalExtent)>(*reinterpret_cast<void**>(base + 0x5903c));
     try {
-        patchImport(patches[0], base, 0x59038, "GetGlyphOutlineA", reinterpret_cast<void*>(&unicodeGlyph));
-        patchImport(patches[1], base, 0x59024, "TextOutA", reinterpret_cast<void*>(&unicodeTextOut));
-        patchImport(patches[2], base, 0x5903c, "GetTextExtentPoint32A", reinterpret_cast<void*>(&unicodeExtent));
-        patchImport(patches[3], base, 0x59184, "GetACP", reinterpret_cast<void*>(&engineCodepage), L"kernel32.dll");
-    } catch (...) { removeForestTextHooks(); throw; }
+        patchImport(module, "GetGlyphOutlineA", unicodeGlyph, originalGlyph);
+        patchImport(module, "TextOutA", unicodeTextOut, originalTextOut);
+        patchImport(module, "GetTextExtentPoint32A", unicodeExtent, originalExtent);
+        if (!originalGlyph && !originalTextOut)
+            throw std::runtime_error("No supported ANSI GDI text API is imported");
+        hookImport(module, "GetACP", reinterpret_cast<void*>(&engineCodepage), patches);
+        patchImport(module, "IsDBCSLeadByteEx", engineLead, originalLead);
+    } catch (...) { removeEngineTextHooks(); throw; }
 }
 
-void removeForestTextHooks() {
-    for (auto& patch : patches) {
-        if (!patch.slot) continue;
-        DWORD protection;
-        if (!VirtualProtect(patch.slot, sizeof(void*), PAGE_READWRITE, &protection)) {
-            report("Cannot remove a Unicode hook safely; terminating the game");
-            TerminateProcess(GetCurrentProcess(), ERROR_INVALID_ADDRESS);
-        }
-        InterlockedExchangePointer(patch.slot, patch.original);
-        DWORD ignored;
-        if (!VirtualProtect(patch.slot, sizeof(void*), protection, &ignored)) {
-            report("Cannot restore Unicode hook protection; terminating the game");
-            TerminateProcess(GetCurrentProcess(), ERROR_INVALID_ADDRESS);
-        }
-        patch = {};
+void removeEngineTextHooks() {
+    try { restoreImports(patches); }
+    catch (...) {
+        report("Cannot remove Unicode imports safely; terminating the game");
+        TerminateProcess(GetCurrentProcess(), ERROR_INVALID_ADDRESS);
     }
     activeTokens = nullptr;
     logger = nullptr;

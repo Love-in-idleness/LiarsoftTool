@@ -1,4 +1,5 @@
-#include "forest_text.h"
+#include "engine_text.h"
+#include "import_fixture.h"
 
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
@@ -41,35 +42,23 @@ struct Surface {
 int main() {
     using namespace liarsoft::runtime;
     try {
-        auto* image = static_cast<uint8_t*>(VirtualAlloc(nullptr, 0x60000, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
-        require(image, "Cannot allocate hook test image");
-        auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(image);
-        dos->e_magic = IMAGE_DOS_SIGNATURE;
-        dos->e_lfanew = 0x80;
-        auto* pe = reinterpret_cast<IMAGE_NT_HEADERS32*>(image + 0x80);
-        pe->Signature = IMAGE_NT_SIGNATURE;
-        pe->FileHeader.Machine = IMAGE_FILE_MACHINE_I386;
-        pe->OptionalHeader.SizeOfImage = 0x60000;
-        const uint8_t call[] = {0xff, 0x15, 0x38, 0x90, 0x45, 0x00};
-        const uint8_t walk[] = {0x66, 0x0f, 0xb6, 0x02, 0x66, 0x0f, 0xb6, 0x52, 0x01,
-                                0xc1, 0xe0, 0x08, 0x03, 0xc2};
-        std::memcpy(image + 0x45542, call, sizeof(call));
-        std::memcpy(image + 0x38836, walk, sizeof(walk));
-        *reinterpret_cast<void**>(image + 0x59038) = reinterpret_cast<void*>(&GetGlyphOutlineA);
-        *reinterpret_cast<void**>(image + 0x59024) = reinterpret_cast<void*>(&TextOutA);
-        *reinterpret_cast<void**>(image + 0x5903c) = reinterpret_cast<void*>(&GetTextExtentPoint32A);
-        *reinterpret_cast<void**>(image + 0x59184) = reinterpret_cast<void*>(&GetACP);
+        ImportFixture image(0xa000);
+        for (const auto* name : {"GetGlyphOutlineA", "TextOutA", "GetTextExtentPoint32A"}) image.add("gdi32.dll", name);
+        image.add("kernel32.dll", "GetACP");
+        image.add("kernel32.dll", "IsDBCSLeadByteEx");
         GlyphTokens table;
         const auto transport = table.encode(u8"Ą");
         require(transport.size() == 2 && table.size() == 1, "GDI fixture needs one non-CP932 glyph");
         const auto token = UINT((uint8_t(transport[0]) << 8) | uint8_t(transport[1]));
-        installForestTextHooks(image, table, nullptr);
-        const auto codepage = *reinterpret_cast<decltype(&GetACP)*>(image + 0x59184);
-        require(codepage() == 932 && *reinterpret_cast<void**>(image + 0x59184) != reinterpret_cast<void*>(&GetACP),
+        installEngineTextHooks(image.image, table, nullptr);
+        const auto codepage = image.function<decltype(&GetACP)>("GetACP");
+        require(codepage() == 932 && codepage != &GetACP,
                 "The engine CRT would use the system codepage instead of CP932");
-        const auto glyph = *reinterpret_cast<decltype(&GetGlyphOutlineA)*>(image + 0x59038);
-        const auto textOut = *reinterpret_cast<decltype(&TextOutA)*>(image + 0x59024);
-        const auto extent = *reinterpret_cast<decltype(&GetTextExtentPoint32A)*>(image + 0x5903c);
+        const auto lead = image.function<decltype(&IsDBCSLeadByteEx)>("IsDBCSLeadByteEx");
+        require(lead(CP_ACP, 0xf0) && !lead(1252, 0xf0), "DBCS detection still depends on the system language");
+        const auto glyph = image.function<decltype(&GetGlyphOutlineA)>("GetGlyphOutlineA");
+        const auto textOut = image.function<decltype(&TextOutA)>("TextOutA");
+        const auto extent = image.function<decltype(&GetTextExtentPoint32A)>("GetTextExtentPoint32A");
         Surface actual, expected;
         HFONT font = CreateFontW(24, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
                                  0, 0, 0, 0, L"Arial");
@@ -101,23 +90,23 @@ int main() {
         const auto nativeE = GetGlyphOutlineA(expected.dc, 'A', GGO_BITMAP, &nativeExpected, 0, nullptr, &identity);
         require(nativeA == nativeE && !std::memcmp(&nativeActual, &nativeExpected, sizeof(nativeActual)),
                 "Native glyph path changed");
-        removeForestTextHooks();
-        require(*reinterpret_cast<void**>(image + 0x59038) == reinterpret_cast<void*>(&GetGlyphOutlineA) &&
-                *reinterpret_cast<void**>(image + 0x59024) == reinterpret_cast<void*>(&TextOutA) &&
-                *reinterpret_cast<void**>(image + 0x5903c) == reinterpret_cast<void*>(&GetTextExtentPoint32A) &&
-                *reinterpret_cast<void**>(image + 0x59184) == reinterpret_cast<void*>(&GetACP),
+        removeEngineTextHooks();
+        require(image.function<decltype(&GetGlyphOutlineA)>("GetGlyphOutlineA") == &GetGlyphOutlineA &&
+                image.function<decltype(&TextOutA)>("TextOutA") == &TextOutA &&
+                image.function<decltype(&GetTextExtentPoint32A)>("GetTextExtentPoint32A") == &GetTextExtentPoint32A &&
+                image.function<decltype(&GetACP)>("GetACP") == &GetACP,
                 "Unicode hooks were not restored");
-        image[0x45542] = 0;
+        ImportFixture unsupported;
+        unsupported.add("kernel32.dll", "GetACP");
         bool rejected = false;
-        try { installForestTextHooks(image, table, nullptr); } catch (const std::runtime_error&) { rejected = true; }
-        require(rejected, "Unknown engine text bytes were accepted");
+        try { installEngineTextHooks(unsupported.image, table, nullptr); } catch (const std::runtime_error&) { rejected = true; }
+        require(rejected, "Missing rendering APIs were accepted");
         SelectObject(actual.dc, oldActual);
         SelectObject(expected.dc, oldExpected);
         DeleteObject(font);
-        VirtualFree(image, 0, MEM_RELEASE);
-        std::cout << "Forest GDI Unicode hook tests passed\n";
+        std::cout << "Named-import GDI Unicode hook tests passed\n";
     } catch (const std::exception& error) {
-        liarsoft::runtime::removeForestTextHooks();
+        liarsoft::runtime::removeEngineTextHooks();
         std::cerr << error.what() << '\n';
         return 1;
     }

@@ -11,7 +11,7 @@
 
 namespace liarsoft::runtime {
 
-// Forest stores characters and font-cache keys as 16-bit DBCS values. Keep the
+// Legacy RScript renderers use 16-bit DBCS characters and font-cache keys. Keep the
 // original character walker, using unused CP932 EUDC slots as lossless glyph IDs.
 class GlyphTokens {
 public:
@@ -34,7 +34,7 @@ private:
     std::unordered_map<char16_t, std::string> nativeEncoding_;
 };
 
-// These accept the legacy sectioned GSC layout used by the verified Forest EXE.
+// Both supported sectioned GSC containers retain their own header/trailing data.
 std::vector<uint8_t> transformUtf8Gsc(const std::vector<uint8_t>& input,
                                       GlyphTokens& tokens);
 void reserveNativeGsc(const std::vector<uint8_t>& input, GlyphTokens& tokens);

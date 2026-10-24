@@ -1,8 +1,7 @@
-#include "forest_bridge.h"
+#include "runtime_bridge.h"
+#include "imports.h"
 #include <windows.h>
-#include <bcrypt.h>
 #include <algorithm>
-#include <array>
 #include <cstring>
 #include <filesystem>
 #include <map>
@@ -14,7 +13,7 @@
 
 namespace {
 const RScriptHostContext* host = nullptr;
-RScriptForestBridge bridge{};
+RScriptRuntimeBridge bridge{};
 struct MemoryFile { std::vector<uint8_t> bytes; uint64_t position = 0; };
 std::map<HANDLE, std::shared_ptr<MemoryFile>> files;
 std::mutex files_mutex;
@@ -23,8 +22,7 @@ decltype(&ReadFile) native_read;
 decltype(&SetFilePointer) native_seek;
 decltype(&GetFileSize) native_size;
 decltype(&CloseHandle) native_close;
-struct Patch { void** slot; void* original; void* replacement; };
-std::vector<Patch> patches;
+std::vector<liarsoft::runtime::ImportPatch> patches;
 
 std::wstring wide(const char* text) {
     int count = MultiByteToWideChar(932, MB_ERR_INVALID_CHARS, text, -1, nullptr, 0);
@@ -159,76 +157,31 @@ BOOL WINAPI closeFile(HANDLE handle) {
     return native_close(handle);
 }
 
-std::string digestFile(const wchar_t* path) {
-    HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (file == INVALID_HANDLE_VALUE) throw std::runtime_error("Cannot read target EXE");
-    BCRYPT_ALG_HANDLE algorithm = nullptr;
-    BCRYPT_HASH_HANDLE hash = nullptr;
-    std::array<unsigned char, 32> digest{};
-    bool ok = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0 &&
-        BCryptCreateHash(algorithm, &hash, nullptr, 0, nullptr, 0, 0) == 0;
-    std::array<unsigned char, 65536> bytes;
-    DWORD read;
-    while (ok) {
-        if (!ReadFile(file, bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr)) { ok = false; break; }
-        if (!read) break;
-        ok = BCryptHashData(hash, bytes.data(), read, 0) == 0;
-    }
-    if (ok) ok = BCryptFinishHash(hash, digest.data(), static_cast<ULONG>(digest.size()), 0) == 0;
-    if (hash) BCryptDestroyHash(hash);
-    if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
-    CloseHandle(file);
-    if (!ok) throw std::runtime_error("Cannot hash target EXE");
-    const char* hex = "0123456789abcdef";
-    std::string result;
-    for (auto byte : digest) { result += hex[byte >> 4]; result += hex[byte & 15]; }
-    return result;
-}
-
-void replace(const Patch& patch, bool restore = false) {
-    DWORD protection;
-    if (!VirtualProtect(patch.slot, sizeof(void*), PAGE_READWRITE, &protection))
-        throw std::runtime_error("Cannot protect Forest import slot");
-    InterlockedExchangePointer(patch.slot, restore ? patch.original : patch.replacement);
-    DWORD ignored;
-    if (!VirtualProtect(patch.slot, sizeof(void*), protection, &ignored))
-        throw std::runtime_error("Cannot restore Forest import protection");
-}
-
-template<class Function> void add(uint32_t rva, const char* name, Function hook, Function& original) {
-    auto** slot = reinterpret_cast<void**>(static_cast<uint8_t*>(host->game_module) + rva);
-    FARPROC expected = GetProcAddress(GetModuleHandleW(L"kernel32.dll"), name);
-    if (*slot != reinterpret_cast<void*>(expected)) throw std::runtime_error(std::string("Forest import was modified: ") + name);
-    static_assert(sizeof(original) == sizeof(void*));
-    std::memcpy(&original, slot, sizeof(original));
-    void* replacement;
-    std::memcpy(&replacement, &hook, sizeof(replacement));
-    patches.push_back({slot, *slot, replacement});
+template<class Function> void add(const char* name, Function hook, Function& original) {
+    auto* address = liarsoft::runtime::hookImport(host->game_module, name,
+        reinterpret_cast<void*>(hook), patches);
+    if (!address) throw std::runtime_error(std::string("Required synchronous file API is not imported: ") + name);
+    std::memcpy(&original, &address, sizeof(original));
 }
 
 void RSCRIPT_CALL shutdown() {
-    for (auto it = patches.rbegin(); it != patches.rend(); ++it) {
-        try { replace(*it, true); } catch (...) { host->log(RSCRIPT_LOG_ERROR, "Cannot restore a Forest import"); }
-    }
-    patches.clear();
+    try { liarsoft::runtime::restoreImports(patches); }
+    catch (...) { host->log(RSCRIPT_LOG_ERROR, "Cannot restore file imports safely"); TerminateProcess(GetCurrentProcess(), ERROR_INVALID_ADDRESS); }
     if (host) host->set_engine_api(nullptr);
 }
 
 int32_t RSCRIPT_CALL initialize(const RScriptHostContext* context) {
     try {
-        if (!context || context->size < sizeof(*context) || sizeof(void*) != 4) return 1;
+        if (!context || context->size < sizeof(*context) || context->abi_version != RSCRIPT_PLUGIN_ABI) return 1;
         host = context;
-        if (digestFile(host->game_exe) != "8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56")
-            throw std::runtime_error("This EXE is not the verified Forest build; no hooks were installed");
-        bridge = {sizeof(bridge), 1, host->game_module, host, nullptr, nullptr};
-        add(0x59098, "CreateFileA", openFile, native_open);
-        add(0x5907c, "ReadFile", readFile, native_read);
-        add(0x590c8, "SetFilePointer", seekFile, native_seek);
-        add(0x590cc, "GetFileSize", sizeFile, native_size);
-        add(0x5909c, "CloseHandle", closeFile, native_close);
-        for (const auto& patch : patches) replace(patch);
+        bridge = {sizeof(bridge), 2, host->game_module, host, nullptr, nullptr};
+        add("CreateFileA", openFile, native_open);
+        add("ReadFile", readFile, native_read);
+        add("SetFilePointer", seekFile, native_seek);
+        add("GetFileSize", sizeFile, native_size);
+        add("CloseHandle", closeFile, native_close);
         host->set_engine_api(&bridge);
-        host->log(RSCRIPT_LOG_INFO, "Verified Forest 8eb71d07: game-local file hooks installed");
+        host->log(RSCRIPT_LOG_INFO, "Synchronous file imports resolved by name; no EXE profile is required");
         return 0;
     } catch (const std::exception& error) {
         if (host) host->log(RSCRIPT_LOG_ERROR, error.what());
@@ -237,7 +190,7 @@ int32_t RSCRIPT_CALL initialize(const RScriptHostContext* context) {
     }
 }
 const RScriptPluginDescriptor descriptor{sizeof(descriptor), RSCRIPT_PLUGIN_ABI,
-    "rscript.forest", "Forest engine adapter", RSCRIPT_FEATURE_ENGINE, initialize, shutdown};
+    "rscript.files", "RScript file overrides", RSCRIPT_FEATURE_ENGINE, initialize, shutdown};
 }
 
 extern "C" RSCRIPT_EXPORT const RScriptPluginDescriptor* RSCRIPT_CALL

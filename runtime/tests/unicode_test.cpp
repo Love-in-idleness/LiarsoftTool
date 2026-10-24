@@ -1,6 +1,7 @@
 #include "unicode.h"
 #include "encoding.h"
 #include "gscfile.h"
+#include "gsc_decompiler.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -101,6 +102,16 @@ int main() {
                 "Unicode rewrite changed GSC command/header/trailing sections");
         const auto raw = liarsoft::convertEncoding(after.strings.at(0), "UTF-8", "CP932", true);
         require(scriptTokens.decode(raw) == u"^g005简体中文 Русский^n^cw", "GSC transport changed dialogue");
+        const auto modernSource = liarsoft::restoreGscFromTsc(
+            ";@gsc-byte-format modern-36\n;@gsc-schema rscript18\n;@gsc-trailer 00000000e066a70000\n"
+            "*font 1 0 0 0 0 \"" + mixed + "\"\n*end\n", "UTF-8");
+        const auto modernOutput = liarsoft::runtime::transformUtf8Gsc(modernSource, scriptTokens);
+        const auto modernBefore = liarsoft::GscFile::fromBytes(modernSource, "UTF-8");
+        const auto modernAfter = liarsoft::GscFile::fromBytes(modernOutput, "CP932");
+        require(modernAfter.headerLength == 36 && modernAfter.commandSection == modernBefore.commandSection &&
+                modernAfter.endSequence == modernBefore.endSequence &&
+                modernAfter.unknown3 == modernBefore.unknown3 && modernAfter.unknown4 == modernBefore.unknown4,
+                "Modern GSC container or trailing sections changed");
         GlyphTokens nativeScript;
         liarsoft::runtime::reserveNativeGsc(fixture(std::string("\xf0\x40", 2)), nativeScript);
         require(nativeScript.encode(u8"简") != std::string("\xf0\x40", 2), "Native GSC did not reserve EUDC");

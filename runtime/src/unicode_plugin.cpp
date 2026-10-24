@@ -1,5 +1,5 @@
-#include "forest_bridge.h"
-#include "forest_text.h"
+#include "runtime_bridge.h"
+#include "engine_text.h"
 #include "unicode.h"
 #include "fileio.h"
 #include "archive_index.h"
@@ -21,7 +21,7 @@ namespace {
 
 using liarsoft::runtime::GlyphTokens;
 GlyphTokens glyphs;
-RScriptForestBridge* bridge = nullptr;
+RScriptRuntimeBridge* bridge = nullptr;
 const RScriptHostContext* host = nullptr;
 std::filesystem::path dictionaryPath;
 std::string dictionaryIdentity;
@@ -120,7 +120,8 @@ void openDictionary() {
     const auto written = GetEnvironmentVariableW(L"LOCALAPPDATA", local.data(), count);
     if (!written || written >= count) throw std::runtime_error("Cannot read LOCALAPPDATA");
     local.resize(written);
-    dictionaryIdentity = "Forest:8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56\n" +
+    const auto executable = liarsoft::readFile(std::filesystem::path(host->game_exe));
+    dictionaryIdentity = "RScript-v2:" + sha256(std::string(executable.begin(), executable.end())) + "\n" +
         utf8(canonical(host->game_exe)) + "\n" + utf8(canonical(host->override_root));
     const auto key = sha256(dictionaryIdentity);
     const auto folder = std::filesystem::path(local) / L"LiarsoftTool" / L"RScriptRuntime" /
@@ -155,20 +156,20 @@ bool gsc(const std::filesystem::path& path) {
 }
 
 void reserveOriginalScripts(const std::filesystem::path& root) {
-    const auto archive = root / L"scr.xfl";
-    if (std::filesystem::exists(archive)) {
-        const liarsoft::ResourceSource source(archive);
+    for (const auto& item : std::filesystem::recursive_directory_iterator(root)) {
+        if (!item.is_regular_file()) continue;
+        if (gsc(item.path())) {
+            liarsoft::runtime::reserveNativeGsc(liarsoft::readFile(item.path()), glyphs);
+            continue;
+        }
+        auto extension = item.path().extension().wstring();
+        CharLowerBuffW(extension.data(), DWORD(extension.size()));
+        if (extension != L".xfl") continue;
+        const liarsoft::ResourceSource source(item.path());
         const auto index = liarsoft::readArchiveIndex(source);
         for (const auto& entry : index.entries) {
-            if (!gsc(std::filesystem::u8path(entry.name))) continue;
-            liarsoft::runtime::reserveNativeGsc(source.subrange(entry.offset, entry.size).readAll(), glyphs);
-        }
-    }
-    const auto folder = root / L"scr";
-    if (std::filesystem::exists(folder)) {
-        for (const auto& entry : std::filesystem::directory_iterator(folder)) {
-            if (entry.is_regular_file() && gsc(entry.path()))
-                liarsoft::runtime::reserveNativeGsc(liarsoft::readFile(entry.path()), glyphs);
+            if (gsc(std::filesystem::u8path(entry.name)))
+                liarsoft::runtime::reserveNativeGsc(source.subrange(entry.offset, entry.size).readAll(), glyphs);
         }
     }
 }
@@ -184,20 +185,20 @@ void reserveOriginalText() {
     // their initialized .rdata/.data byte pairs too, including non-text matches.
     const auto image = liarsoft::readFile(std::filesystem::path(host->game_exe));
     if (image.size() < sizeof(IMAGE_DOS_HEADER))
-        throw std::runtime_error("Truncated Forest executable during Unicode initialization");
+        throw std::runtime_error("Truncated executable during Unicode initialization");
     const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image.data());
     if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew < 0 ||
         size_t(dos->e_lfanew) > image.size() ||
-        sizeof(IMAGE_NT_HEADERS32) > image.size() - size_t(dos->e_lfanew))
-        throw std::runtime_error("Invalid Forest executable during Unicode initialization");
-    const auto* pe = reinterpret_cast<const IMAGE_NT_HEADERS32*>(image.data() + dos->e_lfanew);
-    if (pe->Signature != IMAGE_NT_SIGNATURE || pe->FileHeader.Machine != IMAGE_FILE_MACHINE_I386)
-        throw std::runtime_error("Unsupported Forest executable during Unicode initialization");
+        sizeof(IMAGE_NT_HEADERS) > image.size() - size_t(dos->e_lfanew))
+        throw std::runtime_error("Invalid executable during Unicode initialization");
+    const auto* pe = reinterpret_cast<const IMAGE_NT_HEADERS*>(image.data() + dos->e_lfanew);
+    if (pe->Signature != IMAGE_NT_SIGNATURE || pe->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR_MAGIC)
+        throw std::runtime_error("Incompatible executable during Unicode initialization");
     const auto* sections = IMAGE_FIRST_SECTION(pe);
     const size_t sectionOffset = reinterpret_cast<const uint8_t*>(sections) - image.data();
     if (sectionOffset > image.size() ||
         pe->FileHeader.NumberOfSections > (image.size() - sectionOffset) / sizeof(IMAGE_SECTION_HEADER))
-        throw std::runtime_error("Truncated Forest section table");
+        throw std::runtime_error("Truncated executable section table");
     for (WORD i = 0; i < pe->FileHeader.NumberOfSections; ++i) {
         const auto& section = sections[i];
         if (std::memcmp(section.Name, ".rdata", 6) && std::memcmp(section.Name, ".data", 5)) continue;
@@ -205,7 +206,7 @@ void reserveOriginalText() {
                           ? section.Misc.VirtualSize : section.SizeOfRawData;
         if (section.PointerToRawData > image.size() ||
             length > image.size() - section.PointerToRawData)
-            throw std::runtime_error("Invalid Forest static-data section");
+            throw std::runtime_error("Invalid executable static-data section");
         glyphs.reserveNative({reinterpret_cast<const char*>(image.data() + section.PointerToRawData), length});
     }
     writeDictionary();
@@ -241,7 +242,7 @@ int RSCRIPT_CALL transform(const uint8_t* bytes, uint32_t size, uint32_t utf8Scr
 
 void RSCRIPT_CALL shutdown() {
     if (bridge && bridge->transform_script == transform) bridge->transform_script = nullptr;
-    liarsoft::runtime::removeForestTextHooks();
+    liarsoft::runtime::removeEngineTextHooks();
     if (dictionaryLock != INVALID_HANDLE_VALUE) CloseHandle(dictionaryLock);
     dictionaryLock = INVALID_HANDLE_VALUE;
     bridge = nullptr;
@@ -250,15 +251,15 @@ void RSCRIPT_CALL shutdown() {
 
 int32_t RSCRIPT_CALL initialize(const RScriptHostContext* context) {
     try {
-        bridge = forestBridge(context);
+        bridge = runtimeBridge(context);
         if (!bridge || bridge->transform_script)
-            throw std::runtime_error("Unicode requires a single initialized Forest engine adapter");
+            throw std::runtime_error("Unicode requires a single initialized engine adapter");
         host = context;
         openDictionary();
-        liarsoft::runtime::installForestTextHooks(bridge->game_module, glyphs, context->log);
+        liarsoft::runtime::installEngineTextHooks(bridge->game_module, glyphs, context->log);
         reserveOriginalText();
         bridge->transform_script = transform;
-        if (context->log) context->log(RSCRIPT_LOG_INFO, "Forest Unicode enabled (BMP glyphs; persistent dictionary)");
+        if (context->log) context->log(RSCRIPT_LOG_INFO, "Unicode enabled through named GDI imports (BMP glyphs; persistent dictionary)");
         return 0;
     } catch (const std::exception& error) {
         if (context && context->log) context->log(RSCRIPT_LOG_ERROR, error.what());
@@ -268,7 +269,7 @@ int32_t RSCRIPT_CALL initialize(const RScriptHostContext* context) {
 }
 
 const RScriptPluginDescriptor descriptor{sizeof(RScriptPluginDescriptor), RSCRIPT_PLUGIN_ABI,
-    "liarsoft.unicode", "Forest Unicode text", RSCRIPT_FEATURE_UNICODE, initialize, shutdown};
+    "liarsoft.unicode", "RScript Unicode text", RSCRIPT_FEATURE_UNICODE, initialize, shutdown};
 
 } // namespace
 

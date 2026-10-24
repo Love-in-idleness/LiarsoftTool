@@ -1,4 +1,5 @@
 #include "resource_provider.h"
+#include "archive_index.h"
 #include "encoding.h"
 #include "fileio.h"
 #include "gsc_decompiler.h"
@@ -182,6 +183,34 @@ std::vector<uint8_t> component(const fs::path& root, const fs::path& meta) {
     return output;
 }
 } // namespace
+
+void validateScriptOverride(const std::vector<uint8_t>& bytes, const fs::path& originalRoot,
+                            const fs::path& relative) {
+    const auto root = fs::canonical(originalRoot);
+    auto logical = relativePath(relative);
+    logical.replace_extension(".gsc");
+    auto validate = [&](const ResourceSource& original) {
+        const auto header = original.read(0, 8);
+        if (bytes.size() < 8 || !std::equal(bytes.begin() + 4, bytes.begin() + 8, header.begin() + 4))
+            throw std::runtime_error("Override script container does not match the original GSC: " + logical.u8string());
+    };
+    if (auto loose = regular(root, logical)) { validate(ResourceSource(*loose)); return; }
+    for (auto folder = logical.parent_path(); !folder.empty(); folder = folder.parent_path()) {
+        auto archiveName = folder; archiveName += ".xfl";
+        auto archive = regular(root, archiveName);
+        if (!archive) continue;
+        const ResourceSource source(*archive);
+        const auto index = readArchiveIndex(source);
+        const auto name = lower(logical.lexically_relative(folder).generic_u8string());
+        std::optional<ResourceSource> found;
+        for (const auto& entry : index.entries) {
+            if (lower(entry.name) != name) continue;
+            if (found) throw std::runtime_error("Ambiguous original script entry: " + name);
+            found = source.subrange(entry.offset, entry.size);
+        }
+        if (found) { validate(*found); return; }
+    }
+}
 
 std::optional<fs::path> selectResource(const fs::path& root, const fs::path& relative, ResourceKind kind) {
     const auto canonicalRoot = fs::canonical(root);

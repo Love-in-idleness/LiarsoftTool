@@ -1,4 +1,4 @@
-#include "forest_bridge.h"
+#include "runtime_bridge.h"
 #include "resource_provider.h"
 #include "wcg_decoder.h"
 #include "lim_decoder.h"
@@ -10,7 +10,7 @@
 
 namespace {
 const RScriptHostContext* host = nullptr;
-RScriptForestBridge* bridge = nullptr;
+RScriptRuntimeBridge* bridge = nullptr;
 thread_local std::string last_error;
 
 void RSCRIPT_CALL release(void* owner) { delete static_cast<std::vector<uint8_t>*>(owner); }
@@ -24,11 +24,10 @@ int RSCRIPT_CALL load(const wchar_t* relative, uint32_t kind,
             static_cast<liarsoft::runtime::ResourceKind>(kind),
             (host->enabled_features & RSCRIPT_FEATURE_UNICODE) != 0);
         if (!result) return 0;
-        if (kind == RScriptScript &&
-            (result->bytes.size() < 28 || result->bytes[4] != 28 || result->bytes[5] ||
-             result->bytes[6] || result->bytes[7]))
-            throw std::runtime_error("Forest requires legacy-28 scripts: " + result->source.u8string());
-        // Forest chooses its decoder from the requested suffix before reading bytes.
+        if (kind == RScriptScript)
+            liarsoft::runtime::validateScriptOverride(result->bytes,
+                std::filesystem::path(host->game_exe).parent_path(), path);
+        // The engine chooses its decoder from the requested suffix before reading bytes.
         auto ext = path.extension().wstring();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
         if (kind == RScriptImage && ext == L".lim") {
@@ -52,7 +51,7 @@ int RSCRIPT_CALL load(const wchar_t* relative, uint32_t kind,
 }
 
 int32_t RSCRIPT_CALL initialize(const RScriptHostContext* context) {
-    bridge = forestBridge(context);
+    bridge = runtimeBridge(context);
     if (!bridge) return 1;
     host = context;
     bridge->load_resource = load;

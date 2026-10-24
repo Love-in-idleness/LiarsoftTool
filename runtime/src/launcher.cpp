@@ -97,7 +97,7 @@ LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         column.pszText = const_cast<wchar_t*>(L"Path");
         ListView_InsertColumn(plugins_control, 1, &column);
         std::wstring directory = rscript::parent_path(rscript::module_path());
-        for (const auto* name : {L"RScriptForest.dll", L"RScriptResources.dll", L"RScriptUnicode.dll"})
+        for (const auto* name : {L"RScriptFiles.dll", L"RScriptResources.dll", L"RScriptUnicode.dll"})
             append_plugin(directory + L"\\" + name);
         create_control(window, WC_BUTTONW, L"Add DLL...", WS_TABSTOP | BS_PUSHBUTTON, 16, 360, 112, 30, add_plugin);
         create_control(window, WC_BUTTONW, L"Start game", WS_TABSTOP | BS_DEFPUSHBUTTON, 526, 360, 132, 30, start_game);

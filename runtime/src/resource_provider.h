@@ -31,4 +31,8 @@ std::optional<ResourceData> loadOverride(
     const std::filesystem::path& root, const std::filesystem::path& relative,
     ResourceKind kind, bool unicode = false);
 
+// Compare the container to the original loose/archived GSC when available.
+void validateScriptOverride(const std::vector<uint8_t>& bytes,
+    const std::filesystem::path& originalRoot, const std::filesystem::path& relative);
+
 } // namespace liarsoft::runtime

@@ -96,7 +96,7 @@ int wmain(int argc, wchar_t** argv) {
         std::wstring command = rscript::quote_argument(directory + L"\\RScriptLauncher.exe") +
             L" --game " + rscript::quote_argument(executable) + L" --resources " +
             rscript::quote_argument(rscript::full_path(argv[2]));
-        for (const auto* plugin : {L"RScriptForest.dll", L"RScriptResources.dll", L"RScriptUnicode.dll"})
+        for (const auto* plugin : {L"RScriptFiles.dll", L"RScriptResources.dll", L"RScriptUnicode.dll"})
             command += L" --plugin " + rscript::quote_argument(directory + L"\\" + plugin);
         STARTUPINFOW startup{};
         startup.cb = sizeof(startup);
