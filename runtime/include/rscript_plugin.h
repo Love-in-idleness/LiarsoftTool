@@ -45,6 +45,8 @@ typedef struct RScriptHostContext {
     /* Opaque, private bridge between the selected built-in engine modules. */
     void (RSCRIPT_CALL *set_engine_api)(void* api);
     void* (RSCRIPT_CALL *get_engine_api)(void);
+    /* Optional validated UTF-8 JSON. Check size before accessing appended fields. */
+    const char* kinsoku_json;
 } RScriptHostContext;
 
 typedef struct RScriptPluginDescriptor {

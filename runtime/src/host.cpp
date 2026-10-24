@@ -1,5 +1,6 @@
 #include "rscript_plugin.h"
 #include "win_util.h"
+#include "kinsoku.h"
 
 #include <shlobj.h>
 #include <algorithm>
@@ -20,6 +21,7 @@ struct Plugin {
 std::vector<Plugin> plugins;
 RScriptHostContext context{};
 std::wstring game_path, root_path;
+std::string kinsoku_json;
 void* engine_api = nullptr;
 bool initialized = false;
 SRWLOCK log_lock = SRWLOCK_INIT;
@@ -111,6 +113,15 @@ void initialize(rscript::HostInitPacket* packet) {
     if (!game || !root || !game[0] || !root[0]) throw std::runtime_error("Invalid game or resource path");
     game_path = game;
     root_path = root;
+    kinsoku_json.clear();
+    if (packet->kinsoku_offset) {
+        const auto* json = rscript::packet_string(packet, packet->kinsoku_offset);
+        if (!json) throw std::runtime_error("Invalid kinsoku JSON packet offset");
+        kinsoku_json = rscript::utf8(json);
+        if (kinsoku_json.size() > rscript::max_kinsoku_size)
+            throw std::runtime_error("Kinsoku JSON must not exceed 64 KiB");
+        liarsoft::runtime::parseKinsoku(kinsoku_json);
+    }
     if (_wcsicmp(rscript::full_path(game_path).c_str(), rscript::module_path().c_str()) != 0)
         throw std::runtime_error("The host configuration does not name the current game");
     log_message(RSCRIPT_LOG_INFO, ("Game: " + rscript::utf8(game_path)).c_str());
@@ -148,6 +159,8 @@ void initialize(rscript::HostInitPacket* packet) {
     }
     if ((features & (RSCRIPT_FEATURE_RESOURCES | RSCRIPT_FEATURE_UNICODE)) && !(features & RSCRIPT_FEATURE_ENGINE))
         throw std::runtime_error("Resource and Unicode extensions require an enabled engine adapter");
+    if ((features & RSCRIPT_FEATURE_UNICODE) && kinsoku_json.empty())
+        throw std::runtime_error("Unicode requires a kinsoku JSON configuration");
     std::stable_sort(plugins.begin(), plugins.end(), [](const Plugin& a, const Plugin& b) {
         return plugin_order(a) < plugin_order(b);
     });
@@ -156,7 +169,8 @@ void initialize(rscript::HostInitPacket* packet) {
             reinterpret_cast<LPCWSTR>(&log_message), &host))
         throw std::runtime_error("Could not identify the host module");
     context = {sizeof(context), RSCRIPT_PLUGIN_ABI, GetModuleHandleW(nullptr), host,
-        game_path.c_str(), root_path.c_str(), features, log_message, set_engine_api, get_engine_api};
+        game_path.c_str(), root_path.c_str(), features, log_message, set_engine_api, get_engine_api,
+        kinsoku_json.empty() ? nullptr : kinsoku_json.c_str()};
     for (auto& plugin : plugins) {
         int32_t result = plugin.descriptor->initialize(&context);
         if (result != 0) throw std::runtime_error(std::string(plugin.descriptor->id) +

@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
         const auto executable = (root / "original" / "AnyGame.exe").wstring();
         RScriptHostContext host{sizeof(host), RSCRIPT_PLUGIN_ABI, nullptr, module, executable.c_str(),
             rootString.c_str(), RSCRIPT_FEATURE_ENGINE | RSCRIPT_FEATURE_RESOURCES,
-            nullptr, nullptr, get_api};
+            nullptr, nullptr, get_api, nullptr};
         bridge = {sizeof(bridge), 2, nullptr, &host, nullptr, nullptr};
         require(descriptor->initialize(&host) == 0 && bridge.load_resource, "Cannot initialize resources");
         script(root / "scr" / "0000.gsc", "legacy-28", "early");

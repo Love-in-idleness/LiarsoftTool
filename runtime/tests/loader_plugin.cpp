@@ -1,5 +1,6 @@
 #include "rscript_plugin.h"
 #include <windows.h>
+#include <string>
 
 #ifndef FIXTURE_FAILURE
 #define FIXTURE_FAILURE 0
@@ -15,6 +16,13 @@ int32_t RSCRIPT_CALL initialize(const RScriptHostContext* context) {
         !context->log || !context->get_engine_api || !context->set_engine_api)
         return 41;
     if (FIXTURE_FAILURE) return 42;
+    wchar_t expected[1024]{};
+    if (GetEnvironmentVariableW(L"RSCRIPT_TEST_KINSOKU", expected, 1024)) {
+        if (!context->kinsoku_json) return 44;
+        wchar_t actual[1024]{};
+        if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, context->kinsoku_json, -1, actual, 1024) ||
+            std::wstring(expected) != actual) return 45;
+    }
     return SetEnvironmentVariableW(L"RSCRIPT_TEST_PLUGIN", L"initialized") ? 0 : 43;
 }
 

@@ -4,6 +4,8 @@
 #endif
 #include <cassert>
 #include <cstring>
+#include <fstream>
+#include <stdexcept>
 #include <vector>
 
 int main() {
@@ -27,4 +29,26 @@ int main() {
     assert(!rscript::packet_string(packet, offset));
     packet->total_size = 0;
     assert(!rscript::packet_string(packet, offset));
+    wchar_t temporary[MAX_PATH]{}, file[MAX_PATH]{};
+    assert(GetTempPathW(MAX_PATH, temporary));
+    assert(GetTempFileNameW(temporary, L"rsk", 0, file));
+    const auto write = [&](const std::string& contents) {
+        std::ofstream output(file, std::ios::binary | std::ios::trunc);
+        output.write(contents.data(), static_cast<std::streamsize>(contents.size()));
+        output.close();
+        assert(bool(output));
+    };
+    const auto rejected = [&] {
+        try { rscript::read_kinsoku(file); }
+        catch (const std::runtime_error&) { return; }
+        throw std::runtime_error("Invalid kinsoku file was accepted");
+    };
+    const std::string json = u8R"({"version":1,"no_line_start":"。","no_line_end":"（"})";
+    write(json);
+    assert(rscript::utf8(rscript::read_kinsoku(file)) == json);
+    write("{}"); rejected();
+    write(std::string(rscript::max_kinsoku_size + 1, ' ')); rejected();
+    write("\xFF"); rejected();
+    assert(DeleteFileW(file));
+    rejected();
 }

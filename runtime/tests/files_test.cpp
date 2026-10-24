@@ -39,7 +39,7 @@ int wmain(int argc, wchar_t** argv) {
         require(GetCurrentDirectoryW(32768, cwd) != 0, "Cannot get fixture directory");
         const std::wstring exe = std::wstring(cwd) + L"\\UnknownGame.exe";
         RScriptHostContext context{sizeof(context), RSCRIPT_PLUGIN_ABI, image.image, module, exe.c_str(), cwd,
-            RSCRIPT_FEATURE_ENGINE | RSCRIPT_FEATURE_RESOURCES, log, set_api, get_api};
+            RSCRIPT_FEATURE_ENGINE | RSCRIPT_FEATURE_RESOURCES, log, set_api, get_api, nullptr};
         require(descriptor->initialize(&context) == 0 && bridge, "Adapter initialization failed");
         bridge->load_resource = provide;
         // Keep the logical path inside the named game's root, not the fixture cwd.

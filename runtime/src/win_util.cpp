@@ -1,5 +1,7 @@
 #include "win_util.h"
 #include "rscript_plugin.h"
+#include "kinsoku.h"
+#include "utf8_text.h"
 
 #include <tlhelp32.h>
 #include <psapi.h>
@@ -133,7 +135,7 @@ void load_host(HANDLE process, DWORD process_id, const std::wstring& path) {
         fail(L"The game could not load RScriptHost.dll (NTSTATUS " + std::to_wstring(status) + L")");
 }
 
-std::vector<unsigned char> make_packet(const LaunchOptions& options) {
+std::vector<unsigned char> make_packet(const LaunchOptions& options, const std::wstring& kinsoku) {
     std::vector<unsigned char> bytes(sizeof(HostInitPacket), 0);
     HostInitPacket header{};
     header.size = sizeof(header);
@@ -150,6 +152,7 @@ std::vector<unsigned char> make_packet(const LaunchOptions& options) {
     };
     header.game_offset = append(options.game);
     header.root_offset = append(options.root);
+    if (!kinsoku.empty()) header.kinsoku_offset = append(kinsoku);
     for (size_t i = 0; i < options.plugins.size(); ++i)
         header.plugin_offsets[i] = append(options.plugins[i]);
     header.total_size = static_cast<uint32_t>(bytes.size());
@@ -244,6 +247,23 @@ WORD pe_machine(const std::wstring& path) {
     return header.file.Machine;
 }
 
+std::wstring read_kinsoku(const std::wstring& path) {
+    Handle file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                            FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (file.value == INVALID_HANDLE_VALUE) win_fail(L"Open kinsoku JSON");
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(file.value, &size)) win_fail(L"Read kinsoku JSON size");
+    if (size.QuadPart < 0 || size.QuadPart > max_kinsoku_size)
+        fail(L"Kinsoku JSON must not exceed 64 KiB");
+    std::string json(static_cast<size_t>(size.QuadPart), '\0');
+    DWORD actual = 0;
+    if (!ReadFile(file.value, json.data(), static_cast<DWORD>(json.size()), &actual, nullptr) || actual != json.size())
+        fail(L"Could not read the complete kinsoku JSON");
+    liarsoft::runtime::parseKinsoku(json);
+    const auto decoded = liarsoft::runtime::decodeUtf8(json);
+    return {decoded.begin(), decoded.end()};
+}
+
 const wchar_t* packet_string(const HostInitPacket* packet, uint32_t offset) {
     if (!packet || offset < sizeof(HostInitPacket) || offset % alignof(wchar_t) ||
         packet->total_size < sizeof(wchar_t) || offset > packet->total_size - sizeof(wchar_t))
@@ -262,6 +282,12 @@ DWORD launch(const LaunchOptions& supplied) {
     if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY))
         fail(L"Resource directory does not exist: " + options.root);
     if (options.plugins.size() > max_plugins) fail(L"Too many enabled DLLs (maximum 64)");
+    const bool unicode = std::any_of(options.plugins.begin(), options.plugins.end(), [](const std::wstring& plugin) {
+        const auto name = plugin.substr(plugin.find_last_of(L"\\/") + 1);
+        return _wcsicmp(name.c_str(), L"RScriptUnicode.dll") == 0;
+    });
+    if (options.kinsoku.empty() && unicode) options.kinsoku = parent_path(module_path()) + L"\\kinsoku.json";
+    const auto kinsoku = options.kinsoku.empty() ? std::wstring{} : read_kinsoku(full_path(options.kinsoku));
     WORD target_machine = pe_machine(options.game);
     std::wstring host = parent_path(module_path()) + L"\\RScriptHost.dll";
     if (!options.plugins.empty()) {
@@ -290,7 +316,7 @@ DWORD launch(const LaunchOptions& supplied) {
             uintptr_t offset = entry ? reinterpret_cast<uintptr_t>(entry) - reinterpret_cast<uintptr_t>(local) : 0;
             FreeLibrary(local);
             if (!offset) fail(L"RScriptHost.dll has no initialization entry");
-            auto packet = make_packet(options);
+            auto packet = make_packet(options, kinsoku);
             RemoteBuffer remote(process.hProcess, packet.data(), packet.size());
             DWORD initialized = remote_call(process.hProcess, remote_module(process.dwProcessId, host) + offset, remote.data);
             HostInitPacket result{};

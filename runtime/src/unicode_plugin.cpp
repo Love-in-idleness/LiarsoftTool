@@ -1,5 +1,6 @@
 #include "runtime_bridge.h"
 #include "engine_text.h"
+#include "native_kinsoku.h"
 #include "unicode.h"
 #include "fileio.h"
 #include "archive_index.h"
@@ -242,6 +243,11 @@ int RSCRIPT_CALL transform(const uint8_t* bytes, uint32_t size, uint32_t utf8Scr
 
 void RSCRIPT_CALL shutdown() {
     if (bridge && bridge->transform_script == transform) bridge->transform_script = nullptr;
+    try { liarsoft::runtime::removeNativeKinsoku(); }
+    catch (...) {
+        if (host && host->log) host->log(RSCRIPT_LOG_ERROR, "Cannot restore line-break hooks safely");
+        TerminateProcess(GetCurrentProcess(), ERROR_INVALID_ADDRESS);
+    }
     liarsoft::runtime::removeEngineTextHooks();
     if (dictionaryLock != INVALID_HANDLE_VALUE) CloseHandle(dictionaryLock);
     dictionaryLock = INVALID_HANDLE_VALUE;
@@ -255,8 +261,13 @@ int32_t RSCRIPT_CALL initialize(const RScriptHostContext* context) {
         if (!bridge || bridge->transform_script)
             throw std::runtime_error("Unicode requires a single initialized engine adapter");
         host = context;
+        if (!context->kinsoku_json) throw std::runtime_error("Unicode requires a line-break JSON configuration");
+        const auto rules = liarsoft::runtime::parseKinsoku(context->kinsoku_json);
         openDictionary();
         liarsoft::runtime::installEngineTextHooks(bridge->game_module, glyphs, context->log);
+        const auto classifiers = liarsoft::runtime::installNativeKinsoku(bridge->game_module, glyphs, rules);
+        if (context->log) context->log(RSCRIPT_LOG_INFO,
+            ("UTF-8 line-break rules connected to " + std::to_string(classifiers) + " shared classifier(s)").c_str());
         reserveOriginalText();
         bridge->transform_script = transform;
         if (context->log) context->log(RSCRIPT_LOG_INFO, "Unicode enabled through named GDI imports (BMP glyphs; persistent dictionary)");

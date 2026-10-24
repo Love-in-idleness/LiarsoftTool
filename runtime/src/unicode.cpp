@@ -1,4 +1,5 @@
 #include "unicode.h"
+#include "utf8_text.h"
 #include "encoding.h"
 #include "gscfile.h"
 
@@ -24,47 +25,6 @@ uint16_t tokenValue(size_t index) {
     unsigned low = unsigned(index % 188) + 0x40;
     if (low >= 0x7f) ++low;
     return uint16_t(((index / 188 + 0xf0) << 8) | low);
-}
-
-uint32_t nextUtf8(std::string_view text, size_t& offset) {
-    const size_t start = offset;
-    const auto bad = [start]() -> uint32_t {
-        throw std::runtime_error("Invalid UTF-8 at byte " + std::to_string(start));
-    };
-    const unsigned char first = text[offset++];
-    if (first < 0x80) return first;
-    unsigned count;
-    uint32_t value, minimum;
-    if (first >= 0xc2 && first <= 0xdf) {
-        count = 1; value = first & 0x1f; minimum = 0x80;
-    } else if (first >= 0xe0 && first <= 0xef) {
-        count = 2; value = first & 0x0f; minimum = 0x800;
-    } else if (first >= 0xf0 && first <= 0xf4) {
-        count = 3; value = first & 7; minimum = 0x10000;
-    } else return bad();
-    if (count > text.size() - offset) return bad();
-    while (count--) {
-        const unsigned char c = text[offset++];
-        if ((c & 0xc0) != 0x80) return bad();
-        value = (value << 6) | (c & 0x3f);
-    }
-    if (value < minimum || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff))
-        return bad();
-    return value;
-}
-
-std::u16string utf16(std::string_view text) {
-    std::u16string result;
-    for (size_t offset = 0; offset < text.size();) {
-        auto cp = nextUtf8(text, offset);
-        if (cp <= 0xffff) result += char16_t(cp);
-        else {
-            cp -= 0x10000;
-            result += char16_t(0xd800 + (cp >> 10));
-            result += char16_t(0xdc00 + (cp & 1023));
-        }
-    }
-    return result;
 }
 
 std::vector<size_t> nativeSlots(std::string_view bytes) {
@@ -197,7 +157,7 @@ std::u16string GlyphTokens::decode(std::string_view text) const {
                 continue;
             }
         }
-        output += utf16(convertEncoding(std::string(text.substr(offset, count)), "CP932", "UTF-8", true));
+        output += decodeUtf8(convertEncoding(std::string(text.substr(offset, count)), "CP932", "UTF-8", true));
         offset += count;
     }
     return output;

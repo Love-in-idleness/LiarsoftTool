@@ -191,12 +191,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, wchar_t*, int) {
         for (int i = 1; i < count; ++i) {
             std::wstring option = arguments[i];
             if (option == L"--wait") options.wait = true;
-            else if (option == L"--game" || option == L"--resources" || option == L"--plugin") {
+            else if (option == L"--game" || option == L"--resources" || option == L"--plugin" || option == L"--kinsoku") {
                 if (++i >= count) throw std::runtime_error("Missing launcher option argument");
                 if (option == L"--game") options.game = arguments[i];
                 else if (option == L"--resources") options.root = arguments[i];
+                else if (option == L"--kinsoku") {
+                    if (!arguments[i][0]) throw std::runtime_error("Kinsoku JSON path must not be empty");
+                    options.kinsoku = arguments[i];
+                }
                 else options.plugins.emplace_back(arguments[i]);
-            } else throw std::runtime_error("Usage: RScriptLauncher --game GAME.exe [--resources DIR] [--plugin DLL] [--wait]");
+            } else throw std::runtime_error("Usage: RScriptLauncher --game GAME.exe [--resources DIR] [--plugin DLL] [--kinsoku JSON] [--wait]");
         }
         LocalFree(arguments);
         arguments = nullptr;
