@@ -50,12 +50,14 @@ ResourcePreview decodeResourcePreview(const std::vector<uint8_t>& data, const st
     result.format = format(data, name);
     if (result.format.empty()) return result;
     if (result.format == "GSC") {
-        result.kind = PreviewKind::Text; result.encoding = "UTF-8";
-        result.text = decompileGscBytes(data, encoding, &result.warnings, name);
+        result.kind = PreviewKind::Text;
+        result.encoding = normalizeEncodingName(encoding) == "auto" ? detectGscEncoding(data, &result.warnings) : encoding;
+        result.text = decompileGscBytes(data, result.encoding, &result.warnings, name);
     } else if (result.format == "Text" || result.format == "TSC") {
         result.kind = PreviewKind::Text;
         const std::string input(data.begin(), data.end());
-        result.encoding = result.format == "TSC" ? "UTF-8" : encoding;
+        result.encoding = result.format == "TSC" ? "UTF-8" :
+            normalizeEncodingName(encoding) == "auto" ? "CP932" : encoding;
         result.text = convertEncoding(input, result.encoding, "UTF-8", true);
     } else if (result.format == "OGG" || result.format == "WAV") {
         result.kind = PreviewKind::Audio;

@@ -127,6 +127,12 @@ msgstr "Преобразование"
 msgid "Resource encoding"
 msgstr "Кодировка ресурсов"
 
+msgid "Auto (GSC input)"
+msgstr "Авто (входной GSC)"
+
+msgid "Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."
+msgstr "Авто определяет кодировку входного GSC. Для упаковки или создания GSC выберите конкретную кодировку. Имена в архивах и прочий устаревший текст в режиме авто используют CP932."
+
 msgid "Recursive"
 msgstr "Рекурсивно"
 

@@ -5,12 +5,12 @@ set(header ";@gsc-byte-format modern-36\n;@gsc-schema modern\n")
 file(WRITE "${valid}" "${header}*end\n")
 file(WRITE "${invalid}" "${header}*goto \"bad\\\"label\"\n")
 file(WRITE "${TEST_ROOT}/中文 path/valid.gsc" "KEEP EXISTING GSC")
-execute_process(COMMAND "${TOOL}" --check-tsc --diagnostics=json "${valid}"
+execute_process(COMMAND "${TOOL}" -e CP932 --check-tsc --diagnostics=json "${valid}"
     RESULT_VARIABLE code OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT code EQUAL 0 OR NOT output STREQUAL "{\"diagnostics\":[]}\n" OR NOT error STREQUAL "")
     message(FATAL_ERROR "Valid TSC check failed: ${code} ${output} ${error}")
 endif()
-execute_process(COMMAND "${TOOL}" --check-tsc --diagnostics=json "${invalid}" "${valid}"
+execute_process(COMMAND "${TOOL}" -e CP932 --check-tsc --diagnostics=json "${invalid}" "${valid}"
     RESULT_VARIABLE code OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT code EQUAL 1 OR NOT output MATCHES "\"severity\":\"error\"" OR
     NOT output MATCHES "\"line\":3,\"column\":null" OR NOT error STREQUAL "")
@@ -19,18 +19,18 @@ endif()
 if(NOT output MATCHES "bad\\\\\\\"label")
     message(FATAL_ERROR "JSON string escaping failed: ${output}")
 endif()
-execute_process(COMMAND "${TOOL}" --check-tsc "${invalid}"
+execute_process(COMMAND "${TOOL}" -e CP932 --check-tsc "${invalid}"
     RESULT_VARIABLE code OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT code EQUAL 1 OR NOT error MATCHES ":3: error:" OR NOT output STREQUAL "")
     message(FATAL_ERROR "Text diagnostic failed: ${output} ${error}")
 endif()
-execute_process(COMMAND "${TOOL}" --check-tsc --diagnostics=json "${TEST_ROOT}/missing.tsc"
+execute_process(COMMAND "${TOOL}" -e CP932 --check-tsc --diagnostics=json "${TEST_ROOT}/missing.tsc"
     RESULT_VARIABLE code OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT code EQUAL 1 OR NOT output MATCHES "\"line\":null")
     message(FATAL_ERROR "Missing input diagnostic failed: ${output} ${error}")
 endif()
 foreach(option --diagnostics=json --check-update --pack-only --unpack-only -R)
-    execute_process(COMMAND "${TOOL}" --check-tsc ${option} -o "${TEST_ROOT}/forbidden.gsc" "${valid}"
+    execute_process(COMMAND "${TOOL}" -e CP932 --check-tsc ${option} -o "${TEST_ROOT}/forbidden.gsc" "${valid}"
         RESULT_VARIABLE code)
     if(NOT code EQUAL 1 OR EXISTS "${TEST_ROOT}/forbidden.gsc")
         message(FATAL_ERROR "Check mode accepted conversion options")

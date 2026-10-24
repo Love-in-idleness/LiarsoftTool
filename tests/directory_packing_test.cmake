@@ -39,14 +39,14 @@ file(WRITE "${TEST_ROOT}/root/project.cpp" "not-packed")
 file(WRITE "${TEST_ROOT}/root/source.PNG" "not-packed")
 
 execute_process(
-    COMMAND "${TOOL}" -R -j 1 -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
+    COMMAND "${TOOL}" -e CP932 -R -j 1 -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Packing test directory failed: ${error}")
 endif()
 file(SHA256 "${TEST_ROOT}/root.xfl" serial_hash)
 set(serial_warnings "${error}")
-execute_process(COMMAND "${TOOL}" -R --jobs 8 -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
+execute_process(COMMAND "${TOOL}" -e CP932 -R --jobs 8 -o "${TEST_ROOT}/root.xfl" "${TEST_ROOT}/root"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 file(SHA256 "${TEST_ROOT}/root.xfl" parallel_hash)
 if(result OR NOT serial_hash STREQUAL parallel_hash OR NOT error STREQUAL serial_warnings)
@@ -61,7 +61,7 @@ if(NOT EXISTS "${TEST_ROOT}/root/nested.xfl" OR
 endif()
 
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/unpacked" "${TEST_ROOT}/root.xfl"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/unpacked" "${TEST_ROOT}/root.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Extracting test XFL failed: ${error}")
@@ -78,21 +78,21 @@ foreach(file IN ITEMS project.cpp source.PNG bad.lwg bad.xfl good.xfl plain.lwg 
 endforeach()
 
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/plain_unpacked" "${TEST_ROOT}/root/plain.xfl"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/plain_unpacked" "${TEST_ROOT}/root/plain.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/plain_unpacked/child.GSC")
     message(FATAL_ERROR "Generated child XFL is invalid: ${error}")
 endif()
 
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/nested_unpacked" "${TEST_ROOT}/root/nested.xfl"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/nested_unpacked" "${TEST_ROOT}/root/nested.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/nested_unpacked/scene.lwg")
     message(FATAL_ERROR "Nested child archive was not included: ${error}")
 endif()
 
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/recursive_unpacked" "${TEST_ROOT}/root.xfl"
+    COMMAND "${TOOL}" -e CP932 -R -o "${TEST_ROOT}/recursive_unpacked" "${TEST_ROOT}/root.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/recursive_unpacked/nested/scene/.meta.xml")
     message(FATAL_ERROR "Nested archives were not recursively unpacked: ${error}")
@@ -105,7 +105,7 @@ configure_file("${TEST_ROOT}/root.xfl"
                "${TEST_ROOT}/unpack_tree/level/deep/good.xfl" COPYONLY)
 file(WRITE "${TEST_ROOT}/unpack_tree/level/broken.xfl" "not-an-archive")
 execute_process(
-    COMMAND "${TOOL}" -R --unpack-only "${TEST_ROOT}/unpack_tree"
+    COMMAND "${TOOL}" -e CP932 -R --unpack-only "${TEST_ROOT}/unpack_tree"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR
    NOT EXISTS "${TEST_ROOT}/unpack_tree/level/deep/good/nested/scene/.meta.xml" OR
@@ -115,7 +115,7 @@ if(result OR
 endif()
 
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/good_unpacked" "${TEST_ROOT}/root/good.lwg"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/good_unpacked" "${TEST_ROOT}/root/good.lwg"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/good_unpacked/image.wcg" OR
    NOT EXISTS "${TEST_ROOT}/good_unpacked/mask.msk" OR
@@ -125,7 +125,7 @@ endif()
 
 file(WRITE "${TEST_ROOT}/empty/project.cpp" "not-packed")
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/empty.xfl" "${TEST_ROOT}/empty"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/empty.xfl" "${TEST_ROOT}/empty"
     RESULT_VARIABLE result)
 if(NOT result)
     message(FATAL_ERROR "Empty XFL directory unexpectedly succeeded")
@@ -133,7 +133,7 @@ endif()
 
 file(WRITE "${TEST_ROOT}/empty_lwg/.meta.xml" "${meta}</Items></Canvas>")
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/empty.lwg" "${TEST_ROOT}/empty_lwg"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/empty.lwg" "${TEST_ROOT}/empty_lwg"
     RESULT_VARIABLE result)
 if(NOT result)
     message(FATAL_ERROR "Empty LWG directory unexpectedly succeeded")
@@ -164,7 +164,7 @@ file(READ "${TEST_ROOT}/convert/badref.wav" original_pcm HEX)
 
 # Default PCM and opt-in Vorbis wrapping both work without an original WAV.
 execute_process(
-    COMMAND "${TOOL}" --pack-only -r "${TEST_ROOT}/nonexistent-reference.wav"
+    COMMAND "${TOOL}" -e CP932 --pack-only -r "${TEST_ROOT}/nonexistent-reference.wav"
             -o "${TEST_ROOT}/decoded.wav" "${TEST_ROOT}/convert/audio.ogg"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/decoded.wav")
@@ -175,7 +175,7 @@ if(NOT decoded_pcm STREQUAL original_pcm)
     message(FATAL_ERROR "Default CLI audio output was not decoded PCM")
 endif()
 execute_process(
-    COMMAND "${TOOL}" --vorbis-in-wav --pack-only
+    COMMAND "${TOOL}" -e CP932 --vorbis-in-wav --pack-only
             -o "${TEST_ROOT}/enabled.wav"
             "${TEST_ROOT}/convert/audio.ogg"
     RESULT_VARIABLE result ERROR_VARIABLE error)
@@ -183,7 +183,7 @@ if(result OR NOT EXISTS "${TEST_ROOT}/enabled.wav")
     message(FATAL_ERROR "Template-free compressed audio wrapping failed: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" --unpack-only -o "${TEST_ROOT}/enabled.ogg" "${TEST_ROOT}/enabled.wav"
+    COMMAND "${TOOL}" -e CP932 --unpack-only -o "${TEST_ROOT}/enabled.ogg" "${TEST_ROOT}/enabled.wav"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 file(READ "${TEST_ROOT}/convert/audio.ogg" original_ogg HEX)
 file(READ "${TEST_ROOT}/enabled.ogg" roundtrip_ogg HEX)
@@ -197,13 +197,13 @@ file(WRITE "${TEST_ROOT}/audio_nested/sub/layout.xml" "resource")
 configure_file("${TEST_ROOT}/convert/audio.ogg"
                "${TEST_ROOT}/audio_nested/sub/voice.OGG" COPYONLY)
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/audio_pcm.xfl" "${TEST_ROOT}/audio_nested"
+    COMMAND "${TOOL}" -e CP932 -R -o "${TEST_ROOT}/audio_pcm.xfl" "${TEST_ROOT}/audio_nested"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Recursive PCM conversion failed: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" -R --unpack-only -o "${TEST_ROOT}/audio_pcm_unpacked"
+    COMMAND "${TOOL}" -e CP932 -R --unpack-only -o "${TEST_ROOT}/audio_pcm_unpacked"
             "${TEST_ROOT}/audio_pcm.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 file(READ "${TEST_ROOT}/audio_pcm_unpacked/sub/voice.wav" nested_pcm HEX)
@@ -212,14 +212,14 @@ if(result OR NOT nested_pcm STREQUAL original_pcm OR
     message(FATAL_ERROR "Recursive PCM mode did not reach the child")
 endif()
 execute_process(
-    COMMAND "${TOOL}" -R --vorbis-in-wav
+    COMMAND "${TOOL}" -e CP932 -R --vorbis-in-wav
             -o "${TEST_ROOT}/audio_wrapped.xfl" "${TEST_ROOT}/audio_nested"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Recursive Vorbis mode failed: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" -R --unpack-only -o "${TEST_ROOT}/audio_wrapped_unpacked"
+    COMMAND "${TOOL}" -e CP932 -R --unpack-only -o "${TEST_ROOT}/audio_wrapped_unpacked"
             "${TEST_ROOT}/audio_wrapped.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 file(READ "${TEST_ROOT}/audio_wrapped_unpacked/sub/voice.ogg" nested_ogg HEX)
@@ -230,12 +230,12 @@ endif()
 # Bad audio must warn/continue and exclude an old WAV, in both modes.
 file(WRITE "${TEST_ROOT}/audio_nested/sub/voice.OGG" "broken-ogg")
 foreach(mode "" "--vorbis-in-wav")
-    execute_process(COMMAND "${TOOL}" -R ${mode} -o "${TEST_ROOT}/audio_failed.xfl"
+    execute_process(COMMAND "${TOOL}" -e CP932 -R ${mode} -o "${TEST_ROOT}/audio_failed.xfl"
                     "${TEST_ROOT}/audio_nested" RESULT_VARIABLE result ERROR_VARIABLE error)
     if(result OR NOT error MATCHES "Ogg")
         message(FATAL_ERROR "Invalid nested Ogg did not warn and continue: ${error}")
     endif()
-    execute_process(COMMAND "${TOOL}" -R --unpack-only -o "${TEST_ROOT}/audio_failed_unpacked"
+    execute_process(COMMAND "${TOOL}" -e CP932 -R --unpack-only -o "${TEST_ROOT}/audio_failed_unpacked"
                     "${TEST_ROOT}/audio_failed.xfl" RESULT_VARIABLE result ERROR_VARIABLE error)
     if(result OR EXISTS "${TEST_ROOT}/audio_failed_unpacked/sub/voice.wav" OR
        NOT EXISTS "${TEST_ROOT}/audio_failed_unpacked/sub/layout.xml")
@@ -244,7 +244,7 @@ foreach(mode "" "--vorbis-in-wav")
 endforeach()
 
 execute_process(
-    COMMAND "${TOOL}" -R --vorbis-in-wav
+    COMMAND "${TOOL}" -e CP932 -R --vorbis-in-wav
             -o "${TEST_ROOT}/convert.xfl" "${TEST_ROOT}/convert"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
@@ -268,7 +268,7 @@ if(NOT retained_pcm STREQUAL original_pcm)
 endif()
 
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/convert_unpacked" "${TEST_ROOT}/convert.xfl"
+    COMMAND "${TOOL}" -e CP932 -R -o "${TEST_ROOT}/convert_unpacked" "${TEST_ROOT}/convert.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/convert_unpacked/image.png" OR
    NOT EXISTS "${TEST_ROOT}/convert_unpacked/image.webp" OR
@@ -292,14 +292,14 @@ file(WRITE "${TEST_ROOT}/tsc_restore/script.tsc"
     "; ordinary comment\n")
 file(WRITE "${TEST_ROOT}/tsc_restore/layout.xml" "resource")
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/tsc_restore.xfl"
+    COMMAND "${TOOL}" -e CP932 -R -o "${TEST_ROOT}/tsc_restore.xfl"
             "${TEST_ROOT}/tsc_restore"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Recursive TSC restoration failed: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/tsc_restore_unpacked"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/tsc_restore_unpacked"
             "${TEST_ROOT}/tsc_restore.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 file(READ "${TEST_ROOT}/tsc_restore_unpacked/script.gsc" restored HEX)
@@ -313,7 +313,7 @@ file(MAKE_DIRECTORY "${TEST_ROOT}/webp_cli")
 configure_file("${TEST_ROOT}/convert/image.lim"
                "${TEST_ROOT}/webp_cli/item.LIM" COPYONLY)
 execute_process(
-    COMMAND "${TOOL}" --unpack-only "${TEST_ROOT}/webp_cli/item.LIM"
+    COMMAND "${TOOL}" -e CP932 --unpack-only "${TEST_ROOT}/webp_cli/item.LIM"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/webp_cli/item.webp" OR
    EXISTS "${TEST_ROOT}/webp_cli/item.png")
@@ -322,7 +322,7 @@ endif()
 # Keep the reference distinct on Windows' case-insensitive filesystem.
 file(RENAME "${TEST_ROOT}/webp_cli/item.LIM" "${TEST_ROOT}/webp_cli/expected.lim")
 execute_process(
-    COMMAND "${TOOL}" --pack-only "${TEST_ROOT}/webp_cli/item.webp"
+    COMMAND "${TOOL}" -e CP932 --pack-only "${TEST_ROOT}/webp_cli/item.webp"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/webp_cli/item.lim" OR
    EXISTS "${TEST_ROOT}/webp_cli/item.wcg")
@@ -341,14 +341,14 @@ configure_file("${TEST_ROOT}/convert/image.WEBP"
 file(WRITE "${TEST_ROOT}/webp_lwg/.meta.xml"
     "${meta}<Item x=\"0\" y=\"0\" flag=\"40\">background</Item></Items></Canvas>")
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/webp.lwg" "${TEST_ROOT}/webp_lwg"
+    COMMAND "${TOOL}" -e CP932 -R -o "${TEST_ROOT}/webp.lwg" "${TEST_ROOT}/webp_lwg"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/webp_lwg/background.lim" OR
    EXISTS "${TEST_ROOT}/webp_lwg/background.wcg")
     message(FATAL_ERROR "Recursive WebP packing into LWG failed: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" -R -o "${TEST_ROOT}/webp_lwg_unpacked" "${TEST_ROOT}/webp.lwg"
+    COMMAND "${TOOL}" -e CP932 -R -o "${TEST_ROOT}/webp_lwg_unpacked" "${TEST_ROOT}/webp.lwg"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/webp_lwg_unpacked/background.webp" OR
    EXISTS "${TEST_ROOT}/webp_lwg_unpacked/background.png")
@@ -365,14 +365,14 @@ file(WRITE "${TEST_ROOT}/flat/layout.xml" "resource")
 file(WRITE "${TEST_ROOT}/flat/source.png" "not-converted")
 file(WRITE "${TEST_ROOT}/flat/child/data.gsc" "child")
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/flat.xfl" "${TEST_ROOT}/flat"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/flat.xfl" "${TEST_ROOT}/flat"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR EXISTS "${TEST_ROOT}/flat/source.wcg" OR
    EXISTS "${TEST_ROOT}/flat/child.xfl")
     message(FATAL_ERROR "Non-recursive packing did recursive work: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" -o "${TEST_ROOT}/flat_unpacked" "${TEST_ROOT}/flat.xfl"
+    COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/flat_unpacked" "${TEST_ROOT}/flat.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/flat_unpacked/layout.xml" OR
    EXISTS "${TEST_ROOT}/flat_unpacked/source.png")
@@ -382,35 +382,35 @@ endif()
 # Operation filters: either direction works alone; enabling both matches no
 # operation and must leave every requested output untouched.
 execute_process(
-    COMMAND "${TOOL}" --pack-only -o "${TEST_ROOT}/pack_only.xfl"
+    COMMAND "${TOOL}" -e CP932 --pack-only -o "${TEST_ROOT}/pack_only.xfl"
             "${TEST_ROOT}/flat"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/pack_only.xfl")
     message(FATAL_ERROR "Pack-only mode did not pack a directory: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" --unpack-only -o "${TEST_ROOT}/unpack_only"
+    COMMAND "${TOOL}" -e CP932 --unpack-only -o "${TEST_ROOT}/unpack_only"
             "${TEST_ROOT}/pack_only.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/unpack_only/layout.xml")
     message(FATAL_ERROR "Unpack-only mode did not unpack an archive: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" --unpack-only -o "${TEST_ROOT}/must_not_pack.xfl"
+    COMMAND "${TOOL}" -e CP932 --unpack-only -o "${TEST_ROOT}/must_not_pack.xfl"
             "${TEST_ROOT}/flat"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR EXISTS "${TEST_ROOT}/must_not_pack.xfl")
     message(FATAL_ERROR "Unpack-only mode performed packing: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" --pack-only -o "${TEST_ROOT}/must_not_unpack"
+    COMMAND "${TOOL}" -e CP932 --pack-only -o "${TEST_ROOT}/must_not_unpack"
             "${TEST_ROOT}/pack_only.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR EXISTS "${TEST_ROOT}/must_not_unpack")
     message(FATAL_ERROR "Pack-only mode performed unpacking: ${error}")
 endif()
 execute_process(
-    COMMAND "${TOOL}" --pack-only --unpack-only
+    COMMAND "${TOOL}" -e CP932 --pack-only --unpack-only
             -o "${TEST_ROOT}/both_enabled.xfl" "${TEST_ROOT}/flat"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR EXISTS "${TEST_ROOT}/both_enabled.xfl")
@@ -431,7 +431,7 @@ function(expect_source_time source output)
         message(FATAL_ERROR "Modification time not inherited: ${source} -> ${output}")
     endif()
 endfunction()
-execute_process(COMMAND "${TOOL}" -R
+execute_process(COMMAND "${TOOL}" -e CP932 -R
     -o "${TEST_ROOT}/dated_unpacked" "${TEST_ROOT}/timestamps/dated.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
@@ -468,7 +468,7 @@ foreach(mode IN ITEMS default txt explicit_tsc last_txt last_tsc)
         set(format_options --gsc-to-txt --gsc-to-tsc)
     endif()
     set(source "${TEST_ROOT}/gsc_modes/${mode}/script.gsc")
-    execute_process(COMMAND "${TOOL}" ${format_options} "${source}"
+    execute_process(COMMAND "${TOOL}" -e CP932 ${format_options} "${source}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
     if(result OR NOT EXISTS "${TEST_ROOT}/gsc_modes/${mode}/script.${output_ext}")
         message(FATAL_ERROR "GSC output mode ${mode} failed: ${output} ${error}")
@@ -502,7 +502,7 @@ foreach(mode IN ITEMS default txt)
         set(output_ext txt)
         set(other_ext tsc)
     endif()
-    execute_process(COMMAND "${TOOL}" -R --unpack-only ${format_options}
+    execute_process(COMMAND "${TOOL}" -e CP932 -R --unpack-only ${format_options}
         "${TEST_ROOT}/gsc_recursive_${mode}"
         RESULT_VARIABLE result ERROR_VARIABLE error)
     if(result OR NOT EXISTS "${TEST_ROOT}/gsc_recursive_${mode}/child/script.${output_ext}"
@@ -511,7 +511,7 @@ foreach(mode IN ITEMS default txt)
     endif()
 endforeach()
 
-execute_process(COMMAND "${TOOL}" -R --gsc-to-txt
+execute_process(COMMAND "${TOOL}" -e CP932 -R --gsc-to-txt
     -o "${TEST_ROOT}/dated_txt" "${TEST_ROOT}/timestamps/dated.xfl"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT EXISTS "${TEST_ROOT}/dated_txt/script.txt" OR
@@ -519,7 +519,7 @@ if(result OR NOT EXISTS "${TEST_ROOT}/dated_txt/script.txt" OR
     message(FATAL_ERROR "Recursive archive TXT selection failed: ${error}")
 endif()
 
-execute_process(COMMAND "${TOOL}" "${TEST_ROOT}/convert/badref.wav"
+execute_process(COMMAND "${TOOL}" -e CP932 "${TEST_ROOT}/convert/badref.wav"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(result OR NOT output MATCHES "PCM retained unchanged")
     message(FATAL_ERROR "CLI did not report PCM retention: ${output} ${error}")
@@ -528,13 +528,13 @@ endif()
 file(MAKE_DIRECTORY "${TEST_ROOT}/recovery")
 file(COPY "${TEST_ROOT}/timestamps/stale.gsc" DESTINATION "${TEST_ROOT}/recovery")
 file(SHA256 "${TEST_ROOT}/recovery/stale.gsc" recovery_source_hash)
-execute_process(COMMAND "${TOOL}" --gsc-to-tsc
+execute_process(COMMAND "${TOOL}" -e CP932 --gsc-to-tsc
     -o "${TEST_ROOT}/recovery/direct.tsc" "${TEST_ROOT}/recovery/stale.gsc"
     RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT error MATCHES "Warning: .*Recovered legacy GSC string table length")
     message(FATAL_ERROR "Direct GSC recovery did not report its warning: ${error}")
 endif()
-execute_process(COMMAND "${TOOL}" -R -j 4 --unpack-only --gsc-to-tsc
+execute_process(COMMAND "${TOOL}" -e CP932 -R -j 4 --unpack-only --gsc-to-tsc
     "${TEST_ROOT}/recovery" RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result OR NOT error MATCHES "Warning: .*Recovered legacy GSC string table length")
     message(FATAL_ERROR "Recursive GSC recovery did not report its warning: ${error}")
@@ -559,14 +559,14 @@ foreach(pair IN ITEMS "wcg;png" "lim;webp" "wav;ogg" "gsc;txt")
     endif()
     set(source "${TEST_ROOT}/dated_unpacked/${stem}.${source_ext}")
     set(output "${TEST_ROOT}/timestamps/direct.${output_ext}")
-    execute_process(COMMAND "${TOOL}" -o "${output}" "${source}"
+    execute_process(COMMAND "${TOOL}" -e CP932 -o "${output}" "${source}"
         RESULT_VARIABLE result ERROR_VARIABLE error)
     if(result)
         message(FATAL_ERROR "Direct ${source_ext} extraction failed: ${error}")
     endif()
     expect_source_time("${source}" "${output}")
 endforeach()
-execute_process(COMMAND "${TOOL}" -o "${TEST_ROOT}/dated_scene"
+execute_process(COMMAND "${TOOL}" -e CP932 -o "${TEST_ROOT}/dated_scene"
     "${TEST_ROOT}/dated_unpacked/scene.lwg" RESULT_VARIABLE result ERROR_VARIABLE error)
 if(result)
     message(FATAL_ERROR "Direct dated LWG extraction failed: ${error}")
@@ -576,13 +576,13 @@ foreach(name IN ITEMS .meta.xml background.lim)
 endforeach()
 # Reject invalid thread counts before touching any input/output.
 foreach(jobs "-1" "65" "abc" "2x" "99999999999999999999999999" "")
-    execute_process(COMMAND "${TOOL}" --jobs "${jobs}" --help
+    execute_process(COMMAND "${TOOL}" -e CP932 --jobs "${jobs}" --help
         RESULT_VARIABLE result ERROR_VARIABLE error)
     if(NOT result OR NOT error MATCHES "jobs")
         message(FATAL_ERROR "Invalid thread count was not rejected: '${jobs}' ${error}")
     endif()
 endforeach()
-execute_process(COMMAND "${TOOL}" -j RESULT_VARIABLE result ERROR_VARIABLE error)
+execute_process(COMMAND "${TOOL}" -e CP932 -j RESULT_VARIABLE result ERROR_VARIABLE error)
 if(NOT result OR NOT error MATCHES "requires a value")
     message(FATAL_ERROR "Missing worker argument was not rejected")
 endif()

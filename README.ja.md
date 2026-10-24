@@ -10,12 +10,14 @@ Ren'Py への移植には、[rscript2renpy](https://github.com/Love-in-idleness/
 
 ## 使い始める
 
-Windows 版は GUI と CLI をそれぞれ圧縮済みの単一 EXE で配布します。必要な方をダウンロードして実行してください。展開は不要です。Linux 版の GUI は `liarsofttool-gui`、CLI は `liarsofttool` です。
+Windows 版は GUI と CLI をそれぞれ圧縮済みの単一 EXE で配布します。必要な方をダウンロードして実行してください。展開は不要です。
+Linux 版も GUI・CLI の独立バイナリーです。ダウンロード後に実行権限を付けてください。GUI は翻訳を内蔵しますが、以下のシステムライブラリは必要です。
+ソースからのビルドでは GUI は `liarsofttool-gui`、CLI は `liarsofttool` です。
 
 作業前にゲームリソースをコピーしてください。出力先の既定値は入力ファイルと同じ場所です。再変換で同名ファイルが上書きされることがあります。
 
 1. ファイルまたはフォルダーを追加します。ウィンドウへのドラッグにも対応します。
-2. 「Preferences」でリソースの文字コードを選びます。日本語は通常 CP932、中国語パッチは通常 GBK です。
+2. 既定の `auto` は GSC の文字コードを自動判定します。曖昧な結果や文字化けの場合は手動で選びます。日本語は通常 CP932、中国語パッチは通常 GBK です。
 3. 再帰処理、展開のみ、作成のみを必要に応じて指定し、「Conversion tasks」で出力先を確認します。
 4. 変換を開始します。問題が起きた場合は「Copy details」で詳細をコピーしてください。
 
@@ -30,6 +32,9 @@ GUI・CLI とも、既定では GSC を TSC に変換します。テキストの
 閲覧とプレビューは元ファイルを変更せず、アーカイブ全体を展開しません。「Export raw bytes」は選択項目だけを変換せずに書き出します。アーカイブ内の項目を変換するには、先に書き出してから変換タスクへ追加してください。単独ファイルは直接追加できます。
 
 画像は拡大縮小と透明背景表示に対応します。音声は再生、一時停止、シーク、音量調整が可能です。音声プレビューには GTK のメディアバックエンドと GStreamer の Ogg/Vorbis プラグインが必要です。Windows GUI には同梱しています。
+
+GSC のプレビューも自動判定に対応します。短い文章では判定できない場合があり、ASCII のみでは元の文字コードを特定できません。結果を確認してください。
+梱包、GSC の検査・生成では具体的な文字コードを選択してください。`auto` でもアーカイブ名とその他の旧式テキストには CP932 を使用します。
 
 ## コマンドラインのヘルプ
 
@@ -49,12 +54,12 @@ GSC→TSC は実験的機能です。すべてのゲームに対応するわけ�
 
 ## ソースからビルドする
 
-C++17 コンパイラー、CMake、WebP、Vorbis/Ogg、libcurl 7.85 以降が必要です。GUI には GTK4 4.10、libadwaita 1.5 以降、gettext も必要です。Windows と Linux は共通 GUI を使用します。変換設定、テーマ、表示言語は「Preferences」にあります。テーマはシステム連動・ライト・ダーク、GUI の言語は中国語・英語・ロシア語・日本語です。言語の手動変更は再起動後に反映されます。
+C++17 コンパイラー、CMake、WebP、Vorbis/Ogg、uchardet（静的ライブラリを含む）、libcurl 7.85 以降が必要です。GUI には GTK4 4.10、libadwaita 1.5 以降、gettext も必要です。Windows と Linux は共通 GUI を使用します。変換設定、テーマ、表示言語は「Preferences」にあります。テーマはシステム連動・ライト・ダーク、GUI の言語は中国語・英語・ロシア語・日本語です。言語の手動変更は再起動後に反映されます。
 
 Debian / Ubuntu:
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -82,3 +87,4 @@ LiarsoftTool は GPLv3 です。第三者のコンポーネントには、それ
 - [GTK4 / libadwaita](https://www.gtk.org/): 共通デスクトップ GUI。
 - [GStreamer](https://gstreamer.freedesktop.org/): GTK メディアバックエンドの音声プレビュー。
 - [libcurl](https://curl.se/libcurl/): HTTPS による更新確認。
+- [uchardet](https://www.freedesktop.org/wiki/Software/uchardet/): GSC の文字コード判定。[ライセンス原文](docs/THIRD_PARTY_UCHARDET_LICENSES.md)。変更のない 0.0.8 の[ソース](https://deb.debian.org/debian/pool/main/u/uchardet/uchardet_0.0.8.orig.tar.xz)を静的リンクし、GPLv2 以降の条件で利用します。

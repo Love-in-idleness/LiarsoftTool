@@ -120,6 +120,14 @@ gboolean step(gpointer) {
             openPath(b, directory / "scene.gsc"); stage = 15;
         } else if (stage == 15 && b->selected && b->selected->name.find("scene.gsc") != std::string::npos) {
             require(!b->media && getText(b->text).find("*end") != std::string::npos, "GSC preview or audio cleanup");
+            require(getText(b->text).find("今天") != std::string::npos &&
+                std::string(gtk_label_get_text(GTK_LABEL(b->info))).find("GBK → UTF-8") != std::string::npos,
+                "GSC preview did not detect Chinese text");
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(b->encoding), 3);
+            stage = 150;
+        } else if (stage == 150 && b->selected && b->selected->name.find("scene.gsc") != std::string::npos) {
+            require(encoding(b) == "GBK" && getText(b->text).find("今天") != std::string::npos,
+                "Manual preview encoding did not override auto");
             g_signal_emit_by_name(b->queueButton, "clicked");
             require(queued == (directory / "scene.gsc").u8string(), "queue action input differs");
             openPath(b, directory); stage = 16;
@@ -136,17 +144,19 @@ gboolean step(gpointer) {
 void activateBrowser(GtkApplication* app, gpointer) {
     window = GTK_WINDOW(gtk_application_window_new(app));
     auto* choices = gtk_string_list_new(nullptr);
+    gtk_string_list_append(choices, "Auto (GSC input)");
     for (const auto& name : supportedEncodings()) gtk_string_list_append(choices, name.c_str());
     auto* encodingChoice = gtk_drop_down_new(G_LIST_MODEL(choices), nullptr);
     root = createResourceBrowser(window, GTK_DROP_DOWN(encodingChoice), +[](const std::string& file) { queued = file; });
     g_object_ref_sink(encodingChoice); g_object_unref(encodingChoice);
     b = browser(root);
     require(g_list_model_get_n_items(gtk_drop_down_get_model(GTK_DROP_DOWN(b->encoding))) ==
-            supportedEncodings().size() + 1, "Preview encoding choices differ from conversion choices");
+            supportedEncodings().size() + 2, "Preview encoding choices differ from conversion choices");
+    require(encoding(b) == "auto", "Default preview encoding is not auto");
     for (guint index = 0; index < supportedEncodings().size(); ++index) {
-        gtk_drop_down_set_selected(b->baseEncoding, index);
+        gtk_drop_down_set_selected(b->baseEncoding, index + 1);
         require(encoding(b) == supportedEncodings()[index], "Preview resource encoding index is incorrect");
-        gtk_drop_down_set_selected(GTK_DROP_DOWN(b->encoding), index + 1);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(b->encoding), index + 2);
         require(encoding(b) == supportedEncodings()[index], "Preview explicit encoding index is incorrect");
         gtk_drop_down_set_selected(GTK_DROP_DOWN(b->encoding), 0);
     }
@@ -181,7 +191,9 @@ int main(int argc, char** argv) {
     writeTextFileIfChanged((directory / "latest.tsc").string(), "LATEST");
     const auto text = convertEncoding("日本語", "UTF-8", "CP932", true);
     writeFileIfChanged((directory / "encoded.ini").string(), {text.begin(), text.end()});
-    writeFileIfChanged((directory / "scene.gsc").string(), restoreGscFromTsc(tsc));
+    writeFileIfChanged((directory / "scene.gsc").string(), restoreGscFromTsc(
+        ";@gsc-byte-format modern-36\n;@gsc-schema modern\n"
+        "*TXT 0 0 0 0 \"\" \"今天的天气很好，我们一起走进安静的森林。远处传来了鸟儿的声音，她打开窗户望着蓝色的天空。\" 0\n*end\n", "GBK"));
     writeFileIfChanged((directory / "voice.wav").string(), WavOggExtractor::embed(testVorbis(1, 44100, 88200)));
     auto* app = adw_application_new("io.github.LiarsoftTool.BrowserTest", G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app, "activate", G_CALLBACK(activateBrowser), nullptr);

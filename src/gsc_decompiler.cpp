@@ -2,6 +2,7 @@
 
 #include "encoding.h"
 #include "fileio.h"
+#include <uchardet/uchardet.h>
 
 #include <algorithm>
 #include <cctype>
@@ -10,6 +11,7 @@
 #include <iomanip>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -299,19 +301,20 @@ const std::unordered_map<uint16_t, std::string>& schemasFor(
 
 class ParsedGsc {
 public:
-    ParsedGsc(const std::vector<uint8_t>& data, const std::string& inputPath) : path(inputPath) {
+    ParsedGsc(const std::vector<uint8_t>& data, const std::string& inputPath,
+              bool decodeInstructions = true) : path(inputPath) {
         if (data.size() < 28) fail("shorter than the GSC header");
         const uint32_t headerLength = readU32(data, 4);
         if (headerLength == 28) {
             earlyVmEncoding = true;
             parseLegacy(data);
-            selectSchema({InstructionSchema::Early, InstructionSchema::EarlyShortSelect,
+            if (decodeInstructions) selectSchema({InstructionSchema::Early, InstructionSchema::EarlyShortSelect,
                           InstructionSchema::PreCodeX,
                           InstructionSchema::RScript18,
                           InstructionSchema::RScript19, InstructionSchema::Modern});
         } else if (headerLength == 36) {
             parseModern(data);
-            selectSchema({InstructionSchema::Modern, InstructionSchema::RScript19,
+            if (decodeInstructions) selectSchema({InstructionSchema::Modern, InstructionSchema::RScript19,
                           InstructionSchema::RScript18, InstructionSchema::Early,
                           InstructionSchema::EarlyShortSelect,
                           InstructionSchema::PreCodeX});
@@ -429,6 +432,16 @@ public:
     }
 
     size_t dataBlockCount() const { return indexB.size() / 4; }
+
+    std::vector<std::string> encodedStrings() const {
+        std::vector<std::string> result;
+        const auto count = legacyStrings.empty() ? indexA.size() / 4 : legacyStrings.size();
+        for (size_t i = 0; i < count; ++i) {
+            const auto bytes = stringBytes(i);
+            result.emplace_back(bytes.begin(), bytes.end());
+        }
+        return result;
+    }
 
     fs::path path;
     std::vector<uint8_t> code;
@@ -706,6 +719,7 @@ std::string hex6(size_t value) {
 struct SourceToken {
     std::string value;
     bool quoted = false;
+    size_t start = 0, end = 0;
 };
 
 std::string quoteString(const std::string& value) {
@@ -732,13 +746,13 @@ std::vector<SourceToken> tokenizeSource(const std::string& line, size_t lineNo) 
         while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
             ++pos;
         if (pos == line.size() || line[pos] == ';') break;
+        const size_t begin = pos;
         if (line[pos] != '"') {
-            const size_t begin = pos;
             while (pos < line.size() &&
                    !std::isspace(static_cast<unsigned char>(line[pos])) &&
                    line[pos] != ';')
                 ++pos;
-            result.push_back({line.substr(begin, pos - begin), false});
+            result.push_back({line.substr(begin, pos - begin), false, begin, pos});
             continue;
         }
         ++pos;
@@ -768,7 +782,7 @@ std::vector<SourceToken> tokenizeSource(const std::string& line, size_t lineNo) 
         if (!closed)
             throw std::runtime_error("line " + std::to_string(lineNo) +
                                      ": unterminated string");
-        result.push_back({std::move(value), true});
+        result.push_back({std::move(value), true, begin, pos});
     }
     return result;
 }
@@ -905,7 +919,8 @@ size_t instructionSize(const std::string& kinds) {
 }
 
 std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
-                                          const std::string& fallbackEncoding) {
+                                          const std::string& fallbackEncoding,
+                                          TscDocument* document = nullptr) {
     size_t headerSize = 0;
     std::string encoding = fallbackEncoding;
     std::optional<InstructionSchema> selectedSchema;
@@ -921,8 +936,12 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     std::string line;
     size_t lineNo = 0;
     size_t offset = 0;
+    size_t sourceOffset = 0;
     while (std::getline(input, line)) {
         ++lineNo;
+        const auto start = sourceOffset;
+        sourceOffset = std::min(tscText.size(), sourceOffset + line.size() + 1);
+        if (document) document->lines.push_back({"comment", lineNo, start, sourceOffset, -1, {}});
         try {
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (line.compare(0, std::char_traits<char>::length(BYTE_FORMAT), BYTE_FORMAT) == 0) {
@@ -931,6 +950,7 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                 if (value == "legacy-28") headerSize = 28;
                 else if (value == "modern-36") headerSize = 36;
                 else throw std::runtime_error("unsupported GSC byte format: " + value);
+                if (document) { document->byteFormat = value; document->lines.back().kind = "metadata"; }
                 continue;
             }
             // A stale `;@gsc-text-encoding` line from an older TSC is ignored: the
@@ -939,6 +959,7 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                 if (selectedSchema) throw std::runtime_error("duplicate ;@gsc-schema metadata");
                 selectedSchema = parseSchemaName(
                     line.substr(std::char_traits<char>::length(INSTRUCTION_SCHEMA)));
+                if (document) { document->schema = schemaName(*selectedSchema); document->lines.back().kind = "metadata"; }
                 continue;
             }
             // Checked before `;@gsc-trailer`, whose keyword it extends.
@@ -960,10 +981,18 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                 continue;
             }
             const auto tokens = tokenizeSource(line, lineNo);
+            if (document) {
+                auto& record = document->lines.back();
+                for (const auto& token : tokens)
+                    record.tokens.push_back({token.value, token.quoted ? "string" : "number", token.quoted,
+                                              start + token.start, start + token.end});
+                if (!tokens.empty()) record.tokens[0].role = "command";
+            }
             if (tokens.empty()) continue;
             const auto& first = tokens.front().value;
             if (first.empty()) throw std::runtime_error("expected command or label");
             if (first.front() == ':') {
+                if (document) { document->lines.back().kind = "label"; document->lines.back().tokens[0].role = "label"; }
                 if (tokens.size() != 1 || first.size() == 1)
                     throw std::runtime_error("line " + std::to_string(lineNo) +
                                              ": malformed label");
@@ -981,6 +1010,7 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
             instruction.lineNo = lineNo;
             instruction.offset = offset;
             const std::string name = first.substr(1);
+            if (document) document->lines.back().kind = "command";
             size_t operandAt = 1;
             if (name == "datablock") {
                 if (tokens.size() < 3)
@@ -1044,6 +1074,13 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
             if (instruction.operands.size() != instruction.kinds.size()) {
                 throw std::runtime_error("line " + std::to_string(lineNo) +
                                          ": wrong operand count for " + name);
+            }
+            if (document) {
+                auto& record = document->lines.back();
+                record.opcode = instruction.opcode;
+                for (size_t i = 0; i < instruction.kinds.size(); ++i)
+                    record.tokens[operandAt + i].role = isStringOperand(instruction.opcode, i) ? "string" :
+                        isCodeTarget(instruction.opcode, i) ? "target" : instruction.kinds[i] == 'E' ? "expression" : "number";
             }
             offset += instructionSize(instruction.kinds);
             instructions.push_back(std::move(instruction));
@@ -1198,6 +1235,62 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
 
 } // namespace
 
+std::string detectGscEncoding(const std::vector<uint8_t>& data,
+                              std::vector<std::string>* warnings) {
+    const auto strings = ParsedGsc(data, "GSC encoding detection", false).encodedStrings();
+    auto valid = [&](const std::string& encoding) {
+        try {
+            for (const auto& text : strings) convertEncoding(text, encoding, "UTF-8", true);
+            return true;
+        } catch (const std::runtime_error&) { return false; }
+    };
+    std::string sample;
+    size_t nonAscii = 0;
+    for (const auto& text : strings) {
+        const auto count = std::count_if(text.begin(), text.end(), [](unsigned char c) { return c >= 128; });
+        nonAscii += count;
+        // Exclude resource names and other ASCII-only strings from statistics.
+        if (count && sample.size() < 65536) {
+            sample += text.substr(0, 65536 - sample.size());
+            sample += '\n';
+        }
+    }
+    auto report = [&](const std::string& encoding, const std::string& reason) {
+        if (warnings) warnings->push_back("GSC input encoding: " + encoding + ". " + reason);
+        return encoding;
+    };
+    if (!nonAscii)
+        return report("CP932", "ASCII-only text; original encoding cannot be determined.");
+    if (valid("UTF-8"))
+        return report("UTF-8", "Valid UTF-8 text; override manually if the text looks wrong.");
+
+    std::unique_ptr<uchardet, decltype(&uchardet_delete)> detector(uchardet_new(), uchardet_delete);
+    if (!detector || uchardet_handle_data(detector.get(), sample.data(), sample.size()))
+        throw std::runtime_error("GSC encoding detector failed");
+    uchardet_data_end(detector.get());
+    const std::string guessed = uchardet_get_charset(detector.get());
+    std::string encoding = normalizeEncodingName(guessed);
+    if (guessed == "EUC-KR") encoding = "CP949";
+    if (guessed == "ISO-8859-1") encoding = "CP1252";
+    if (encoding == "GB18030" && valid("GBK")) encoding = "GBK";
+    const auto& supported = supportedEncodings();
+    const bool supportedGuess = std::find(supported.begin(), supported.end(), encoding) != supported.end();
+    if (nonAscii < 32 || !supportedGuess || !valid(encoding)) {
+        std::string candidates;
+        for (const auto& candidate : supported) {
+            if (valid(candidate)) candidates += (candidates.empty() ? "" : ", ") + candidate;
+        }
+        throw std::runtime_error("Cannot reliably detect GSC input encoding" +
+            (guessed.empty() ? std::string() : " (uchardet: " + guessed + ")") +
+            ". Choose an encoding manually. Decodable candidates (not proof): " +
+            (candidates.empty() ? "none" : candidates));
+    }
+    // GBK is a subset of GB18030; shared bytes cannot identify the original label.
+    if ((encoding == "GB18030" || encoding == "GBK") && valid("GBK"))
+        return report("GBK", "GBK/GB18030 are indistinguishable for these strings; override manually if needed.");
+    return report(encoding, "Statistical guess, validated for every string; override manually if the text looks wrong.");
+}
+
 static std::string decompileListing(const std::vector<uint8_t>& data, const std::string& inputPath,
                                     const std::string& encoding,
                                     std::vector<std::string>* warnings) {
@@ -1347,6 +1440,19 @@ std::vector<TscDiagnostic> checkTsc(const std::string& tscText, const std::strin
     } catch (const std::exception& error) {
         return {{"error", error.what(), 0}};
     }
+}
+
+TscDocument inspectTsc(const std::string& text) {
+    TscDocument document;
+    try {
+        convertEncoding(text, "UTF-8", "UTF-8", true);
+        compileStructuredTsc(text, "UTF-8", &document);
+    } catch (const TscSourceError& error) {
+        document.diagnostics.push_back({"error", error.what(), error.line});
+    } catch (const std::exception& error) {
+        document.diagnostics.push_back({"error", error.what(), 0});
+    }
+    return document;
 }
 
 std::vector<std::string> decompileGscToFile(const std::string& inputPath,

@@ -130,6 +130,12 @@ msgstr "変換"
 msgid "Resource encoding"
 msgstr "リソースの文字コード"
 
+msgid "Auto (GSC input)"
+msgstr "自動（入力 GSC）"
+
+msgid "Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."
+msgstr "入力 GSC を自動判定します。梱包や GSC 出力では具体的な文字コードを選択してください。自動モードのアーカイブ名とその他の旧式テキストには CP932 を使います。"
+
 msgid "Recursive"
 msgstr "再帰処理"
 

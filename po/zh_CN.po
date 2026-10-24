@@ -127,6 +127,12 @@ msgstr "转换"
 msgid "Resource encoding"
 msgstr "资源编码"
 
+msgid "Auto (GSC input)"
+msgstr "自动（GSC 输入）"
+
+msgid "Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."
+msgstr "自动检测 GSC 输入。封包或生成 GSC 时请选择具体编码。自动模式下，归档文件名和其他旧式文本使用 CP932。"
+
 msgid "Recursive"
 msgstr "递归处理"
 

@@ -39,7 +39,8 @@ int main() {
     rejected([] { decodeResourcePreview({'W', 'G'}, "body"); });
     const std::string tsc = ";@gsc-byte-format modern-36\n;@gsc-schema modern\n*end\n";
     const auto gsc = restoreGscFromTsc(tsc);
-    require(decodeResourcePreview({'B', 'M', 0, 0}, "scene.gsc").kind == PreviewKind::Text);
+    rejected([] { decodeResourcePreview({'B', 'M', 0, 0}, "scene.gsc"); });
+    require(decodeResourcePreview({'B', 'M', 0, 0}, "scene.gsc", "CP932").kind == PreviewKind::Text);
     require(decodeResourcePreview(gsc, "scene.gsc").text == decompileGscBytes(gsc, "CP932", nullptr, "scene.gsc"));
     std::vector<uint8_t> wav(48, 0);
     std::copy_n("RIFF", 4, wav.begin()); u32(wav, 4, 40);

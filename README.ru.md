@@ -14,20 +14,24 @@ Liar-soft и raiL-soft. Программа упаковывает и распа�
 
 Для Windows доступны отдельные сжатые однофайловые EXE для GUI и CLI.
 Скачайте нужную программу и запустите её без распаковки.
-В Linux запускайте `liarsofttool-gui`. Консольная программа — `liarsofttool`.
+Для Linux доступны отдельные бинарные файлы GUI и CLI. После скачивания разрешите выполнение; распаковка не нужна.
+Переводы встроены в GUI, но перечисленные ниже системные библиотеки по-прежнему необходимы.
+Сборка из исходников создаёт `liarsofttool-gui` и консольную программу `liarsofttool`.
 
 Работайте с копией ресурсов игры. По умолчанию результат записывается рядом
 с исходным файлом; повторное преобразование может заменить одноимённый файл.
 
 1. Добавьте файлы или папки, либо перетащите их в окно.
-2. Выберите кодировку ресурсов в параметрах: обычно CP932 для японского текста
-   или GBK для китайских патчей.
+2. По умолчанию `auto` определяет кодировку GSC. При неоднозначном результате или неверном тексте выберите её вручную: обычно CP932 для японского текста или GBK для китайских патчей.
 3. При необходимости включите рекурсию, только упаковку или только распаковку.
    Проверьте задачи и пути вывода.
 4. Запустите преобразование. Кнопка «Копировать подробности» копирует полный отчёт об ошибках.
 
 GUI и CLI по умолчанию преобразуют GSC в TSC. Чтобы извлечь только текст
 для перевода, включите **GSC → TXT** в параметрах GUI.
+
+Определение работает и при просмотре GSC. Короткого текста может быть недостаточно; ASCII не позволяет установить исходную кодировку. Проверяйте результат.
+Для упаковки, проверки или создания GSC нужно выбрать конкретную кодировку. В режиме `auto` имена в архивах и прочий устаревший текст по-прежнему читаются как CP932.
 
 «Проверить обновления» проверяет новые выпуски вручную и позволяет открыть
 страницу GitHub. При запуске программа не подключается к сети и не загружает
@@ -75,7 +79,7 @@ GSC → TSC — экспериментальная функция; поддер�
 
 ## Сборка из исходников
 
-Нужны компилятор C++17, CMake, WebP, Vorbis/Ogg и libcurl 7.85 или новее.
+Нужны компилятор C++17, CMake, WebP, Vorbis/Ogg, uchardet (со статической библиотекой) и libcurl 7.85 или новее.
 Для GUI нужны GTK4 4.10, libadwaita 1.5 или новее и gettext.
 В Windows и Linux используется один интерфейс.
 
@@ -86,7 +90,7 @@ GSC → TSC — экспериментальная функция; поддер�
 Debian / Ubuntu:
 
 ```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j2
 ```
@@ -119,3 +123,4 @@ LiarsoftTool распространяется по GPLv3. Сторонние к�
 - [GTK4 / libadwaita](https://www.gtk.org/) — общий интерфейс.
 - [GStreamer](https://gstreamer.freedesktop.org/) — аудиопросмотр через GTK.
 - [libcurl](https://curl.se/libcurl/) — проверка обновлений HTTPS.
+- [uchardet](https://www.freedesktop.org/wiki/Software/uchardet/) — определение кодировки GSC; [лицензии](docs/THIRD_PARTY_UCHARDET_LICENSES.md). Неизменённый [исходный код](https://deb.debian.org/debian/pool/main/u/uchardet/uchardet_0.0.8.orig.tar.xz) версии 0.0.8 связан статически и используется по GPLv2 или новее.

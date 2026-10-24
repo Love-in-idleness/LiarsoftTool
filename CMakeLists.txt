@@ -6,6 +6,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
 find_package(CURL 7.85 REQUIRED)
 
+# Keep detection inside both executables, without another runtime DLL/SO.
+find_path(UCHARDET_INCLUDE_DIR uchardet/uchardet.h)
+find_library(UCHARDET_LIBRARY NAMES "${CMAKE_STATIC_LIBRARY_PREFIX}uchardet${CMAKE_STATIC_LIBRARY_SUFFIX}")
+if(NOT UCHARDET_INCLUDE_DIR OR NOT UCHARDET_LIBRARY)
+    message(FATAL_ERROR "uchardet development files, including its static library, are required")
+endif()
+add_library(Uchardet::uchardet STATIC IMPORTED)
+set_target_properties(Uchardet::uchardet PROPERTIES
+    IMPORTED_LOCATION "${UCHARDET_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${UCHARDET_INCLUDE_DIR}")
+
 # libvorbisfile provides the same PCM decoder on Linux and Windows.
 find_path(VORBIS_INCLUDE_DIR vorbis/vorbisfile.h)
 find_path(OGG_INCLUDE_DIR ogg/ogg.h)
@@ -63,6 +74,18 @@ if(BUILD_GUI)
     add_custom_target(gui_translations ALL DEPENDS ${GUI_CATALOGS})
     add_library(liarsofttool_gui_preferences STATIC src/gui_preferences.cpp)
     target_link_libraries(liarsofttool_gui_preferences PUBLIC PkgConfig::ADWAITA Intl::Intl liarsofttool_core)
+    if(NOT WIN32)
+        set(embedded_catalogs "${CMAKE_CURRENT_BINARY_DIR}/gui_catalogs.h")
+        add_custom_command(OUTPUT "${embedded_catalogs}"
+            COMMAND ${CMAKE_COMMAND}
+                "-DCATALOG_DIR=${CMAKE_CURRENT_BINARY_DIR}/locale"
+                "-DOUTPUT=${embedded_catalogs}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_gui_catalogs.cmake"
+            DEPENDS ${GUI_CATALOGS} "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_gui_catalogs.cmake")
+        target_sources(liarsofttool_gui_preferences PRIVATE "${embedded_catalogs}")
+        target_include_directories(liarsofttool_gui_preferences PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+        target_compile_definitions(liarsofttool_gui_preferences PRIVATE LIARSOFT_EMBEDDED_CATALOGS)
+    endif()
 endif()
 
 # Include directories
@@ -113,7 +136,7 @@ add_library(liarsofttool_core STATIC
     src/stb_impl.cpp
     src/stb_image_impl.cpp
 )
-target_link_libraries(liarsofttool_core PUBLIC WebP::webp Vorbis::file Threads::Threads)
+target_link_libraries(liarsofttool_core PUBLIC WebP::webp Vorbis::file Threads::Threads Uchardet::uchardet)
 if(NOT WIN32)
     target_link_libraries(liarsofttool_core PUBLIC Iconv::Iconv)
 endif()
@@ -147,7 +170,8 @@ endif()
 
 # Install
 install(TARGETS liarsofttool DESTINATION bin)
-install(FILES docs/THIRD_PARTY_AUDIO_LICENSES.md DESTINATION share/doc/LiarsoftTool)
+install(FILES docs/THIRD_PARTY_AUDIO_LICENSES.md docs/THIRD_PARTY_UCHARDET_LICENSES.md
+    DESTINATION share/doc/LiarsoftTool)
 if(BUILD_GUI)
     install(TARGETS liarsofttool-gui DESTINATION bin)
 endif()
@@ -175,6 +199,13 @@ if(BUILD_TESTING)
 
     add_executable(gscfile_test tests/gscfile_test.cpp)
     add_test(NAME gscfile COMMAND gscfile_test)
+    add_executable(gsc_encoding_test tests/gsc_encoding_test.cpp)
+    target_link_libraries(gsc_encoding_test PRIVATE liarsofttool_core)
+    add_test(NAME gsc_encoding COMMAND gsc_encoding_test)
+    add_test(NAME gsc_encoding_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool> -DFIXTURES=$<TARGET_FILE:gsc_encoding_test>
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/gsc_encoding_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/gsc_encoding_test.cmake)
 
     add_executable(fileio_test tests/fileio_test.cpp)
     add_test(NAME fileio COMMAND fileio_test)
@@ -196,6 +227,12 @@ if(BUILD_TESTING)
     add_executable(gsc_decompiler_test tests/gsc_decompiler_test.cpp)
     add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
     add_executable(tsc_check_test tests/tsc_check_test.cpp)
+    add_executable(tsc_document_test tests/tsc_document_test.cpp)
+    target_link_libraries(tsc_document_test PRIVATE liarsofttool_core)
+    add_test(NAME tsc_document COMMAND tsc_document_test)
+    add_test(NAME tsc_document_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool> -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/tsc_document_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/tsc_document_test.cmake)
     target_link_libraries(tsc_check_test PRIVATE liarsofttool_core)
     add_test(NAME tsc_check COMMAND tsc_check_test)
     add_test(NAME tsc_check_cli COMMAND ${CMAKE_COMMAND}
@@ -222,6 +259,12 @@ if(BUILD_TESTING)
         foreach(language en ru zh_CN ja ja_JP fr_FR)
             add_test(NAME gui_language_${language} COMMAND gui_smoke_test ${language})
         endforeach()
+        if(NOT WIN32)
+            foreach(language ru zh_CN ja)
+                add_test(NAME gui_standalone_${language} COMMAND ${CMAKE_COMMAND} -E env
+                    LIARSOFT_TEST_EMBEDDED=1 $<TARGET_FILE:gui_smoke_test> ${language})
+            endforeach()
+        endif()
         if(WIN32)
             add_test(NAME gui_smoke COMMAND gui_smoke_test)
             add_test(NAME gui_browser COMMAND gui_browser_test)

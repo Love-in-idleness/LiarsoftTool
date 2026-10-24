@@ -6,7 +6,7 @@
 namespace liarsoft::conversion {
 
 struct ConversionOptions {
-    std::string encoding = "CP932";
+    std::string encoding = "auto";
     std::string referencePath;
     bool recursive = false;
     bool gscToTsc = false;

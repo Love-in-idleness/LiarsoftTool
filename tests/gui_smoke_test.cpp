@@ -30,15 +30,15 @@ gboolean tick(gpointer) {
                 require(gdk_texture_save_to_png(texture, destination), "window capture failed");
                 g_object_unref(texture); gsk_render_node_unref(node); g_object_unref(paintable);
             }
-            require(options().encoding == "CP932" && options().gscToTsc && !options().recursive &&
+            require(options().encoding == "auto" && options().gscToTsc && !options().recursive &&
                 !options().unpackOnly && !active(ui.packOnly) && !options().vorbisInWav &&
                 options().workers == 0, "conversion defaults changed");
             for (guint index = 0; index < liarsoft::supportedEncodings().size(); ++index) {
-                gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), index);
+                gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), index + 1);
                 require(options().encoding == liarsoft::supportedEncodings()[index],
                         "Conversion encoding index is incorrect");
             }
-            gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), 0);
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), 1);
             for (unsigned value = 0; value < 3; ++value) {
                 ui.preferences.theme = value; theme(); savePreferences();
                 require(liarsoft::gui::loadPreferences().theme == value, "theme not saved");
@@ -101,10 +101,20 @@ int main(int argc, char** argv) {
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     fs::create_directories(directory);
     g_setenv("XDG_CONFIG_HOME", directory.string().c_str(), TRUE);
+    g_setenv("XDG_CACHE_HOME", directory.string().c_str(), TRUE);
     g_setenv("LANGUAGE", argc == 2 ? argv[1] : "en", TRUE);
     if (argc == 2) {
         const std::string language = liarsoft::gui::effectiveLanguage("");
-        liarsoft::gui::initializeTranslations(language, argv[0]);
+        const bool standalone = g_getenv("LIARSOFT_TEST_EMBEDDED") != nullptr;
+        const std::string executable = standalone ? (directory / "standalone/gui").string() : argv[0];
+        liarsoft::gui::initializeTranslations(language, executable.c_str());
+        if (standalone) {
+            const auto catalog = directory / "liarsofttool/locale" / language / "LC_MESSAGES/liarsofttool.mo";
+            require(fs::is_regular_file(catalog), "standalone catalog not installed");
+            const auto modified = fs::last_write_time(catalog);
+            liarsoft::gui::initializeTranslations(language, executable.c_str());
+            require(fs::last_write_time(catalog) == modified, "unchanged catalog was rewritten");
+        }
         const std::string expected = language == "ru" ? "Параметры" : language == "zh_CN" ? "首选项" :
             language == "ja" ? "設定" : "Preferences";
         require(language == (std::string(argv[1]).compare(0, 2, "ja") == 0 ? "ja" :
