@@ -9,11 +9,14 @@
 #include <vector>
 #include <filesystem>
 #include <charconv>
+#include <algorithm>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 #include <shellapi.h>
+#include <io.h>
+#include <fcntl.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -37,6 +40,7 @@ static void printUsage(const char* prog) {
               << "      --vorbis-in-wav    Wrap Ogg in WAV instead of decoding to PCM\n"
               << "      --check-update     Check GitHub for a newer release (no conversion)\n"
               << "      --check-tsc        Check TSC inputs without writing GSC\n"
+              << "      --inspect-tsc      Inspect one UTF-8 TSC as JSON; '-' reads stdin\n"
               << "      --diagnostics=json Machine-readable diagnostics for --check-tsc\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
@@ -150,6 +154,59 @@ static std::string jsonString(const std::string& value) {
     return result + '"';
 }
 
+static int inspectInput(const std::string& path) {
+    liarsoft::TscDocument document;
+    try {
+        std::string text;
+        if (path == "-") {
+#ifdef _WIN32
+            _setmode(_fileno(stdin), _O_BINARY);
+#endif
+            char buffer[8192];
+            while (std::cin.read(buffer, sizeof(buffer)) || std::cin.gcount()) {
+                if (text.size() + std::cin.gcount() > 64 * 1024 * 1024)
+                    throw std::runtime_error("TSC stdin exceeds 64 MiB");
+                text.append(buffer, static_cast<size_t>(std::cin.gcount()));
+            }
+            if (std::cin.bad()) throw std::runtime_error("Cannot read TSC stdin");
+        } else {
+            const auto bytes = liarsoft::readFile(fs::u8path(path));
+            text.assign(bytes.begin(), bytes.end());
+        }
+        document = liarsoft::inspectTsc(text);
+    } catch (const std::exception& error) { document.diagnostics.push_back({"error", error.what(), 0}); }
+    std::cout << "{\"version\":1,\"byteFormat\":" << jsonString(document.byteFormat)
+              << ",\"schema\":" << jsonString(document.schema) << ",\"lines\":[";
+    bool first = true;
+    for (const auto& line : document.lines) {
+        if (!first) std::cout << ',';
+        first = false;
+        std::cout << "{\"kind\":" << jsonString(line.kind) << ",\"line\":" << line.line
+                  << ",\"start\":" << line.start << ",\"end\":" << line.end
+                  << ",\"opcode\":" << line.opcode << ",\"tokens\":[";
+        bool firstToken = true;
+        for (const auto& token : line.tokens) {
+            if (!firstToken) std::cout << ',';
+            firstToken = false;
+            std::cout << "{\"value\":" << jsonString(token.value) << ",\"role\":" << jsonString(token.role)
+                      << ",\"quoted\":" << (token.quoted ? "true" : "false")
+                      << ",\"start\":" << token.start << ",\"end\":" << token.end << '}';
+        }
+        std::cout << "]}";
+    }
+    std::cout << "],\"diagnostics\":[";
+    first = true;
+    for (const auto& diagnostic : document.diagnostics) {
+        if (!first) std::cout << ',';
+        first = false;
+        std::cout << "{\"severity\":" << jsonString(diagnostic.severity)
+                  << ",\"message\":" << jsonString(diagnostic.message)
+                  << ",\"line\":" << (diagnostic.line ? std::to_string(diagnostic.line) : "null") << ",\"column\":null}";
+    }
+    std::cout << "]}\n";
+    return document.diagnostics.empty() ? 0 : 1;
+}
+
 static int checkInputs(const std::vector<std::string>& inputs, const std::string& encoding, bool json) {
     bool failed = false, first = true;
     if (json) std::cout << "{\"diagnostics\":[";
@@ -232,7 +289,7 @@ static int runCli(int argc, char* argv[]) {
     bool vorbisInWav = false;
     unsigned workers = 0;
     bool checkUpdate = false;
-    bool checkTsc = false, jsonDiagnostics = false;
+    bool checkTsc = false, inspectTsc = false, jsonDiagnostics = false;
 
     // Parse arguments
     int i = 1;
@@ -278,9 +335,11 @@ static int runCli(int argc, char* argv[]) {
             checkUpdate = true;
         } else if (arg == "--check-tsc") {
             checkTsc = true;
+        } else if (arg == "--inspect-tsc") {
+            inspectTsc = true;
         } else if (arg == "--diagnostics=json") {
             jsonDiagnostics = true;
-        } else if (!arg.empty() && arg[0] == '-') {
+        } else if (arg != "-" && !arg.empty() && arg[0] == '-') {
             std::cerr << "Error: unknown option: " << arg << std::endl;
             printUsage(argv[0]);
             return 1;
@@ -290,6 +349,18 @@ static int runCli(int argc, char* argv[]) {
         ++i;
     }
 
+    if (inspectTsc) {
+        if (inputs.size() != 1 || checkTsc || checkUpdate || !explicitOutput.empty() || !referencePath.empty() ||
+            recursive || packOnly || unpackOnly || vorbisInWav || !gscToTsc || workers) {
+            std::cerr << "Error: --inspect-tsc requires one input and cannot be combined with conversion options\n";
+            return 1;
+        }
+        return inspectInput(inputs[0]);
+    }
+    if (std::find(inputs.begin(), inputs.end(), "-") != inputs.end()) {
+        std::cerr << "Error: stdin is only supported by --inspect-tsc\n";
+        return 1;
+    }
     if (jsonDiagnostics && !checkTsc) {
         std::cerr << "Error: --diagnostics=json requires --check-tsc\n";
         return 1;
@@ -395,7 +466,8 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
     // The new check API uses UTF-8 paths; existing conversion paths remain native.
     bool checking = false;
-    for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--check-tsc") checking = true;
+    for (int i = 1; i < argc; ++i)
+        if (std::string(argv[i]) == "--check-tsc" || std::string(argv[i]) == "--inspect-tsc") checking = true;
     if (checking) {
         int count = 0;
         auto** wide = CommandLineToArgvW(GetCommandLineW(), &count);

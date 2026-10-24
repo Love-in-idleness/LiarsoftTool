@@ -22,3 +22,15 @@ Invalid CLI arguments use stderr and exit 1; JSON is not guaranteed for invocati
 
 C++ callers use `checkTsc(text, encoding)`, declared in `include/gsc_decompiler.h`.
 Checking and compilation share syntax, operand layouts and encoding rules; do not maintain another compiler in the editor.
+
+## Graph editor document interface
+
+`--inspect-tsc` accepts one file, or `-` for UTF-8 stdin, and always produces JSON.
+It shares compiler syntax validation, without target-encoding restrictions or GSC writes. Exit codes are 0/1.
+Protocol `version: 1` returns `byteFormat`, `schema`, `lines` and `diagnostics`.
+Lines contain `kind`, `line`, `start`, `end`, `opcode`, `tokens`; tokens contain decoded `value`,
+`quoted`, `role` and source ranges. Ranges are zero-based, half-open UTF-8 byte offsets, including quotes,
+not UTF-16 columns. Line ranges include original line endings. Errors may leave partial records:
+keep the source and disable graphical mutation. Roles distinguish commands, labels, targets, strings,
+expressions and numbers. Known layouts with unknown semantics retain their opcode.
+C++ callers use `inspectTsc(text)`. Report an upgrade requirement for older tools instead of using another parser.

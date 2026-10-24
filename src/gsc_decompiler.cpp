@@ -719,6 +719,7 @@ std::string hex6(size_t value) {
 struct SourceToken {
     std::string value;
     bool quoted = false;
+    size_t start = 0, end = 0;
 };
 
 std::string quoteString(const std::string& value) {
@@ -745,13 +746,13 @@ std::vector<SourceToken> tokenizeSource(const std::string& line, size_t lineNo) 
         while (pos < line.size() && std::isspace(static_cast<unsigned char>(line[pos])))
             ++pos;
         if (pos == line.size() || line[pos] == ';') break;
+        const size_t begin = pos;
         if (line[pos] != '"') {
-            const size_t begin = pos;
             while (pos < line.size() &&
                    !std::isspace(static_cast<unsigned char>(line[pos])) &&
                    line[pos] != ';')
                 ++pos;
-            result.push_back({line.substr(begin, pos - begin), false});
+            result.push_back({line.substr(begin, pos - begin), false, begin, pos});
             continue;
         }
         ++pos;
@@ -781,7 +782,7 @@ std::vector<SourceToken> tokenizeSource(const std::string& line, size_t lineNo) 
         if (!closed)
             throw std::runtime_error("line " + std::to_string(lineNo) +
                                      ": unterminated string");
-        result.push_back({std::move(value), true});
+        result.push_back({std::move(value), true, begin, pos});
     }
     return result;
 }
@@ -918,7 +919,8 @@ size_t instructionSize(const std::string& kinds) {
 }
 
 std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
-                                          const std::string& fallbackEncoding) {
+                                          const std::string& fallbackEncoding,
+                                          TscDocument* document = nullptr) {
     size_t headerSize = 0;
     std::string encoding = fallbackEncoding;
     std::optional<InstructionSchema> selectedSchema;
@@ -934,8 +936,12 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
     std::string line;
     size_t lineNo = 0;
     size_t offset = 0;
+    size_t sourceOffset = 0;
     while (std::getline(input, line)) {
         ++lineNo;
+        const auto start = sourceOffset;
+        sourceOffset = std::min(tscText.size(), sourceOffset + line.size() + 1);
+        if (document) document->lines.push_back({"comment", lineNo, start, sourceOffset, -1, {}});
         try {
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (line.compare(0, std::char_traits<char>::length(BYTE_FORMAT), BYTE_FORMAT) == 0) {
@@ -944,6 +950,7 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                 if (value == "legacy-28") headerSize = 28;
                 else if (value == "modern-36") headerSize = 36;
                 else throw std::runtime_error("unsupported GSC byte format: " + value);
+                if (document) { document->byteFormat = value; document->lines.back().kind = "metadata"; }
                 continue;
             }
             // A stale `;@gsc-text-encoding` line from an older TSC is ignored: the
@@ -952,6 +959,7 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                 if (selectedSchema) throw std::runtime_error("duplicate ;@gsc-schema metadata");
                 selectedSchema = parseSchemaName(
                     line.substr(std::char_traits<char>::length(INSTRUCTION_SCHEMA)));
+                if (document) { document->schema = schemaName(*selectedSchema); document->lines.back().kind = "metadata"; }
                 continue;
             }
             // Checked before `;@gsc-trailer`, whose keyword it extends.
@@ -973,10 +981,18 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
                 continue;
             }
             const auto tokens = tokenizeSource(line, lineNo);
+            if (document) {
+                auto& record = document->lines.back();
+                for (const auto& token : tokens)
+                    record.tokens.push_back({token.value, token.quoted ? "string" : "number", token.quoted,
+                                              start + token.start, start + token.end});
+                if (!tokens.empty()) record.tokens[0].role = "command";
+            }
             if (tokens.empty()) continue;
             const auto& first = tokens.front().value;
             if (first.empty()) throw std::runtime_error("expected command or label");
             if (first.front() == ':') {
+                if (document) { document->lines.back().kind = "label"; document->lines.back().tokens[0].role = "label"; }
                 if (tokens.size() != 1 || first.size() == 1)
                     throw std::runtime_error("line " + std::to_string(lineNo) +
                                              ": malformed label");
@@ -994,6 +1010,7 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
             instruction.lineNo = lineNo;
             instruction.offset = offset;
             const std::string name = first.substr(1);
+            if (document) document->lines.back().kind = "command";
             size_t operandAt = 1;
             if (name == "datablock") {
                 if (tokens.size() < 3)
@@ -1057,6 +1074,13 @@ std::vector<uint8_t> compileStructuredTsc(const std::string& tscText,
             if (instruction.operands.size() != instruction.kinds.size()) {
                 throw std::runtime_error("line " + std::to_string(lineNo) +
                                          ": wrong operand count for " + name);
+            }
+            if (document) {
+                auto& record = document->lines.back();
+                record.opcode = instruction.opcode;
+                for (size_t i = 0; i < instruction.kinds.size(); ++i)
+                    record.tokens[operandAt + i].role = isStringOperand(instruction.opcode, i) ? "string" :
+                        isCodeTarget(instruction.opcode, i) ? "target" : instruction.kinds[i] == 'E' ? "expression" : "number";
             }
             offset += instructionSize(instruction.kinds);
             instructions.push_back(std::move(instruction));
@@ -1416,6 +1440,19 @@ std::vector<TscDiagnostic> checkTsc(const std::string& tscText, const std::strin
     } catch (const std::exception& error) {
         return {{"error", error.what(), 0}};
     }
+}
+
+TscDocument inspectTsc(const std::string& text) {
+    TscDocument document;
+    try {
+        convertEncoding(text, "UTF-8", "UTF-8", true);
+        compileStructuredTsc(text, "UTF-8", &document);
+    } catch (const TscSourceError& error) {
+        document.diagnostics.push_back({"error", error.what(), error.line});
+    } catch (const std::exception& error) {
+        document.diagnostics.push_back({"error", error.what(), 0});
+    }
+    return document;
 }
 
 std::vector<std::string> decompileGscToFile(const std::string& inputPath,

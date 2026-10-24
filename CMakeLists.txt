@@ -227,6 +227,12 @@ if(BUILD_TESTING)
     add_executable(gsc_decompiler_test tests/gsc_decompiler_test.cpp)
     add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
     add_executable(tsc_check_test tests/tsc_check_test.cpp)
+    add_executable(tsc_document_test tests/tsc_document_test.cpp)
+    target_link_libraries(tsc_document_test PRIVATE liarsofttool_core)
+    add_test(NAME tsc_document COMMAND tsc_document_test)
+    add_test(NAME tsc_document_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool> -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/tsc_document_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/tsc_document_test.cmake)
     target_link_libraries(tsc_check_test PRIVATE liarsofttool_core)
     add_test(NAME tsc_check COMMAND tsc_check_test)
     add_test(NAME tsc_check_cli COMMAND ${CMAKE_COMMAND}
