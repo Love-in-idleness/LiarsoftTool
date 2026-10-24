@@ -63,6 +63,8 @@ cmake --build build -j2
 
 ## 関連資料
 
+[CodeX TSC 拡張](tsc-vscode/README.ja.md)は、この独立ブランチにある VS Code 用のハイライト・検査・コンパイル支援です。
+
 [文書一覧](docs/README.ja.md) · [TSC 命令リファレンス](docs/GSC_OPCODE_REFERENCE.ja.md) · [開発計画](docs/ROADMAP.ja.md)
 
 正当に入手したゲームリソースを使用してください。変換に成功しても、すべてのエンジンで使えるとは限りません。ゲームへ戻した後の動作を確認してください。

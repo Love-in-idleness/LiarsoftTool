@@ -1,6 +1,6 @@
 # CodeX TSC
 
-[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 为 LiarsoftTool 当前 TSC 格式提供高亮、错误检查和 GSC 编译。
 插件位于 `codex/tsc-vscode` 分支，尚未发布到扩展市场。

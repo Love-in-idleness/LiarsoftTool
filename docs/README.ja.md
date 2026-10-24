@@ -9,6 +9,7 @@
 - [用途と使い方](../README.ja.md)。CLI のヘルプは `liarsofttool -h`。
 - [Windows のビルドとパッケージ作成](BUILDING.ja.md)
 - [TSC 命令リファレンス](GSC_OPCODE_REFERENCE.ja.md)
+- [CodeX TSC 拡張](../tsc-vscode/README.ja.md)
 - [音声ライブラリのライセンス原文](THIRD_PARTY_AUDIO_LICENSES.md)
 
 ## 開発資料

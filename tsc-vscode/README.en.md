@@ -1,6 +1,6 @@
 # CodeX TSC
 
-[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 Highlighting, compiler-backed diagnostics and GSC compilation for the current
 LiarsoftTool TSC format. This extension lives on `codex/tsc-vscode` and is not
