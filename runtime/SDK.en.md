@@ -20,12 +20,12 @@ The current ABI is `RSCRIPT_PLUGIN_ABI == 1`; return a null pointer for unsuppor
 The descriptor, ID, and name must remain valid for the lifetime of the process.
 
 - Supply the structure size, ABI version, unique ID, UTF-8 name, and initialization function.
-- Set `features` to `0` for ordinary extensions. Built-in engine, resource, and Unicode feature bits cannot be registered twice.
+- Set `features` to `0` for ordinary extensions. Built-in file integration, resource, and Unicode feature bits cannot be registered twice.
 - `initialize(context)` returns `0` on success and any other value on failure. Send details through `context->log`.
 - Check the context size and version first. Paths are borrowed UTF-16; IDs, names, and logs use UTF-8.
 - Copy any data needed after initialization, including paths and strings; do not retain borrowed pointers.
 
-The host initializes the engine first, followed by resources, Unicode, and other extensions.
+The host initializes file integration first, followed by resources, Unicode, and other extensions.
 Ordinary extensions run in the user's selected order; there is no general dependency resolver.
 Duplicate IDs, conflicting built-in features, or incompatible ABIs prevent startup.
 

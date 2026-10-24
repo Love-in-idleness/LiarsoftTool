@@ -6,15 +6,17 @@
 
 ## Scope
 
-The launcher and host are not Forest-specific; file and text adapters target a verified EXE.
-The first adapter supports only the Forest build below. Addresses are VAs at its preferred
-image base unless marked as import-slot RVAs. No proprietary DLL code or game assets are included.
+Integration resolves API names in PE imports, without game names, EXE allowlists, or fixed addresses.
+Forest and SevenBridge validate shared file and text paths. Addresses below are evidence, not runtime
+selection conditions: VAs use the preferred image base unless marked as import-slot RVAs.
+No proprietary DLL code or game assets are included.
 
 ## Inspected files
 
 | File | SHA-256 |
 | --- | --- |
 | Forest `Forest.exe` | `8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56` |
+| SevenBridge `SBridge_jp.exe` | `c7d5fc38cf0c354a61d056b607cf1367b2529557e9e0407d0b0fdf12771b35e3` |
 | CodeXRScript / OC patch `RsComp.dll` | `6c65c3545a559b6e4a01d54fdb2f57ad4e605b27dc73959cde18bd3468f3cb30` |
 | UBAI `RsComp.dll` | `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9` |
 | Albatross `rsinit.dll` | `43499ada89a18735707c0e33d9a9bb585022e8e1b9b93e562a5e41bbb8340eb6` |
@@ -37,7 +39,7 @@ that a replacement `RsComp.dll` works with every game.
 | `0x428260` / `0x4288d0` | Forms LIM / WCG paths; the request determines the decoder |
 | `0x424b50` | Opens an LWG component |
 
-The adapter replaces only five import slots in the game EXE:
+The five file import slots in this Forest sample are:
 
 | Windows API | RVA |
 | --- | --- |
@@ -49,9 +51,34 @@ The adapter replaces only five import slots in the game EXE:
 
 A matching override becomes an in-memory file. Otherwise the original API handles loose files
 and XFL through the game. There are no process-wide NT file hooks.
-A LIM request must receive LIM bytes, not a renamed WCG. Script overrides must retain Forest's
-legacy-28 format; another game's modern-36 layout is rejected.
+A LIM request must receive LIM bytes, not a renamed WCG. Forest uses
+legacy-28 scripts, but this does not justify rejecting modern-36 from another engine.
+The runtime retains TSC metadata and checks the original loose or archived GSC header when available;
+it does not choose the header size from a game name.
 Image, audio, LWG, and TSC conversion reuse the existing core, including the shared `.meta.xml` reader.
+
+## SevenBridge comparison
+
+| Behavior | VA / import RVA |
+| --- | --- |
+| Loose-file first, then archive | `0x427c30 → 0x42e020 / 0x42e760` |
+| GSC loading | `0x415a60`, nine DWORDs, modern-36 |
+| LIM / WCG / LWG request | `0x42b910` / `0x42bf80` / `0x4281f0` |
+| File imports | open `0x5f098`, read `0x5f080`, seek `0x5f0e0`, size `0x5f0e4`, close `0x5f09c` |
+| DBCS parser | `0x43dad0`; `0x43db76` forms lead<<8\|trail |
+| GDI glyph path | `0x44adf0`, calls `GetGlyphOutlineA` |
+| CRT codepage initialization | `0x44d444 → 0x44d5f1 → GetACP` |
+
+Addresses and GSC headers differ, but the synchronous file protocol is shared.
+The same Files / Resources / Unicode DLLs handle both samples; no SevenBridge-specific DLL is added.
+`imports.cpp` parses ordinary PE imports and rejects missing APIs or existing hook conflicts.
+SevenBridge's `FindFirstFileA` concerns saves/directories, not resource preflight; MCI video bypasses this override path.
+
+REA evidence: fallback `ev_aa340a6409c9a54a1f26c89c1852b42989d52f080dee22121653bcb1bfd57bba`,
+GSC `ev_4b709b26aef633c9dadc5343ecb2fe26276667c62df7e3982a280d53464ee4a3`,
+parser `ev_fc6c754911df3df1c51c4883f8919a561b03506db554063b44fbab618c6d3916`,
+glyphs `ev_3560688f91be6c3ed92c87c94570b236b6514478bc63db0e127f59bf0a61b4b4`,
+CRT `ev_c4c5f4527fa369b4af23870e6b73666994f8b60fe2041741d8fa196910bd6c12`.
 
 ## Unicode integration
 
@@ -62,7 +89,8 @@ Passing raw UTF-8 into these paths splits characters incorrectly; changing file 
 
 `0x44880c` reads the static CRT classification table at `0x48fa00`; `0x44bfb8` initializes it,
 using `0x44c165` to query the system `GetACP`. The Unicode module therefore also makes the game's
-own `GetACP` import slot (RVA `0x59184`) return 932, so internal double-byte IDs work on non-Japanese systems.
+own named `GetACP` import return 932, so internal double-byte IDs work on non-Japanese systems.
+System-default requests to `IsDBCSLeadByteEx` also use 932; other explicit codepages retain their meaning.
 This changes neither Windows regional settings nor other modules' `GetACP` calls.
 REA evidence: `ev_fec16cd0f7502d87c643ce4be10a0f513fed452271d3d9e2470c33a9fc4ff9a2`
 and `ev_17e895a8bdb39082341c3f9bdb782e5e4ef09b18431096f0819b17088726f365`.
@@ -101,9 +129,10 @@ Portable tests cover override priorities, invalid resources without fallback, pa
 component layout, unchanged inputs, and glyph dictionaries. Windows / Wine tests additionally
 cover pre-entry loading, ABI and failure rollback, file APIs, and Unicode GDI drawing.
 Synthetic import-table tests and actual game startup checks are separate; startup does not verify
-full gameplay, old saves, or every font. Native Windows and different EXE versions need separate acceptance.
+full gameplay, old saves, or every font. Native Windows and other file/rendering protocols need separate acceptance.
 
 On an independent game copy, Wine checks reached the opening and title and loaded actual TSC / PNG overrides.
+The same generic override and Unicode paths have been checked in Forest and SevenBridge, without per-game code.
 Japanese, simplified Chinese, Latin characters outside CP932, and text color controls in the test script
 were confirmed in the original engine's rendered frame.
 The manual helper [game_smoke.cpp](tests/game_smoke.cpp) terminates only its own verified child game process.

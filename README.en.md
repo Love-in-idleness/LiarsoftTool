@@ -89,7 +89,7 @@ build. See [build instructions](docs/BUILDING.en.md) for Windows and packaging.
 
 [RScript Runtime](runtime/README.en.md) is a separate experimental Windows launcher
 with optional DLLs for prioritizing loose resources and UTF-8 scripts in the original game.
-Only one verified Forest EXE is currently supported.
+Integration follows shared APIs, without a game allowlist.
 
 See the [roadmap](docs/ROADMAP.en.md) for planned work.
 

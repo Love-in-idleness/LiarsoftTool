@@ -6,15 +6,17 @@
 
 ## 范围
 
-加载器与宿主不绑定 Forest；接入游戏文件与文字绘制的适配器绑定已验证的 EXE。
-首个适配器只支持下面的 Forest 构建。以下地址均为其首选加载基址下的 VA，
-导入表位置另外标为 RVA。没有把私有 DLL 的代码或游戏资源加入仓库。
+实现按 PE 导入表中的接口名称接入，不绑定游戏名、哈希白名单或固定地址。
+Forest 与 SevenBridge 用于验证公共文件及文字路径。以下地址只记录分析证据，
+不是运行时选择条件；VA 按首选加载基址解释，导入表位置另外标为 RVA。
+没有把私有 DLL 的代码或游戏资源加入仓库。
 
 ## 检查的文件
 
 | 文件 | SHA-256 |
 | --- | --- |
 | Forest `Forest.exe` | `8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56` |
+| SevenBridge `SBridge_jp.exe` | `c7d5fc38cf0c354a61d056b607cf1367b2529557e9e0407d0b0fdf12771b35e3` |
 | CodeXRScript／OC 补丁 `RsComp.dll` | `6c65c3545a559b6e4a01d54fdb2f57ad4e605b27dc73959cde18bd3468f3cb30` |
 | UBAI `RsComp.dll` | `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9` |
 | Albatross `rsinit.dll` | `43499ada89a18735707c0e33d9a9bb585022e8e1b9b93e562a5e41bbb8340eb6` |
@@ -36,7 +38,7 @@ Forest 在 `0x412eb0` 加载编译器，`0x4135f0` 包装四参数调用；
 | `0x428260`／`0x4288d0` | 分别形成 LIM／WCG 路径，解码器由请求路径决定 |
 | `0x424b50` | 打开 LWG 组件 |
 
-适配器只替换游戏 EXE 自己的五个导入槽：
+在这个 Forest 样本中，五个文件导入槽的位置为：
 
 | Windows 接口 | RVA |
 | --- | --- |
@@ -48,8 +50,32 @@ Forest 在 `0x412eb0` 加载编译器，`0x4135f0` 包装四参数调用；
 
 覆盖命中后返回内存文件，未命中仍调用原接口，由原游戏处理散装资源及 XFL。
 不拦截全进程的 NT 文件接口。请求 LIM 时必须交付 LIM 字节，不能仅改文件扩展名；
-覆盖脚本也必须保持 Forest 的 legacy-28 格式，不接受其他游戏的 modern-36。
+Forest 原脚本为 legacy-28，但不能据此拒绝其他引擎的 modern-36。
+运行时保留 TSC 自带格式，并在能找到原散装或归档 GSC 时核对头长；不按游戏名指定头长。
 图像、音频、LWG 和 TSC 的转换复用转换核心；组件布局复用同一个 `.meta.xml` 读取器。
+
+## SevenBridge 对照
+
+| 行为 | VA / 导入 RVA |
+| --- | --- |
+| 散装优先、失败后归档 | `0x427c30 → 0x42e020 / 0x42e760` |
+| GSC 加载 | `0x415a60`，连读九个 DWORD，即 modern-36 |
+| LIM / WCG / LWG 请求 | `0x42b910` / `0x42bf80` / `0x4281f0` |
+| 文件导入 | open `0x5f098`、read `0x5f080`、seek `0x5f0e0`、size `0x5f0e4`、close `0x5f09c` |
+| 双字节解析 | `0x43dad0`，`0x43db76` 形成 lead<<8\|trail |
+| GDI 字形路径 | `0x44adf0`，调用 `GetGlyphOutlineA` |
+| CRT 代码页初始化 | `0x44d444 → 0x44d5f1 → GetACP` |
+
+两个样本的地址和 GSC 头长不同，文件接口的同步读、定位和关闭协议一致。
+因此使用同一套 Files／Resources／Unicode DLL，不添加 SevenBridge 专用 DLL。
+普通 PE 导入表通过 `imports.cpp` 解析；缺失接口或已有钩子冲突时明确报错。
+SevenBridge 的 `FindFirstFileA` 仅用于存档／建目录，不是资源预检；MCI 视频则不经公共覆盖路径。
+
+REA 依据：文件回退 `ev_aa340a6409c9a54a1f26c89c1852b42989d52f080dee22121653bcb1bfd57bba`，
+GSC `ev_4b709b26aef633c9dadc5343ecb2fe26276667c62df7e3982a280d53464ee4a3`，
+文字解析 `ev_fc6c754911df3df1c51c4883f8919a561b03506db554063b44fbab618c6d3916`，
+字形 `ev_3560688f91be6c3ed92c87c94570b236b6514478bc63db0e127f59bf0a61b4b4`，
+CRT `ev_c4c5f4527fa369b4af23870e6b73666994f8b60fe2041741d8fa196910bd6c12`。
 
 ## Unicode 接入
 
@@ -60,7 +86,8 @@ Forest 在 `0x412eb0` 加载编译器，`0x4135f0` 包装四参数调用；
 
 `0x44880c` 查询静态 CRT 的 `0x48fa00` 分类表；`0x44bfb8` 初始化该表，
 经 `0x44c165` 读取系统 `GetACP`。因此 Unicode 模块还把游戏自己的 `GetACP`
-导入槽（RVA `0x59184`）固定为 932，让引擎在非日文系统上也正确识别内部双字节编号。
+导入固定为 932，让引擎在非日文系统上也正确识别内部双字节编号。
+`IsDBCSLeadByteEx` 的系统默认代码页请求同样使用 932；显式指定的其他代码页保持原义。
 不修改 Windows 区域设置，也不替换其他模块的 `GetACP`。
 对应 REA 证据为 `ev_fec16cd0f7502d87c643ce4be10a0f513fed452271d3d9e2470c33a9fc4ff9a2`
 与 `ev_17e895a8bdb39082341c3f9bdb782e5e4ef09b18431096f0819b17088726f365`。
@@ -95,9 +122,10 @@ Forest 在 `0x412eb0` 加载编译器，`0x4135f0` 包装四参数调用；
 公共测试检查资源优先级、损坏资源不回退、路径边界、组件布局、输入未修改和字形字典。
 Windows／Wine 测试另外检查入口前加载、ABI 与失败回退、文件接口及 Unicode GDI 绘制。
 模拟导入表的测试与真实游戏启动检查分开；启动成功不代表完整游玩、旧存档或全部字体已验证。
-原生 Windows 与不同 EXE 版本必须另行验收。
+原生 Windows、其他引擎读取／渲染协议必须另行验收。
 
 在独立游戏副本中，Wine 已检查开场、标题，以及实际加载覆盖 TSC／PNG。
+通用实现已分别在 Forest 与 SevenBridge 中检查同一条覆盖及 Unicode 路径；没有逐游戏代码。
 测试脚本中的日文、简体中文、CP932 之外的拉丁字符和文字颜色控制已在原引擎画面确认。
 手动检查工具为 [game_smoke.cpp](tests/game_smoke.cpp)，只终止它自己创建并核对过的游戏子进程，
 不加入默认 CTest，也不附带测试游戏资源。

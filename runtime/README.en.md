@@ -6,7 +6,9 @@
 
 Experimental Windows DLL extensions for running loose resources and UTF-8 scripts in the original game.
 They do not recreate the game, modify the EXE on disk, or require replacing the official `RsComp.dll`.
-The current build provides a 32-bit launcher and a Forest adapter, not support for every RScript game.
+It targets CodeX RScript games sharing the supported formats and Windows APIs, without game-name checks,
+EXE hash allowlists, or fixed addresses. Current builds and game checks use 32-bit Windows;
+Forest and SevenBridge are regression samples, not an admission list.
 
 ## Getting started
 
@@ -21,12 +23,12 @@ Test with a game copy first: even though extensions do not rewrite resources, th
 
 | DLL | Purpose |
 | --- | --- |
-| `RScriptForest.dll` | Connects to the verified Forest engine version |
+| `RScriptFiles.dll` | Hooks synchronous file imports by API name |
 | `RScriptResources.dll` | Gives loose resources and current-format TSC priority |
 | `RScriptUnicode.dll` | Enables characters outside CP932 in UTF-8 override scripts |
 
 The launcher loads `RScriptHost.dll` when needed; it is not a separate checkbox.
-Checking Resources or Unicode also checks Forest. Unchecking Forest unchecks both.
+Checking Resources or Unicode also checks Files. Unchecking Files unchecks both.
 With everything unchecked, the original game runs without DLL injection. Changes take effect on the next launch.
 
 **Add DLL...** adds another DLL, initially unchecked. Load trusted files only:
@@ -55,16 +57,12 @@ Resources are converted in memory on demand; original resources are not rewritte
 Export TSC using the current LiarsoftTool and save it as UTF-8, keeping generated labels and metadata.
 Official compiler source features such as includes and macros are not supported here.
 
-## Forest and UTF-8
+TSC retains its own container format. If an original GSC is found loose or in an XFL entry,
+its header layout must match. New scenes without a reference retain their supplied format rather than guessing one.
 
-The built-in adapter accepts only `Forest.exe` with this SHA-256. Other versions are rejected;
-the check must not be bypassed.
+## UTF-8
 
-```text
-8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56
-```
-
-Enable Resources, Unicode, and Forest together for UTF-8 translations. Original GSC remains CP932.
+Enable Resources, Unicode, and Files together for UTF-8 translations. Original GSC remains CP932.
 With Resources alone, all TSC text must still be representable in CP932.
 
 The Unicode adapter currently supports characters in the Basic Multilingual Plane, including common Chinese,
@@ -79,11 +77,26 @@ The glyph dictionary is stored at:
 ```
 
 Do not delete it while keeping old saves or history. Back it up with saves, and keep the game and override directory paths unchanged
-when migrating; another path uses another dictionary. Story edits can still make old saves incompatible.
+when migrating; another path or changed EXE content uses another dictionary. Story edits can still make old saves incompatible.
 Multiple game instances cannot use the same dictionary simultaneously.
+
+Do not mix these generic DLLs with the early Forest-specific DLLs; use one complete build.
+Glyph dictionaries from that early prototype are not migrated automatically.
 
 Error details are in `%LOCALAPPDATA%\LiarsoftTool\RScriptRuntime\host-<pid>.log`.
 Logs and dictionaries go to the user data directory, not the original resources.
+
+## Compatibility
+
+Files hooks `CreateFileA`, `ReadFile`, `SetFilePointer`, `GetFileSize`, and `CloseHandle`
+in the EXE's ordinary import table. Unicode uses ANSI GDI glyph, text, and measurement APIs,
+with CP932 character recognition local to the game module; system regional settings are unchanged.
+
+Missing required APIs, damaged imports, and existing hook conflicts prevent initialization with an error.
+Delay imports, dynamically obtained functions, other DLLs' own reads, file enumeration, mapping,
+and asynchronous reads are not intercepted. MCI video playback is outside the override path.
+Engines using other file or text APIs may need additional shared support;
+successful DLL initialization alone does not establish full compatibility.
 
 ## Building and validation
 

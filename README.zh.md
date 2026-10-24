@@ -81,7 +81,7 @@ Windows 编译和打包见 [构建说明](docs/BUILDING.zh.md)。
 ## 更多说明
 
 [RScript Runtime](runtime/README.zh.md) 是独立的实验性 Windows 加载器与可选 DLL，
-用于原游戏优先读取散装资源和 UTF-8 脚本；目前仅适配一个已验证的 Forest EXE。
+用于同类 RScript 引擎优先读取散装资源和 UTF-8 脚本，按接口接入，不使用游戏白名单。
 
 [文档目录](docs/README.zh.md) · [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.zh.md)
 · [开发规划](docs/ROADMAP.zh.md)

@@ -6,7 +6,8 @@
 
 实验性的 Windows DLL 扩展，用原游戏运行散装资源和 UTF-8 脚本。
 不重新实现游戏，不修改磁盘上的 EXE，不要求替换官方 `RsComp.dll`。
-目前提供 32 位加载器及 Forest 适配，不能直接用于所有 RScript 游戏。
+面向使用相同文件格式和 Windows 接口的 CodeX RScript 游戏，不使用游戏名、EXE 哈希白名单或固定地址。
+目前构建和游戏检查使用 32 位 Windows 版本；Forest、SevenBridge 是回归样本，不是准入名单。
 
 ## 开始使用
 
@@ -21,12 +22,12 @@
 
 | DLL | 用途 |
 | --- | --- |
-| `RScriptForest.dll` | 接入已经验证的 Forest 引擎版本 |
+| `RScriptFiles.dll` | 按接口名称接入游戏的同步文件读取 |
 | `RScriptResources.dll` | 优先加载散装资源及当前格式的 TSC |
 | `RScriptUnicode.dll` | 在 UTF-8 覆盖脚本中使用原 CP932 之外的文字 |
 
 宿主 `RScriptHost.dll` 由加载器按需加载，不单独勾选。
-勾选 Resources 或 Unicode 会自动勾选 Forest；取消 Forest 也会取消这两项。
+勾选 Resources 或 Unicode 会自动勾选 Files；取消 Files 也会取消这两项。
 全部取消时直接运行原游戏，不注入 DLL。开关在下次启动游戏时生效。
 
 **Add DLL...** 可以添加额外 DLL，新增项默认关闭。仅加载可信文件：
@@ -55,15 +56,12 @@ DLL 可以读取或修改整个游戏进程，加载器不提供沙箱。
 TSC 需要由当前 LiarsoftTool 导出并以 UTF-8 保存；保留生成的标签和元数据。
 这里不支持官方编译器的 include、宏等高层源文件。
 
-## Forest 与 UTF-8
+TSC 保留自身的容器格式。能找到原 GSC 时，会核对散装文件或 XFL 条目的头格式，
+不一致时报错；新增场景找不到参考时，不替用户猜测目标格式。
 
-内置适配仅接受以下 `Forest.exe` 的 SHA-256；其他版本会拒绝加载，不能绕过检查使用。
+## UTF-8
 
-```text
-8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56
-```
-
-使用 UTF-8 译文时同时启用 Resources、Unicode 和 Forest。原 GSC 仍按 CP932 处理。
+使用 UTF-8 译文时同时启用 Resources、Unicode 和 Files。原 GSC 仍按 CP932 处理。
 只启用 Resources 时，TSC 中的文字仍须能用 CP932 表示。
 
 当前 Unicode 适配支持基本多文种平面内的文字，例如常用中、日、俄文；
@@ -78,11 +76,25 @@ TSC 需要由当前 LiarsoftTool 导出并以 UTF-8 保存；保留生成的标�
 ```
 
 保留旧存档或历史记录时，不要删除字典。迁移存档时一并备份字典，并保持游戏与覆盖目录路径不变；
-更换路径会使用另一份字典。修改剧情后，旧存档仍可能不兼容。
+更换路径或 EXE 内容会使用另一份字典。修改剧情后，旧存档仍可能不兼容。
 同一字典不能同时供多个游戏实例使用。
+
+本版的通用 DLL 与早期 Forest 专用 DLL 不能混用；请使用同一次构建的完整文件组。
+旧试验版的字形字典不自动迁移。
 
 错误详情见 `%LOCALAPPDATA%\LiarsoftTool\RScriptRuntime\host-<pid>.log`。
 日志和字典写入用户数据目录，不写进原游戏资源。
+
+## 兼容范围
+
+Files 接入 EXE 普通导入表中的 `CreateFileA`、`ReadFile`、`SetFilePointer`、
+`GetFileSize`、`CloseHandle`。Unicode 使用 ANSI GDI 的字形、文本与测量接口，
+并在游戏模块内固定 CP932 字符识别，不改变系统区域设置。
+
+缺少必要接口、导入表损坏或已有钩子冲突会阻止加载，并给出错误。
+目前不接管延迟导入、动态取得的函数、其他 DLL 自身的读取、文件枚举、映射或异步读取；
+MCI 视频播放也不属于覆盖路径。使用其他读取或文字渲染方式的引擎仍可能需要补充公共支持，
+不能仅凭 DLL 初始化成功就认为游戏完全兼容。
 
 ## 构建与验证
 
