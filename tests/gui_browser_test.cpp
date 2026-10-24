@@ -135,11 +135,22 @@ gboolean step(gpointer) {
 }
 void activateBrowser(GtkApplication* app, gpointer) {
     window = GTK_WINDOW(gtk_application_window_new(app));
-    const char* choices[] = {"CP932", "GBK", "CP1251", nullptr};
-    auto* encoding = gtk_drop_down_new_from_strings(choices);
-    root = createResourceBrowser(window, GTK_DROP_DOWN(encoding), +[](const std::string& file) { queued = file; });
-    g_object_ref_sink(encoding); g_object_unref(encoding);
+    auto* choices = gtk_string_list_new(nullptr);
+    for (const auto& name : supportedEncodings()) gtk_string_list_append(choices, name.c_str());
+    auto* encodingChoice = gtk_drop_down_new(G_LIST_MODEL(choices), nullptr);
+    root = createResourceBrowser(window, GTK_DROP_DOWN(encodingChoice), +[](const std::string& file) { queued = file; });
+    g_object_ref_sink(encodingChoice); g_object_unref(encodingChoice);
     b = browser(root);
+    require(g_list_model_get_n_items(gtk_drop_down_get_model(GTK_DROP_DOWN(b->encoding))) ==
+            supportedEncodings().size() + 1, "Preview encoding choices differ from conversion choices");
+    for (guint index = 0; index < supportedEncodings().size(); ++index) {
+        gtk_drop_down_set_selected(b->baseEncoding, index);
+        require(encoding(b) == supportedEncodings()[index], "Preview resource encoding index is incorrect");
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(b->encoding), index + 1);
+        require(encoding(b) == supportedEncodings()[index], "Preview explicit encoding index is incorrect");
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(b->encoding), 0);
+    }
+    gtk_drop_down_set_selected(b->baseEncoding, 0);
     gtk_window_set_default_size(window, 1000, 700);
     gtk_window_set_child(window, root); gtk_window_present(window);
 }

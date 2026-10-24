@@ -1,6 +1,7 @@
 #include "gui_browser.h"
 #include "gui_common.h"
 #include "resource_preview.h"
+#include "encoding.h"
 #include "fileio.h"
 #include <adwaita.h>
 #include <libintl.h>
@@ -69,11 +70,8 @@ void setText(GtkWidget* widget, const std::string& text) {
     gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(widget)), text.data(), static_cast<int>(text.size()));
 }
 std::string encoding(Browser* b) {
-    const char* values[] = {"", "UTF-8", "CP932", "GBK", "CP1251"};
     const auto choice = gtk_drop_down_get_selected(GTK_DROP_DOWN(b->encoding));
-    if (choice) return values[choice];
-    const char* defaults[] = {"CP932", "GBK", "CP1251"};
-    return defaults[gtk_drop_down_get_selected(b->baseEncoding)];
+    return supportedEncodings().at(choice ? choice - 1 : gtk_drop_down_get_selected(b->baseEncoding));
 }
 std::string hexPage(const ResourceSource& source, uint64_t offset) {
     const auto bytes = source.read(offset, static_cast<size_t>(std::min(HexPageSize, source.size() - offset)));
@@ -376,8 +374,10 @@ GtkWidget* createResourceBrowser(GtkWindow* parent, GtkDropDown* resourceEncodin
         if (b->history.size() > 1) request(b, RequestKind::Open, b->history[b->history.size() - 2], b->history.size() - 2);
     }), b);
     gtk_widget_set_sensitive(b->back, FALSE); gtk_box_append(GTK_BOX(actions), b->back);
-    const char* choices[] = {B_("Resource setting"), "UTF-8", "CP932", "GBK", "CP1251", nullptr};
-    b->encoding = gtk_drop_down_new_from_strings(choices);
+    auto* choices = gtk_string_list_new(nullptr);
+    gtk_string_list_append(choices, B_("Resource setting"));
+    for (const auto& encoding : supportedEncodings()) gtk_string_list_append(choices, encoding.c_str());
+    b->encoding = gtk_drop_down_new(G_LIST_MODEL(choices), nullptr);
     gtk_widget_set_tooltip_text(b->encoding, B_("Text and archive filename encoding"));
     gtk_box_append(GTK_BOX(actions), b->encoding); gtk_box_append(GTK_BOX(b->root), actions);
     b->address = browserLabel(B_("Open a folder or archive. Browsing never unpacks or changes the input."));

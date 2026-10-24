@@ -6,6 +6,7 @@
 
 LiarsoftTool 用于处理 CodeX RScript 引擎游戏的资源，支持封包解包、图像转换、
 脚本提取与回写、音频转换，适用于 Liar-soft、raiL-soft 等社团的作品。
+当前版本不提供游戏 EXE 转换。
 
 若要将游戏移植到 Ren'Py，请配合
 [rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy) 使用。
@@ -56,6 +57,8 @@ liarsofttool -h
 只改对话时可使用 TXT：在 `>` 后填写译文，再以原 GSC 为参考写回。
 需要编辑完整脚本时使用 TSC，修改其中的命令和文字后重新编译。
 TSC 用 UTF-8 保存，生成 GSC 时选择与目标游戏匹配的编码。
+可选编码包括 CP932 / Windows-31J、GBK、GB18030、Big5 / CP950、
+韩文 CP949、Windows CP1250–CP1258 和 UTF-8；转换与资源预览使用同一份编码列表。
 
 GSC→TSC 是实验性功能，不是所有游戏都已适配。编辑前保留原 GSC，
 不要删除 TSC 中自动生成的标签和元数据。
@@ -86,7 +89,7 @@ Windows 编译和打包见 [构建说明](docs/BUILDING.zh.md)。
 [文档目录](docs/README.zh.md) · [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.zh.md)
 · [开发规划](docs/ROADMAP.zh.md)
 
-请使用合法持有的游戏资源。脚本、图像或 EXE 能成功转换，不代表所有引擎版本
+请使用合法持有的游戏资源。脚本或图像能成功转换，不代表所有引擎版本
 都能直接使用，替换回游戏后请自行测试。
 
 ## 许可与致谢

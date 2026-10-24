@@ -3,6 +3,7 @@
 #include "gui_preferences.h"
 #include "gui_browser.h"
 #include "conversion.h"
+#include "encoding.h"
 #include "xflarchive.h"
 #include "update_check.h"
 #include <adwaita.h>
@@ -117,8 +118,7 @@ static gboolean closeWindow(GtkWindow*, gpointer) {
     return working;
 }
 static liarsoft::conversion::ConversionOptions options() {
-    const char* encodings[] = {"CP932", "GBK", "CP1251"};
-    return {encodings[gtk_drop_down_get_selected(GTK_DROP_DOWN(ui.encoding))], path(ui.reference),
+    return {liarsoft::supportedEncodings().at(gtk_drop_down_get_selected(GTK_DROP_DOWN(ui.encoding))), path(ui.reference),
         active(ui.recursive), !active(ui.txt), active(ui.unpackOnly), active(ui.vorbis),
         static_cast<unsigned>(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ui.workers)))};
 }
@@ -334,8 +334,9 @@ static void buildPreferences() {
     group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
     adw_preferences_group_set_title(group, _("Conversion"));
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), group);
-    const char* encodings[] = {"CP932 / Windows-31J", "GBK", "CP1251", nullptr};
-    ui.encoding = gtk_drop_down_new_from_strings(encodings);
+    auto* encodings = gtk_string_list_new(nullptr);
+    for (const auto& encoding : liarsoft::supportedEncodings()) gtk_string_list_append(encodings, encoding.c_str());
+    ui.encoding = gtk_drop_down_new(G_LIST_MODEL(encodings), nullptr);
     addRow(group, _("Resource encoding"), ui.encoding);
     ui.recursive = check(group, _("Recursive"));
     ui.packOnly = check(group, _("Pack only"));
