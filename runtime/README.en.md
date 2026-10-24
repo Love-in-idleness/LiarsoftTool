@@ -1,0 +1,114 @@
+# RScript Runtime
+
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+
+[Engine evidence](ENGINE_AUDIT.en.md) · [DLL development guide](SDK.en.md)
+
+Experimental Windows DLL extensions for running loose resources and UTF-8 scripts in the original game.
+They do not recreate the game, modify the EXE on disk, or require replacing the official `RsComp.dll`.
+The current build provides a 32-bit launcher and a Forest adapter, not support for every RScript game.
+
+## Getting started
+
+Keep the built `RScriptLauncher.exe`, `RScriptHost.dll`, and feature DLLs in the same directory.
+They do not need to be placed in the game directory. Open the launcher:
+
+1. Select the game EXE in **Game executable**.
+2. Select an **Override resources** directory, or leave it empty to use the game directory.
+3. Check the DLLs you need and click **Start game**.
+
+Test with a game copy first: even though extensions do not rewrite resources, the game itself may write saves.
+
+| DLL | Purpose |
+| --- | --- |
+| `RScriptForest.dll` | Connects to the verified Forest engine version |
+| `RScriptResources.dll` | Gives loose resources and current-format TSC priority |
+| `RScriptUnicode.dll` | Enables characters outside CP932 in UTF-8 override scripts |
+
+The launcher loads `RScriptHost.dll` when needed; it is not a separate checkbox.
+Checking Resources or Unicode also checks Forest. Unchecking Forest unchecks both.
+With everything unchecked, the original game runs without DLL injection. Changes take effect on the next launch.
+
+**Add DLL...** adds another DLL, initially unchecked. Load trusted files only:
+native DLLs can access or modify the entire game process; there is no sandbox.
+See the [DLL development guide](SDK.en.md). No Wiki DLL is included, and DLLs cannot be unloaded while playing.
+
+## Resource overrides
+
+Keep the original directory layout, for example `scr/2100.tsc`, `grpe/9001.webp`,
+`voice/0001.ogg`, and `grps/tbox01/.meta.xml`. The override directory does not need a complete copy of the game.
+
+Resources with the same logical name use this order:
+
+| Type | Priority |
+| --- | --- |
+| Audio | `ogg > wav` |
+| Scripts | `tsc > gsc` |
+| Images | `webp > png > lim > wcg` |
+| Image components | Component directory with `.meta.xml` `> lwg` |
+
+Keep `.meta.xml` together with the component images it references: it supplies positions, dimensions, and entry names.
+Missing overrides use the original game loading path. A selected override that is damaged or incomplete
+reports an error instead of silently using a lower-priority file.
+
+Resources are converted in memory on demand; original resources are not rewritten.
+Export TSC using the current LiarsoftTool and save it as UTF-8, keeping generated labels and metadata.
+Official compiler source features such as includes and macros are not supported here.
+
+## Forest and UTF-8
+
+The built-in adapter accepts only `Forest.exe` with this SHA-256. Other versions are rejected;
+the check must not be bypassed.
+
+```text
+8eb71d07304d362ec26cc47d93c6ef5854b5acadd7c9fe941755ad50820a3e56
+```
+
+Enable Resources, Unicode, and Forest together for UTF-8 translations. Original GSC remains CP932.
+With Resources alone, all TSC text must still be representable in CP932.
+
+The Unicode adapter currently supports characters in the Basic Multilingual Plane, including common Chinese,
+Japanese, and Russian text. Supplementary characters such as emoji and general complex-script shaping are not supported.
+Distinct characters outside CP932 share at most 1880 glyph-mapping slots; slots already used by the original game
+reduce the available capacity. Install fonts containing the required characters: successful resource loading does not ensure glyph coverage.
+
+The glyph dictionary is stored at:
+
+```text
+%LOCALAPPDATA%\LiarsoftTool\RScriptRuntime\<key>\glyphs.bin
+```
+
+Do not delete it while keeping old saves or history. Back it up with saves, and keep the game and override directory paths unchanged
+when migrating; another path uses another dictionary. Story edits can still make old saves incompatible.
+Multiple game instances cannot use the same dictionary simultaneously.
+
+Error details are in `%LOCALAPPDATA%\LiarsoftTool\RScriptRuntime\host-<pid>.log`.
+Logs and dictionaries go to the user data directory, not the original resources.
+
+## Building and validation
+
+Build the runtime separately from the repository root; GTK and libcurl are not required.
+Prepare a 32-bit Windows MinGW toolchain and matching static WebP and Vorbis/Ogg libraries:
+
+```bash
+cmake -S runtime -B build/runtime-win32 \
+  -DCMAKE_SYSTEM_NAME=Windows \
+  -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc-posix \
+  -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++-posix \
+  -DCMAKE_FIND_ROOT_PATH=/path/to/windows-x86-dependencies \
+  -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY \
+  -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+  -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+  -DBUILD_TESTING=OFF
+cmake --build build/runtime-win32 -j2
+```
+
+Use the same target architecture and runtime for dependencies and compiler; do not mix Windows and Linux libraries.
+Outputs are in `build/runtime-win32/`. `RScriptLogExample.dll` is an additional logging example.
+
+Add `-DBUILD_RUNTIME=ON` to an existing main-project build to enable the portable resource and Unicode tests.
+Windows tests also need Python 3 and the Vorbis encoder library; cross-builds can set `RSCRIPT_WINE`.
+Only Windows builds produce the launcher and feature DLLs.
+
+This is experimental. Automated tests, Wine checks, and a full playthrough on native Windows are different kinds of validation.
+Compatibility with every scene, save, font, or plugin combination is not guaranteed. Supply legally obtained game files yourself.

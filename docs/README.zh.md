@@ -9,12 +9,14 @@
 - [项目介绍与使用](../README.zh.md)；命令行帮助运行 `liarsofttool -h`。
 - [Windows 构建与打包](BUILDING.zh.md)
 - [TSC 指令参考](GSC_OPCODE_REFERENCE.zh.md)
+- [RScript Runtime 使用与构建](../runtime/README.zh.md)
 - [音频依赖许可证](THIRD_PARTY_AUDIO_LICENSES.md)
 
 ## 开发参考
 
 - [开发规划](ROADMAP.zh.md)
 - [TSC 检查接口](TSC_DIAGNOSTICS.zh.md)
+- [运行时 DLL 接口](../runtime/SDK.zh.md)
 - [工作约定](../AGENTS.zh.md)
 
 以下为引擎和文件格式的分析依据，普通使用无需阅读。
@@ -27,6 +29,7 @@
 - [Jeanne / Kagerou](JEANNE_KAGEROU_ENGINE_AUDIT.zh.md)
 - [CNMI 体验版](CNMI_TRIAL_ENGINE_AUDIT.zh.md)
 - [RsComp.dll 与媒体指令](RSCOMP_MEDIA_AUDIT.zh.md)
+- [运行时接入：Forest、RsComp 与 Albatross DLL](../runtime/ENGINE_AUDIT.zh.md)
 
 ## 开发检查
 

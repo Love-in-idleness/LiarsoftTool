@@ -7,12 +7,14 @@
 - [Обзор и работа с программой](../README.ru.md); справка CLI — `liarsofttool -h`.
 - [Сборка и упаковка Windows](BUILDING.ru.md)
 - [Справочник TSC](GSC_OPCODE_REFERENCE.ru.md)
+- [Использование и сборка RScript Runtime](../runtime/README.ru.md)
 - [Лицензии аудиобиблиотек](THIRD_PARTY_AUDIO_LICENSES.md)
 
 ## Разработка
 
 - [План развития](ROADMAP.ru.md)
 - [Интерфейс проверки TSC](TSC_DIAGNOSTICS.ru.md)
+- [Интерфейс DLL runtime](../runtime/SDK.ru.md)
 - [Правила работы](../AGENTS.ru.md)
 
 Ниже технические справочники. Для обычной работы они не нужны.
@@ -25,6 +27,7 @@
 - [Jeanne / Kagerou](JEANNE_KAGEROU_ENGINE_AUDIT.ru.md)
 - [Пробная версия CNMI](CNMI_TRIAL_ENGINE_AUDIT.ru.md)
 - [RsComp.dll и медиакоманды](RSCOMP_MEDIA_AUDIT.ru.md)
+- [Подключение runtime: Forest, RsComp и DLL Albatross](../runtime/ENGINE_AUDIT.ru.md)
 
 ## Проверки
 
