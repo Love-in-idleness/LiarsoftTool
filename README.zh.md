@@ -1,6 +1,6 @@
 # LiarsoftTool
 
-[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 ![LiarsoftTool](image.png)
 
@@ -68,7 +68,7 @@ GSC→TSC 是实验性功能，不是所有游戏都已适配。编辑前保留�
 
 需要 C++17 编译器、CMake、WebP、Vorbis/Ogg、libcurl 7.85 及以上；图形界面还需要 GTK4 4.10、libadwaita 1.5 及以上和 gettext。
 Windows 和 Linux 使用同一套 GUI。首选项集中设置转换选项、主题和界面语言。
-主题可跟随系统或使用浅色、深色；界面支持中、英、俄语，手动选择后重启生效。
+主题可跟随系统或使用浅色、深色；界面支持中、英、俄、日语，手动选择后重启生效。
 
 Debian / Ubuntu：
 

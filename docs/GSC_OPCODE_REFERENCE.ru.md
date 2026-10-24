@@ -1,6 +1,6 @@
 # Справочник команд TSC
 
-[中文](GSC_OPCODE_REFERENCE.zh.md) | [English](GSC_OPCODE_REFERENCE.en.md) | [Русский](GSC_OPCODE_REFERENCE.ru.md)
+[中文](GSC_OPCODE_REFERENCE.zh.md) | [English](GSC_OPCODE_REFERENCE.en.md) | [Русский](GSC_OPCODE_REFERENCE.ru.md) | [日本語](GSC_OPCODE_REFERENCE.ja.md)
 
 [Документация](README.ru.md)
 

@@ -1,6 +1,6 @@
 # 开发参考：Khime / Albatross 资源
 
-[中文](KHIME_ALBATROSS_ENGINE_AUDIT.zh.md) | [English](KHIME_ALBATROSS_ENGINE_AUDIT.en.md) | [Русский](KHIME_ALBATROSS_ENGINE_AUDIT.ru.md)
+[中文](KHIME_ALBATROSS_ENGINE_AUDIT.zh.md) | [English](KHIME_ALBATROSS_ENGINE_AUDIT.en.md) | [Русский](KHIME_ALBATROSS_ENGINE_AUDIT.ru.md) | [日本語](KHIME_ALBATROSS_ENGINE_AUDIT.ja.md)
 
 [返回文档目录](README.zh.md)
 

@@ -1,6 +1,6 @@
 # Developer reference: Khime / Albatross resources
 
-[中文](KHIME_ALBATROSS_ENGINE_AUDIT.zh.md) | [English](KHIME_ALBATROSS_ENGINE_AUDIT.en.md) | [Русский](KHIME_ALBATROSS_ENGINE_AUDIT.ru.md)
+[中文](KHIME_ALBATROSS_ENGINE_AUDIT.zh.md) | [English](KHIME_ALBATROSS_ENGINE_AUDIT.en.md) | [Русский](KHIME_ALBATROSS_ENGINE_AUDIT.ru.md) | [日本語](KHIME_ALBATROSS_ENGINE_AUDIT.ja.md)
 
 [Documentation](README.en.md) · [User guide](../README.en.md)
 

@@ -1,6 +1,6 @@
 # Техническая справка: аудиоконтейнеры
 
-[中文](AUDIO_PROCESSING_AUDIT.zh.md) | [English](AUDIO_PROCESSING_AUDIT.en.md) | [Русский](AUDIO_PROCESSING_AUDIT.ru.md)
+[中文](AUDIO_PROCESSING_AUDIT.zh.md) | [English](AUDIO_PROCESSING_AUDIT.en.md) | [Русский](AUDIO_PROCESSING_AUDIT.ru.md) | [日本語](AUDIO_PROCESSING_AUDIT.ja.md)
 
 [Документация](README.ru.md)
 

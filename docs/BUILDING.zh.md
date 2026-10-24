@@ -1,6 +1,6 @@
 # Windows 构建与打包
 
-[中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md)
+[中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md) | [日本語](BUILDING.ja.md)
 
 ## MSYS2 UCRT64
 
@@ -34,7 +34,7 @@ python tests/test_windows_pack.py
 输出目录必须尚不存在。分别发布其中的 `liarsofttool.exe`、
 `liarsofttool-gui.exe`，不再把两个程序合成 ZIP。
 脚本开启压缩并保留 GUI 的媒体子进程支持；CLI 仅包含自己的运行库。
-封装后仍须验证转换、三语界面、图片与音频预览，不能只检查 EXE 是否生成。
+封装后仍须验证转换、四语界面、图片与音频预览，不能只检查 EXE 是否生成。
 
 Linux 构建机也可使用本脚本，需在当前环境准备 Wine；路径由 `winepath` 转换。
 
