@@ -62,6 +62,11 @@ int main() {
             "GB18030 four-byte character was decoded as GBK");
     require(liarsoft::convertEncoding(u8"\u0080", "UTF-8", "GB18030", true) == std::string("\x81\x30\x81\x30", 4),
             "GB18030 four-byte character was encoded as GBK");
+    const std::string vietnamese("\x56\x69\xEA\xF2\x74", 5);
+    const auto vietnameseUtf8 = liarsoft::convertEncoding(vietnamese, "CP1258", "UTF-8", true);
+    require((vietnameseUtf8 == u8"Việt" || vietnameseUtf8 == u8"Việt") &&
+            liarsoft::convertEncoding(vietnameseUtf8, "UTF-8", "CP1258", true) == vietnamese,
+            "CP1258 combining tone mark changed or was lost");
     requireInvalid(std::string("\xC3", 1), "UTF-8");
     requireInvalid(std::string("\xFF", 1), "UTF-8");
     requireInvalid(u8"😀", "CP932");
