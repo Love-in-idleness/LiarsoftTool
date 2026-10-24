@@ -1,6 +1,6 @@
 # Разработка DLL
 
-[中文](SDK.zh.md) | [English](SDK.en.md) | [Русский](SDK.ru.md)
+[中文](SDK.zh.md) | [English](SDK.en.md) | [Русский](SDK.ru.md) | [日本語](SDK.ja.md)
 
 Это минимальный интерфейс DLL для будущих расширений, а не универсальный SDK игрового движка.
 Публичный интерфейс описан в [rscript_plugin.h](include/rscript_plugin.h), полный минимальный пример —

@@ -1,6 +1,6 @@
 # RScript Runtime
 
-[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 [逆向依据](ENGINE_AUDIT.zh.md) · [DLL 开发说明](SDK.zh.md)
 

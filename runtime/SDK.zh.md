@@ -1,6 +1,6 @@
 # DLL 开发说明
 
-[中文](SDK.zh.md) | [English](SDK.en.md) | [Русский](SDK.ru.md)
+[中文](SDK.zh.md) | [English](SDK.en.md) | [Русский](SDK.ru.md) | [日本語](SDK.ja.md)
 
 这是一个最小 DLL 接口，供后续扩展使用，不是通用游戏引擎 SDK。
 公开接口见 [rscript_plugin.h](include/rscript_plugin.h)，完整最小示例见

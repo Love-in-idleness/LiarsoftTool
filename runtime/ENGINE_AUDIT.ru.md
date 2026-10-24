@@ -1,6 +1,6 @@
 # Основания реализации RScript Runtime
 
-[中文](ENGINE_AUDIT.zh.md) | [English](ENGINE_AUDIT.en.md) | [Русский](ENGINE_AUDIT.ru.md)
+[中文](ENGINE_AUDIT.zh.md) | [English](ENGINE_AUDIT.en.md) | [Русский](ENGINE_AUDIT.ru.md) | [日本語](ENGINE_AUDIT.ja.md)
 
 [Руководство](README.ru.md) · [Интерфейс DLL](SDK.ru.md)
 

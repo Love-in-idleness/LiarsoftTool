@@ -63,6 +63,8 @@ cmake --build build -j2
 
 ## 関連資料
 
+[RScript Runtime](runtime/README.ja.md) は独立した実験的 Windows ランチャーと任意 DLL です。同系 RScript エンジンで展開済み資源と UTF-8 スクリプトを優先装入し、ゲーム whitelist でなくインターフェースを使って接続します。
+
 [文書一覧](docs/README.ja.md) · [TSC 命令リファレンス](docs/GSC_OPCODE_REFERENCE.ja.md) · [開発計画](docs/ROADMAP.ja.md)
 
 正当に入手したゲームリソースを使用してください。変換に成功しても、すべてのエンジンで使えるとは限りません。ゲームへ戻した後の動作を確認してください。

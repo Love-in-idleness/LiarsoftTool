@@ -1,6 +1,6 @@
 # RScript Runtime 逆向依据
 
-[中文](ENGINE_AUDIT.zh.md) | [English](ENGINE_AUDIT.en.md) | [Русский](ENGINE_AUDIT.ru.md)
+[中文](ENGINE_AUDIT.zh.md) | [English](ENGINE_AUDIT.en.md) | [Русский](ENGINE_AUDIT.ru.md) | [日本語](ENGINE_AUDIT.ja.md)
 
 [使用说明](README.zh.md) · [DLL 接口](SDK.zh.md)
 

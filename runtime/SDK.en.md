@@ -1,6 +1,6 @@
 # DLL development guide
 
-[中文](SDK.zh.md) | [English](SDK.en.md) | [Русский](SDK.ru.md)
+[中文](SDK.zh.md) | [English](SDK.en.md) | [Русский](SDK.ru.md) | [日本語](SDK.ja.md)
 
 This is a minimal DLL interface for future extensions, not a general game engine SDK.
 The public interface is [rscript_plugin.h](include/rscript_plugin.h); the complete minimal example is
