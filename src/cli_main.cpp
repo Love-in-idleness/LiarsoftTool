@@ -23,7 +23,7 @@ static void printUsage(const char* prog) {
               << "Usage: " << prog << " [options] <input...> [output]\n\n"
               << "Options:\n"
               << "  -e, --encoding <enc>  Text encoding (default: cp932 / Windows-31J)\n"
-              << "                        Supported: cp932, gbk, cp1251\n"
+              << "                        Supported: cp932, gbk, gb18030, big5/cp950, cp949, cp1250-cp1258, utf-8\n"
               << "  -r, --reference <path> Reference GSC file for TXT injection\n"
               << "  -o, --output <path>    Explicit output file or directory\n"
               << "  -R, --recursive        Recursively pack/unpack and convert resources\n"

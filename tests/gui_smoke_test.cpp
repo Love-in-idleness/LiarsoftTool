@@ -33,6 +33,12 @@ gboolean tick(gpointer) {
             require(options().encoding == "CP932" && options().gscToTsc && !options().recursive &&
                 !options().unpackOnly && !active(ui.packOnly) && !options().vorbisInWav &&
                 options().workers == 0, "conversion defaults changed");
+            for (guint index = 0; index < liarsoft::supportedEncodings().size(); ++index) {
+                gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), index);
+                require(options().encoding == liarsoft::supportedEncodings()[index],
+                        "Conversion encoding index is incorrect");
+            }
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), 0);
             for (unsigned value = 0; value < 3; ++value) {
                 ui.preferences.theme = value; theme(); savePreferences();
                 require(liarsoft::gui::loadPreferences().theme == value, "theme not saved");
