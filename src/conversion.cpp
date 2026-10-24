@@ -6,7 +6,7 @@
 #include <memory>
 #include <stdexcept>
 
-#include "exe_patch.h"
+// #include "exe_patch.h" // EXE conversion is disabled; retained for reference.
 #include "bmp_normalizer.h"
 #include "fileio.h"
 #include "gsc_decompiler.h"
@@ -59,11 +59,14 @@ std::string guessOutput(const std::string& inputPath,
     if (ext == ".webp") return (base / (stem + ".lim")).string();
     if (ext == ".wav") return (base / (stem + ".ogg")).string();
     if (ext == ".ogg") return (base / (stem + ".wav")).string();
+#if 0 // EXE conversion is disabled.
     if (ext == ".exe") {
         const std::string suffix = encoding == "GBK" ? ".gbk.exe" :
             encoding == "CP1251" ? ".cp1251.exe" : ".sjis.exe";
         return (base / (stem + suffix)).string();
     }
+#endif
+    (void)encoding;
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return (base / (stem + ".wcg")).string();
     return (base / input.filename()).string();
@@ -84,7 +87,8 @@ std::string guessType(const std::string& path,
     if (ext == ".webp") return "WebP -> LIM";
     if (ext == ".wav") return "WAV -> OGG";
     if (ext == ".ogg") return "OGG -> WAV";
-    if (ext == ".exe") return "EXE -> " + encoding;
+    // if (ext == ".exe") return "EXE -> " + encoding;
+    (void)encoding;
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return "IMG -> WCG";
     if (fs::is_directory(path)) return "DIR -> XFL/LWG";
@@ -96,7 +100,7 @@ bool isSupported(const std::string& path) {
     return ext == ".gsc" || ext == ".tsc" || ext == ".txt" ||
            ext == ".xfl" || ext == ".lwg" || ext == ".wcg" ||
            ext == ".lim" || ext == ".wav" || ext == ".ogg" ||
-           ext == ".exe" || ext == ".png" || ext == ".jpg" ||
+           ext == ".png" || ext == ".jpg" ||
            ext == ".jpeg" || ext == ".bmp" || ext == ".webp" || fs::is_directory(path);
 }
 
@@ -170,8 +174,10 @@ ConversionResult convert(const std::string& inputPath,
         const auto data = liarsoft::wcgEncode(
             pixels.get(), static_cast<uint32_t>(width), static_cast<uint32_t>(height));
         liarsoft::writeFileIfChanged(outputPath, data);
+#if 0 // EXE conversion is disabled.
     } else if (ext == ".exe") {
         liarsoft::exeConvertFile(inputPath, outputPath, options.encoding);
+#endif
     } else {
         throw std::runtime_error("Unsupported format");
     }

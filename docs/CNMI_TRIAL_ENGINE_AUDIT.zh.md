@@ -1,6 +1,6 @@
 # 开发参考：CNMI 体验版资源
 
-[中文](CNMI_TRIAL_ENGINE_AUDIT.zh.md) | [English](CNMI_TRIAL_ENGINE_AUDIT.en.md) | [Русский](CNMI_TRIAL_ENGINE_AUDIT.ru.md)
+[中文](CNMI_TRIAL_ENGINE_AUDIT.zh.md) | [English](CNMI_TRIAL_ENGINE_AUDIT.en.md) | [Русский](CNMI_TRIAL_ENGINE_AUDIT.ru.md) | [日本語](CNMI_TRIAL_ENGINE_AUDIT.ja.md)
 
 [返回文档目录](README.zh.md)
 

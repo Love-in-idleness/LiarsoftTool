@@ -182,8 +182,12 @@ int main(int argc, char** argv) {
            "/out/scene.tsc");
     assert(guessOutput("/game/voice.ogg", "", false, "CP932") ==
            "/game/voice.wav");
-    assert(guessOutput("/game/start.exe", "", false, "CP1251") ==
-           "/game/start.cp1251.exe");
+    if (isSupported("/game/start.EXE") || guessType("/game/start.exe", false, "CP1251") != "?")
+        throw std::runtime_error("EXE conversion is still advertised");
+    bool exeRejected = false;
+    try { convert("/game/start.exe", "/game/changed.exe", {}); }
+    catch (const std::runtime_error& error) { exeRejected = std::string(error.what()) == "Unsupported format"; }
+    if (!exeRejected) throw std::runtime_error("EXE conversion is still callable");
     assert(guessType("VOICE.OGG", false, "CP932") == "OGG -> WAV");
     assert(isSupported("IMAGE.JPEG"));
     assert(!isSupported("README.md"));

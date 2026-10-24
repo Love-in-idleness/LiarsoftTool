@@ -2,6 +2,7 @@
 #include "gsc_decompiler.h"
 #include "fileio.h"
 #include "transfile.h"
+#include "encoding_samples.h"
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -92,6 +93,20 @@ int main() {
             require(noStrings.strings.empty(), "Empty GSC gained a string");
             const auto saved = noStrings.toBytes();
             require(GscFile::fromBytes(saved, "CP932").strings.empty(), "Empty GSC cannot be rebuilt");
+            for (const auto& sample : encodingSamples()) {
+                const auto source = std::string(";@gsc-byte-format ") + format +
+                    "\n;@gsc-schema " + (std::string(format) == "modern-36" ? "modern" : "early") +
+                    "\n*TXT 0 0 0 0 \"Name\" \"" + sample.second + "\" 0\n*end\n";
+                const auto encoded = restoreGscFromTsc(source, sample.first);
+                const auto decoded = GscFile::fromBytes(encoded, sample.first);
+                require(decoded.strings == std::vector<std::string>({"Name", sample.second}),
+                        "GSC text changed in an extended encoding");
+                require(decoded.toBytes() == encoded, "GSC encoding round-trip changed bytes");
+                const auto listing = decompileGscBytes(encoded, sample.first);
+                require(listing.find(sample.second) != std::string::npos &&
+                        restoreGscFromTsc(listing, sample.first) == encoded,
+                        "GSC/TSC encoding round-trip changed text or bytes");
+            }
         }
         gsc.strings[0] = u8"😀";
         rejects([&] { gsc.save(file.string()); });

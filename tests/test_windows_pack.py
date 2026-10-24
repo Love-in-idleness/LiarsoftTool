@@ -21,6 +21,8 @@ class WindowsPackTest(unittest.TestCase):
                       "share/locale/ru/LC_MESSAGES/liarsofttool.mo",
                       "share/locale/ru/LC_MESSAGES/gtk40.mo",
                       "share/locale/zh_CN/LC_MESSAGES/liarsofttool.mo",
+                      "share/locale/ja/LC_MESSAGES/liarsofttool.mo",
+                      "share/locale/ja/LC_MESSAGES/gtk40.mo",
                       "share/locale/fr/LC_MESSAGES/gtk40.mo",
                       "lib/gtk-4.0/media/gstreamer.dll",
                       "libexec/gstreamer-1.0/gst-plugin-scanner.exe", "COPYING", "docs/README.md")
@@ -57,6 +59,8 @@ class WindowsPackTest(unittest.TestCase):
         self.assertIn("gtk.dll", gui)
         self.assertIn("libexec/gstreamer-1.0/gst-plugin-scanner.exe", gui)
         self.assertIn("locale/ru/LC_MESSAGES/liarsofttool.mo", gui)
+        self.assertIn("locale/ja/LC_MESSAGES/liarsofttool.mo", gui)
+        self.assertIn("share/locale/ja/LC_MESSAGES/gtk40.mo", gui)
         self.assertIn("share/locale/ru/LC_MESSAGES/gtk40.mo", gui)
         self.assertNotIn("share/locale/fr/LC_MESSAGES/gtk40.mo", gui)
         self.assertFalse(any(name.startswith("bin/") for name in gui))

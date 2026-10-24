@@ -2,6 +2,7 @@
 #define LIARSOFTTOOL_ENCODING_H
 
 #include <string>
+#include <vector>
 
 namespace liarsoft {
 
@@ -19,6 +20,9 @@ std::string convertEncoding(const std::string& input,
 /// rather than strict Shift-JIS, so Windows NEC/IBM extension bytes work on
 /// every supported platform.
 std::string normalizeEncodingName(const std::string& encoding);
+
+/// Encoding choices shared by conversion and resource-preview interfaces.
+const std::vector<std::string>& supportedEncodings();
 
 } // namespace liarsoft
 

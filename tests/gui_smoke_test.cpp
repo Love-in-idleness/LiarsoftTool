@@ -33,13 +33,19 @@ gboolean tick(gpointer) {
             require(options().encoding == "CP932" && options().gscToTsc && !options().recursive &&
                 !options().unpackOnly && !active(ui.packOnly) && !options().vorbisInWav &&
                 options().workers == 0, "conversion defaults changed");
+            for (guint index = 0; index < liarsoft::supportedEncodings().size(); ++index) {
+                gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), index);
+                require(options().encoding == liarsoft::supportedEncodings()[index],
+                        "Conversion encoding index is incorrect");
+            }
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(ui.encoding), 0);
             for (unsigned value = 0; value < 3; ++value) {
                 ui.preferences.theme = value; theme(); savePreferences();
                 require(liarsoft::gui::loadPreferences().theme == value, "theme not saved");
                 const AdwColorScheme expected[] = {ADW_COLOR_SCHEME_DEFAULT, ADW_COLOR_SCHEME_FORCE_LIGHT, ADW_COLOR_SCHEME_FORCE_DARK};
                 require(adw_style_manager_get_color_scheme(adw_style_manager_get_default()) == expected[value], "theme not applied");
             }
-            for (auto language : {"en", "ru", "zh_CN", ""}) {
+            for (auto language : {"en", "ru", "zh_CN", "ja", ""}) {
                 ui.preferences.language = language; savePreferences();
                 require(liarsoft::gui::loadPreferences().language == language, "language not saved");
             }
@@ -99,7 +105,10 @@ int main(int argc, char** argv) {
     if (argc == 2) {
         const std::string language = liarsoft::gui::effectiveLanguage("");
         liarsoft::gui::initializeTranslations(language, argv[0]);
-        const std::string expected = language == "ru" ? "Параметры" : language == "zh_CN" ? "首选项" : "Preferences";
+        const std::string expected = language == "ru" ? "Параметры" : language == "zh_CN" ? "首选项" :
+            language == "ja" ? "設定" : "Preferences";
+        require(language == (std::string(argv[1]).compare(0, 2, "ja") == 0 ? "ja" :
+            std::string(argv[1]) == "fr_FR" ? "en" : argv[1]), "system language detection failed");
         if (_("Preferences") != expected) {
             std::cerr << "language=" << language << " locale=" << std::setlocale(LC_MESSAGES, nullptr)
                       << " catalogs=" << bindtextdomain("liarsofttool", nullptr)

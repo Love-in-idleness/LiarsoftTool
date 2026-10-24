@@ -1,6 +1,6 @@
 # 开发参考：Evermaiden 资源与引擎
 
-[中文](EVERMAIDEN_ENGINE_AUDIT.zh.md) | [English](EVERMAIDEN_ENGINE_AUDIT.en.md) | [Русский](EVERMAIDEN_ENGINE_AUDIT.ru.md)
+[中文](EVERMAIDEN_ENGINE_AUDIT.zh.md) | [English](EVERMAIDEN_ENGINE_AUDIT.en.md) | [Русский](EVERMAIDEN_ENGINE_AUDIT.ru.md) | [日本語](EVERMAIDEN_ENGINE_AUDIT.ja.md)
 
 [返回文档目录](README.zh.md)
 

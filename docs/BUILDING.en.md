@@ -1,6 +1,6 @@
 # Windows builds and packaging
 
-[中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md)
+[中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md) | [日本語](BUILDING.ja.md)
 
 [Project guide](../README.en.md)
 
@@ -33,7 +33,7 @@ python tests/test_windows_pack.py
 
 The output directory must not exist. Publish `liarsofttool.exe` and `liarsofttool-gui.exe`
 separately, not together in a ZIP. Compression and GUI media subprocess support are enabled;
-the CLI includes only its own runtime libraries. Test conversion, all three languages, images and audio
+the CLI includes only its own runtime libraries. Test conversion, all four languages, images and audio
 after packing; producing an EXE alone is not enough.
 
 Linux build hosts can use the same script with Wine installed; paths are converted with `winepath`.

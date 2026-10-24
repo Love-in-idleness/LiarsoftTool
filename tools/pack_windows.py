@@ -46,7 +46,7 @@ def project(bundle, executable, output):
                 relative.parts[:2] != ("share", "licenses") and len(relative.parts) != 1:
             continue
         elif relative.parts[:2] == ("share", "locale"):
-            if relative.parts[2] not in ("en", "ru", "zh_CN"):
+            if relative.parts[2] not in ("en", "ru", "zh_CN", "ja"):
                 continue
             if source.name == "liarsofttool.mo":
                 # The app checks adjacent catalogs; GTK keeps its share/locale layout.

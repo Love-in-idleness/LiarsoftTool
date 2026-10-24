@@ -1,12 +1,13 @@
 # LiarsoftTool
 
-[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md)
+[中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 ![LiarsoftTool](image.png)
 
 LiarsoftTool handles resources from CodeX RScript games, including titles by
 Liar-soft and raiL-soft. It packs and unpacks archives, converts images and audio,
 and extracts or rebuilds scripts.
+The current version does not convert game EXE files.
 
 To port a game to Ren'Py, use it with
 [rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy).
@@ -62,6 +63,9 @@ For dialogue-only changes, edit the text after `>` in TXT and import it using
 the original GSC as the reference. For full script editing, export TSC, edit
 its commands and text, then compile it back. Save TSC as UTF-8 and choose
 the encoding used by the target game when compiling GSC.
+Available encodings are CP932 / Windows-31J, GBK, GB18030, Big5 / CP950,
+Korean CP949, Windows CP1250–CP1258 and UTF-8. Conversion and resource previews
+share the same encoding choices.
 
 GSC→TSC is experimental and does not support every game. Keep the original GSC,
 and retain generated labels and metadata in TSC.
@@ -72,7 +76,7 @@ See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
 Requires a C++17 compiler, CMake, WebP, Vorbis/Ogg and libcurl 7.85 or newer. The GUI also requires
 GTK4 4.10, libadwaita 1.5 or newer, and gettext. Windows and Linux share the same frontend.
 Preferences contain conversion options, the system/light/dark theme and the interface
-language. English, Russian and Simplified Chinese are supported; language changes apply after restart.
+language. English, Russian, Simplified Chinese and Japanese are supported; language changes apply after restart.
 
 On Debian / Ubuntu:
 

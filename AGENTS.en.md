@@ -1,6 +1,6 @@
 # Working agreements
 
-[中文](AGENTS.zh.md) | [English](AGENTS.en.md) | [Русский](AGENTS.ru.md)
+[中文](AGENTS.zh.md) | [English](AGENTS.en.md) | [Русский](AGENTS.ru.md) | [日本語](AGENTS.ja.md)
 
 ## Before starting
 
@@ -21,8 +21,8 @@
 
 - README is for users: purpose, installation, GUI operation and necessary limitations.
 - Maintain CLI options and examples only in program help; point readers to `liarsofttool -h` rather than duplicating them.
-- Follow the user's Chinese wording; English and Russian carry the same information and structure.
-- Maintain every project-authored document as separate `.zh.md`, `.en.md`, `.ru.md` files. The unsuffixed `.md` is navigation only; update all three together.
+- Follow the user's Chinese wording; English, Russian and Japanese carry the same information and structure.
+- Maintain every project-authored document as separate `.zh.md`, `.en.md`, `.ru.md`, `.ja.md` files. The unsuffixed `.md` is navigation only; update all four together.
 - Keep original licenses and third-party legal texts unchanged; translate project-authored explanations separately.
 - Parser fields, legacy migration, error-handling implementation, test logs and commit histories do not belong in user guides.
 - Keep actionable cautions: encoding, backup, version requirements and unsupported features.

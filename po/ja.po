@@ -1,0 +1,257 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: LiarsoftTool 2.3.0\n"
+"PO-Revision-Date: 2026-10-24 00:00+0000\n"
+"Last-Translator: LiarsoftTool contributors\n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "Copy details"
+msgstr "詳細をコピー"
+
+msgid "Close"
+msgstr "閉じる"
+
+msgid "Open releases"
+msgstr "リリースページを開く"
+
+msgid "Could not open the link"
+msgstr "リンクを開けませんでした"
+
+msgid "Operation failed"
+msgstr "操作に失敗しました"
+
+msgid "Please wait for the operation to finish."
+msgstr "処理の完了をお待ちください。"
+
+msgid "Ready"
+msgstr "準備完了"
+
+msgid "Unsupported input"
+msgstr "未対応の入力"
+
+msgid "Converting…"
+msgstr "変換中…"
+
+msgid "Skipped"
+msgstr "スキップ"
+
+msgid "OK (PCM retained)"
+msgstr "完了（PCM を保持）"
+
+msgid "OK"
+msgstr "完了"
+
+msgid "Warning"
+msgstr "警告"
+
+msgid "Failed"
+msgstr "失敗"
+
+msgid "Error"
+msgstr "エラー"
+
+msgid "Input"
+msgstr "入力"
+
+msgid "Output"
+msgstr "出力"
+
+msgid "Completed with errors"
+msgstr "完了（一部エラー）"
+
+msgid "All done"
+msgstr "すべて完了"
+
+msgid "Completed with warnings"
+msgstr "完了（警告あり）"
+
+msgid "Checking GitHub for updates…"
+msgstr "GitHub で更新を確認中…"
+
+msgid "Update check complete"
+msgstr "更新確認完了"
+
+msgid "Update check failed"
+msgstr "更新を確認できませんでした"
+
+msgid "A new version is available"
+msgstr "新しいバージョンがあります"
+
+msgid "No newer release is available"
+msgstr "新しいリリースはありません"
+
+msgid "Current"
+msgstr "現在"
+
+msgid "Latest"
+msgstr "最新"
+
+msgid "Output directory"
+msgstr "出力ディレクトリ"
+
+msgid "Reference GSC"
+msgstr "参照 GSC"
+
+msgid "Select input"
+msgstr "入力を選択"
+
+msgid "Preferences"
+msgstr "設定"
+
+msgid "Appearance and language"
+msgstr "外観と言語"
+
+msgid "Follow system"
+msgstr "システムに従う"
+
+msgid "Light"
+msgstr "ライト"
+
+msgid "Dark"
+msgstr "ダーク"
+
+msgid "Theme"
+msgstr "テーマ"
+
+msgid "System language"
+msgstr "システム言語"
+
+msgid "Language (after restart)"
+msgstr "言語（再起動後に反映）"
+
+msgid "Conversion"
+msgstr "変換"
+
+msgid "Resource encoding"
+msgstr "リソースの文字コード"
+
+msgid "Recursive"
+msgstr "再帰処理"
+
+msgid "Pack only"
+msgstr "アーカイブ作成のみ"
+
+msgid "Unpack only"
+msgstr "展開のみ"
+
+msgid "GSC → TXT (instead of TSC)"
+msgstr "GSC → TXT（TSC の代わりに）"
+
+msgid "Vorbis-in-WAV"
+msgstr "WAV に Vorbis を格納"
+
+msgid "Threads (0 = automatic)"
+msgstr "スレッド数（0 は自動）"
+
+msgid "Same as input"
+msgstr "入力と同じ場所"
+
+msgid "Choose…"
+msgstr "選択…"
+
+msgid "Reference GSC for TXT"
+msgstr "TXT の参照 GSC"
+
+msgid "Check for updates"
+msgstr "更新を確認"
+
+msgid "Conversion tasks"
+msgstr "変換タスク"
+
+msgid "Add files"
+msgstr "ファイルを追加"
+
+msgid "Add folder"
+msgstr "フォルダーを追加"
+
+msgid "Remove"
+msgstr "削除"
+
+msgid "Clear"
+msgstr "一覧を消去"
+
+msgid "Convert all"
+msgstr "すべて変換"
+
+msgid "Could not read preferences"
+msgstr "設定を読み込めませんでした"
+
+msgid "Resources"
+msgstr "リソース"
+
+msgid "Preview failed; raw bytes remain available."
+msgstr "プレビューに失敗しました。元のバイト列は表示できます。"
+
+msgid "No decoder for this entry. Use the hex view, or double-click to open an archive."
+msgstr "この項目のデコーダーはありません。16 進表示を使うか、ダブルクリックでアーカイブを開いてください。"
+
+msgid "Export complete"
+msgstr "書き出し完了"
+
+msgid "entries"
+msgstr "項目"
+
+msgid "bytes"
+msgstr "bytes"
+
+msgid "Export cannot overwrite its source file."
+msgstr "元ファイルへの上書きはできません。"
+
+msgid "Export original bytes"
+msgstr "元のバイト列を書き出す"
+
+msgid "Open resource"
+msgstr "リソースを開く"
+
+msgid "Open file"
+msgstr "ファイルを開く"
+
+msgid "Open folder"
+msgstr "フォルダーを開く"
+
+msgid "Back"
+msgstr "戻る"
+
+msgid "Resource setting"
+msgstr "リソース設定"
+
+msgid "Text and archive filename encoding"
+msgstr "テキストとアーカイブ内ファイル名の文字コード"
+
+msgid "Open a folder or archive. Browsing never unpacks or changes the input."
+msgstr "フォルダーかアーカイブを開いてください。閲覧時に展開や入力の変更は行いません。"
+
+msgid "Text"
+msgstr "テキスト"
+
+msgid "Image zoom"
+msgstr "画像の倍率"
+
+msgid "Image"
+msgstr "画像"
+
+msgid "Volume"
+msgstr "音量"
+
+msgid "Audio"
+msgstr "音声"
+
+msgid "Previous page"
+msgstr "前のページ"
+
+msgid "Next page"
+msgstr "次のページ"
+
+msgid "Hex"
+msgstr "16 進表示"
+
+msgid "Add to conversion tasks"
+msgstr "変換タスクに追加"
+
+msgid "Unknown type"
+msgstr "不明な形式"

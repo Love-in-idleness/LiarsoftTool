@@ -1,6 +1,6 @@
 # Техническая справка: ресурсы Jeanne / Kagerou
 
-[中文](JEANNE_KAGEROU_ENGINE_AUDIT.zh.md) | [English](JEANNE_KAGEROU_ENGINE_AUDIT.en.md) | [Русский](JEANNE_KAGEROU_ENGINE_AUDIT.ru.md)
+[中文](JEANNE_KAGEROU_ENGINE_AUDIT.zh.md) | [English](JEANNE_KAGEROU_ENGINE_AUDIT.en.md) | [Русский](JEANNE_KAGEROU_ENGINE_AUDIT.ru.md) | [日本語](JEANNE_KAGEROU_ENGINE_AUDIT.ja.md)
 
 [Документация](README.ru.md) · [Руководство](../README.ru.md)
 

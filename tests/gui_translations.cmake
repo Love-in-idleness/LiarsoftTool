@@ -4,7 +4,7 @@ execute_process(COMMAND "${XGETTEXT}" --language=C++ --from-code=UTF-8
 if(NOT result EQUAL 0)
     message(FATAL_ERROR "Cannot collect GUI messages: ${error}")
 endif()
-foreach(language ru zh_CN)
+foreach(language ru zh_CN ja)
     execute_process(COMMAND "${MSGCMP}" "${SOURCE_DIR}/po/${language}.po" "${BUILD_DIR}/gui-test.pot"
         RESULT_VARIABLE result ERROR_VARIABLE error)
     if(NOT result EQUAL 0)

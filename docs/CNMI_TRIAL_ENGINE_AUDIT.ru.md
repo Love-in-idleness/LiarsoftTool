@@ -1,6 +1,6 @@
 # Техническая справка: ресурсы пробной CNMI
 
-[中文](CNMI_TRIAL_ENGINE_AUDIT.zh.md) | [English](CNMI_TRIAL_ENGINE_AUDIT.en.md) | [Русский](CNMI_TRIAL_ENGINE_AUDIT.ru.md)
+[中文](CNMI_TRIAL_ENGINE_AUDIT.zh.md) | [English](CNMI_TRIAL_ENGINE_AUDIT.en.md) | [Русский](CNMI_TRIAL_ENGINE_AUDIT.ru.md) | [日本語](CNMI_TRIAL_ENGINE_AUDIT.ja.md)
 
 [Документация](README.ru.md) · [Руководство](../README.ru.md)
 

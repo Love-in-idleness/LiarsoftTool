@@ -51,7 +51,7 @@ if(BUILD_GUI)
     pkg_check_modules(ADWAITA REQUIRED IMPORTED_TARGET libadwaita-1>=1.5 gtk4>=4.10)
     find_package(Intl REQUIRED)
     find_program(MSGFMT msgfmt REQUIRED)
-    foreach(language ru zh_CN)
+    foreach(language ru zh_CN ja)
         set(catalog "${CMAKE_CURRENT_BINARY_DIR}/locale/${language}/LC_MESSAGES/liarsofttool.mo")
         add_custom_command(OUTPUT "${catalog}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/locale/${language}/LC_MESSAGES"
@@ -109,7 +109,7 @@ add_library(liarsofttool_core STATIC
     src/lim_decoder.cpp
     src/lwg_decoder.cpp
     src/wav_ogg.cpp
-    src/exe_patch.cpp
+    # src/exe_patch.cpp # EXE conversion is disabled in production builds.
     src/stb_impl.cpp
     src/stb_image_impl.cpp
 )
@@ -187,8 +187,11 @@ if(BUILD_TESTING)
     add_executable(wav_ogg_test tests/wav_ogg_test.cpp)
     add_test(NAME wav_ogg COMMAND wav_ogg_test)
 
-    add_executable(exe_patch_test tests/exe_patch_test.cpp)
+    add_executable(exe_patch_test tests/exe_patch_test.cpp src/exe_patch.cpp)
     add_test(NAME exe_patch COMMAND exe_patch_test)
+    add_test(NAME exe_conversion_disabled COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool> -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/exe_disabled_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/exe_disabled_test.cmake)
 
     add_executable(gsc_decompiler_test tests/gsc_decompiler_test.cpp)
     add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
@@ -216,7 +219,7 @@ if(BUILD_TESTING)
         add_dependencies(gui_browser_test gui_translations)
         target_link_libraries(gui_smoke_test PRIVATE liarsofttool_gui_preferences liarsofttool_updates)
         add_dependencies(gui_smoke_test gui_translations)
-        foreach(language en ru zh_CN fr_FR)
+        foreach(language en ru zh_CN ja ja_JP fr_FR)
             add_test(NAME gui_language_${language} COMMAND gui_smoke_test ${language})
         endforeach()
         if(WIN32)

@@ -1,6 +1,6 @@
 # Техническая справка: ресурсы и движок CannonBall
 
-[中文](CANNONBALL_ENGINE_AUDIT.zh.md) | [English](CANNONBALL_ENGINE_AUDIT.en.md) | [Русский](CANNONBALL_ENGINE_AUDIT.ru.md)
+[中文](CANNONBALL_ENGINE_AUDIT.zh.md) | [English](CANNONBALL_ENGINE_AUDIT.en.md) | [Русский](CANNONBALL_ENGINE_AUDIT.ru.md) | [日本語](CANNONBALL_ENGINE_AUDIT.ja.md)
 
 [Документация](README.ru.md) · [Руководство](../README.ru.md)
 
