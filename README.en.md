@@ -96,7 +96,7 @@ build. See [build instructions](docs/BUILDING.en.md) for Windows and packaging.
 
 ## Further reading
 
-The [VS Code TSC extension](tsc-vscode/README.en.md) provides highlighting, checks and compilation.
+The [VS Code TSC extension](tsc-vscode/README.en.md) provides highlighting, checks, compilation and graphical story authoring, prioritizing SevenBridge with a Forest profile retained.
 It is maintained only on `codex/tsc-vscode`, packaged locally as a VSIX, not published to the Marketplace.
 
 See the [roadmap](docs/ROADMAP.en.md) for planned work.

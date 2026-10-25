@@ -15,10 +15,11 @@ Keep common conversion entry points, options and defaults. Browsing does not cha
 Provide Chinese, English, Russian and Japanese documentation together. Do not automatically push, release or raise versions.
 This is a plan, not a list of shipped features.
 
-## Long-term: graphical TSC editor
+## Graphical TSC editor: first version on its own branch
 
-A future editor will support dialogue, resources, conditions, choices and flow using LiarsoftTool checking and compilation.
-Interaction and supported scope remain undecided. This phase adds neither an implementation nor an editor framework.
+The latest scope adds paragraph/event/connection authoring, source switching, static resource previews and native-engine export on `codex/tsc-vscode`.
+Japanese SevenBridge is the priority, with a Forest profile retained; other games are not being added.
+This first version still needs original-game acceptance. It is not an engine simulator and is not merged into master. See the [guide](../tsc-vscode/README.en.md).
 
 Experimental `--pure-renpy` is a long-term rscript2renpy goal: see its
 [roadmap](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.en.md).

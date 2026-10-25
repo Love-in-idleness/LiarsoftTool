@@ -88,7 +88,7 @@ Windows 编译和打包见 [构建说明](docs/BUILDING.zh.md)。
 
 ## 更多说明
 
-[VS Code TSC 插件](tsc-vscode/README.zh.md)提供高亮、检查和编译。
+[VS Code TSC 插件](tsc-vscode/README.zh.md)提供高亮、检查、编译与图形化剧情创作，当前优先适配 SevenBridge，保留 Forest 配置。
 插件只在 `codex/tsc-vscode` 分支维护，可在本地构建 VSIX，不发布到扩展市场。
 
 [文档目录](docs/README.zh.md) · [TSC 指令参考](docs/GSC_OPCODE_REFERENCE.zh.md)

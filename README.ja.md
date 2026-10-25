@@ -68,7 +68,7 @@ cmake --build build -j2
 
 ## 関連資料
 
-[CodeX TSC 拡張](tsc-vscode/README.ja.md)は、この独立ブランチにある VS Code 用のハイライト・検査・コンパイル支援です。
+[CodeX TSC 拡張](tsc-vscode/README.ja.md)は、この独立ブランチにある VS Code 用の構文強調・検証・コンパイルとシナリオグラフ編集です。SevenBridge を優先し、Forest 設定も保持しています。
 
 [文書一覧](docs/README.ja.md) · [TSC 命令リファレンス](docs/GSC_OPCODE_REFERENCE.ja.md) · [開発計画](docs/ROADMAP.ja.md)
 

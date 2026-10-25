@@ -16,10 +16,11 @@
 必须由使用者触发。使用说明同步维护中英俄日四语，不自动推送、发布或提高版本。
 本页是规划，不是已实现功能清单。
 
-## 长期规划：图形化 TSC 编辑器
+## 图形化 TSC 编辑器：独立分支首版
 
-未来按对白、资源、条件、选项和流程等语义提供创作界面，复用 LiarsoftTool
-的检查和编译能力。具体交互和支持范围另行确定，本轮不实现、不预建编辑器框架。
+按最新安排，`codex/tsc-vscode` 已提供段落／事件／连线创作、源码切换、静态资源预览和原引擎导出。
+优先核对 SevenBridge 日文版，保留 Forest 配置；其他游戏暂不扩展。
+这是待原游戏人工验收的首版，不是引擎模拟器，也未合并至主分支。见[使用说明](../tsc-vscode/README.zh.md)。
 
 实验性 `--pure-renpy` 属于 rscript2renpy 的长期目标，见
 [对应规划](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.md)。

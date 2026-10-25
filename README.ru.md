@@ -101,7 +101,7 @@ cmake --build build -j2
 
 ## Другие материалы
 
-[Расширение TSC для VS Code](tsc-vscode/README.ru.md) предоставляет подсветку, проверку и компиляцию.
+[Расширение TSC для VS Code](tsc-vscode/README.ru.md) предоставляет подсветку, проверку, компиляцию и графическое создание сценариев; приоритет — SevenBridge, профиль Forest сохранён.
 Оно поддерживается только в `codex/tsc-vscode` и собирается в локальный VSIX, без публикации в Marketplace.
 
 [Документация](docs/README.ru.md) · [План развития](docs/ROADMAP.ru.md)
