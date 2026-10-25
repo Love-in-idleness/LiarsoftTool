@@ -90,9 +90,15 @@ function App() {
         <div className="toolbar">{['paragraph', 'condition', 'choice', 'end'].map(kind => <button key={kind} onClick={() => addNode(kind)} disabled={disabled || !state.config}>{t(kind[0].toUpperCase() + kind.slice(1))} +</button>)}
             <button disabled={disabled || !edge} onClick={() => { const current = state.graph.edges.find(e => e.id === edge); if (current) edit({ type: 'disconnect', node: current.source, handle: current.sourceHandle }); setEdge(null); }}>{t('Disconnect selected edge')}</button>
             <span role="status">{pending ? t('Refreshing…') : state?.config?.profile}</span></div>
-        <div className="workspace"><section className="canvas" aria-label={t('Story graph')}><ReactFlow nodes={nodes} edges={(state?.graph.edges || []).map(e => ({ ...e, label: t(e.sourceHandle), selected: e.id === edge }))}
+        <div className="workspace"><section className="canvas" aria-label={t('Story graph')} onKeyUp={event => {
+            if (event.key.startsWith('Arrow') && event.target.closest('.react-flow__node')) {
+                const current = flowView.current?.getNode(selected);
+                if (current) edit({ type: 'move', node: current.id, x: current.position.x, y: current.position.y });
+            }
+        }}><ReactFlow nodes={nodes} edges={(state?.graph.edges || []).map(e => ({ ...e, label: t(e.sourceHandle), selected: e.id === edge }))}
             ariaLabelConfig={ariaLabelConfig}
             onInit={instance => { flowView.current = instance; }}
+            onSelectionChange={({ nodes, edges }) => { if (nodes.length === 1) select(nodes[0].id); if (edges.length === 1) setEdge(edges[0].id); }}
             nodeTypes={nodeTypes} onNodesChange={onNodesChange} onNodeClick={(_, n) => { select(n.id); setPredecessor(''); setEdge(null); }}
             onEdgeClick={(_, e) => setEdge(e.id)} onNodeDragStop={(_, n) => edit({ type: 'move', node: n.id, x: n.position.x, y: n.position.y })}
             onConnect={e => edit({ type: 'connect', node: e.source, target: e.target, handle: e.sourceHandle })}
