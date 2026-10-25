@@ -84,6 +84,12 @@ test('invalid source disables mutations and malformed editor comments remain ord
         assert(!node.metadata); assert.equal(node.id, 'start');
     }
 });
+test('return terminates a paragraph instead of leaving a misleading outgoing connection', async () => {
+    const text = await edit(g.newScene('sevenbridge'), { type: 'appendEvent', node: 'start', event: 'return' }, 'sevenbridge');
+    const doc = await inspect(text, tool), graph = g.graph(text, doc);
+    assert(graph.nodes[0].flowEnd); assert(!graph.edges.some(e => e.source === 'start'));
+    assert.throws(() => g.mutate(text, doc, { type: 'connect', node: 'start', target: g.stop }), /port/);
+});
 test('static preview follows known context, honors clears, colors, and warns on merges/cycles', async () => {
     const body = g.event('background', { image: 12, x: 4, y: 5 }, 'forest') + g.event('sprite', { image: 13 }, 'forest') + g.event('dialogue', { speaker: 2, text: '^cyYellow^cgGreen^cwWhite\nline' }, 'forest');
     let text = g.newScene('forest').replace('*goto _editor_stop', body + '*goto _editor_stop');
@@ -99,5 +105,12 @@ test('static preview follows known context, honors clears, colors, and warns on 
     assert(!staticState(merge, await inspect(merge, tool), g.stop, 'start').warnings.length);
     const cycle = text.replace('*goto _editor_stop', '*goto start');
     assert.match(staticState(cycle, await inspect(cycle, tool), 'start').warnings.join(), /Cycle/);
+    const call = text.replace('*goto _editor_stop', '*gosub 501\n*goto _editor_stop');
+    const called = staticState(call, await inspect(call, tool), 'start');
+    assert.equal(called.layers.length, 0); assert.match(called.warnings.join(), /Scene calls/);
+    const anchored = text.replace('*load 10', '*locmode 10 1 1\n*load 10');
+    assert(!staticState(anchored, await inspect(anchored, tool), 'start').layers.some(l => l.layer === 10));
+    const mergeDoc = await inspect(merge, tool);
+    assert.throws(() => staticState(merge, mergeDoc, g.stop, 'nonexistent'), /predecessor/);
     assert.equal(textRuns('plain').speaker, 999);
 });

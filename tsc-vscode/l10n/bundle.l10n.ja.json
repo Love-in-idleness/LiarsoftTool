@@ -1,0 +1,18 @@
+{
+  "LiarsoftTool failed. See the LiarsoftTool TSC output for details.": "LiarsoftTool の実行に失敗しました。出力パネルの詳細を確認してください。",
+  "Trust this workspace before running LiarsoftTool.": "LiarsoftTool を実行する前にワークスペースを信頼してください。",
+  "Open a local TSC file first.": "先にローカル TSC ファイルを開いてください。", "Save": "保存",
+  "Save this file before checking or compiling?": "検証またはコンパイルの前にファイルを保存しますか？",
+  "The tool did not return TSC diagnostics.": "TSC の検証結果が返されませんでした。--check-tsc 対応の LiarsoftTool が必要です。",
+  "GSC compilation failed.": "GSC のコンパイルに失敗しました。", "GSC written: {0}": "GSC 出力先：{0}",
+  "TSC editor: {0}": "TSC エディター：{0}", "Open a scene in a TSC project first.": "先に TSC プロジェクト内のシーンを開いてください。",
+  "Target engine": "対象エンジン", "Unpacked game resource working copy": "展開済みゲーム素材の作業用コピー", "Parent folder for the new project": "新規プロジェクトの親フォルダー",
+  "New project folder name": "新規プロジェクトのフォルダー名", "Use a simple folder name": "パス区切りを含まないフォルダー名を入力してください",
+  "First scene number": "最初のシーン番号", "Choose a number from 0000 to 32767": "0000〜32767 の番号を入力してください", "New scene number": "新規シーン番号",
+  "Save project files before building?": "ビルド前にプロジェクトを保存しますか？", "Building TSC project": "TSC プロジェクトをビルド中", "Build written: {0}": "ビルド出力先：{0}",
+  "Resource kind": "素材の種類", "background": "背景", "sprite": "立ち絵", "music": "音楽", "sound": "効果音", "voice": "ボイス", "nameplate": "名前画像",
+  "Import resource": "素材を追加", "Resource name": "素材名", "Resource number (existing numbers replace resources only in exported output)": "素材番号（既存番号の置換は出力先のみ）", "Invalid resource number": "素材番号が無効です",
+  "Variable name": "変数名", "Register number: choose a free register; original game scripts may already use it": "レジスター番号：元のシナリオで使われていないことを確認してください", "Choose a register from 16 to 6999": "16〜6999 のレジスター番号を入力してください",
+  "Character name": "キャラクター名", "Nameplate number (gfNNN); 999 means narration": "名前画像番号（gfNNN）；999 は地の文", "Choose a number from 0 to 999": "0〜999 の番号を入力してください", "This nameplate is already registered": "この名前画像は登録済みです",
+  "Source changed; wait for the graph to refresh": "ソースが変わりました。グラフの更新をお待ちください", "Only the first LWG frame is previewed": "LWG の最初のフレームのみ表示します"
+}

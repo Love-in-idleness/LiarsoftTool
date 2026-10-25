@@ -23,6 +23,7 @@ function editor(source) {
         DiagnosticSeverity: { Error: 0, Warning: 1 },
         languages: { createDiagnosticCollection: () => ({ ...disposable, set: (uri, value) => entries.set(uri.toString(), value), delete: uri => entries.delete(uri.toString()) }) },
         window: {
+            registerCustomEditorProvider: () => disposable,
             activeTextEditor: { document: doc },
             createOutputChannel: () => ({ ...disposable, appendLine: text => logs.push(text), show() {} }),
             showWarningMessage: async text => { warnings.push(text); return replies.shift(); },

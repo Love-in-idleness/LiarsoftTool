@@ -1,4 +1,6 @@
 node_modules/**
 test/**
+webview/**
+build.js
 package-lock.json
 **/*.vsix

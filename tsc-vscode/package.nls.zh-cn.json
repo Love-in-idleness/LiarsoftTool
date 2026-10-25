@@ -1,5 +1,7 @@
 {
-  "description": "TSC 高亮、复用编译器的错误检查与本机 GSC 编译。",
+  "description": "Forest/SevenBridge 的 TSC 图形化剧情创作、高亮、检查与 GSC 编译。",
+  "graph": "打开剧情图", "newProject": "新建 TSC 工程", "newScene": "新建场景", "buildProject": "构建 TSC 工程",
+  "importAsset": "导入资源", "addVariable": "添加命名变量", "addCharacter": "添加角色", "projectSettings": "打开工程设置",
   "trust": "受限模式可使用高亮；检查和编译需要信任工作区。",
   "check": "检查已保存文件",
   "compile": "将已保存文件编译为 GSC",

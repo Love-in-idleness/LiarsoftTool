@@ -71,8 +71,11 @@ function graph(text, document) {
             }
         }
         if (group) node.events.push(group);
+        const terminalIndex = node.commands.findIndex(c => [5, 8, 12, 14, 16].includes(c.opcode));
+        const reachable = terminalIndex < 0 ? node.commands : node.commands.slice(0, terminalIndex + 1);
+        node.flowEnd = [8, 12, 16].includes(reachable.at(-1)?.opcode);
         const targets = [];
-        for (const command of node.commands) {
+        for (const command of reachable) {
             const refs = command.tokens.filter(t => t.role === 'target');
             if ([3, 4, 5, 14].includes(command.opcode))
                 refs.slice(0, command.opcode === 14 ? Number(command.tokens[1].value) : 1).forEach((token, index) =>
@@ -82,7 +85,7 @@ function graph(text, document) {
             const next = targets.find(t => t.handle === 'next'); if (next) next.handle = 'true';
         }
         for (const target of targets) edges.push({ id: `${node.id}:${target.token.start}`, source: node.id, target: target.token.value, sourceHandle: target.handle, token: target.token });
-        const last = node.commands.at(-1);
+        const last = reachable.at(-1);
         if (!targets.length && nodes[i + 1] && (!last || ![8, 12, 16].includes(last.opcode)))
             edges.push({ id: `${node.id}:fallthrough`, source: node.id, target: nodes[i + 1].id, sourceHandle: 'next', implicit: true });
     }
@@ -96,7 +99,7 @@ function newScene(engine) {
     const p = profile(engine);
     return `;@gsc-byte-format ${p.byteFormat}\n;@gsc-schema ${p.schema}\n` +
         `${marker}${JSON.stringify({ title: 'Start', kind: 'paragraph', x: 0, y: 0 })}\n:start\n*goto ${stop}\n` +
-        `${marker}${JSON.stringify({ title: 'End', kind: 'end', x: 360, y: 0 })}\n:${stop}\n*end\n`;
+        `${marker}${JSON.stringify({ title: 'End', kind: 'end', x: 280, y: 0 })}\n:${stop}\n*end\n`;
 }
 function flow(kind, fields, engine) {
     const p = profile(engine), target = label(fields.target || stop);
@@ -127,7 +130,7 @@ function event(type, fields, engine) {
         if (!/^[A-Za-z0-9_]+$/.test(folder)) throw new Error('Invalid image folder');
         return `*queue\n*folder ${layer} ${quote(folder)}\n*locmode ${layer} 0 0\n*load ${layer} ${n('image', 1, 0)} ${n('x')} ${n('y')} 0 0\n*update 0 0 0\n`;
     }
-    case 'clear': return `*cls ${n('layer', 30, 1, 49)} 0\n`;
+    case 'clear': return `*queue\n*cls ${n('layer', 30, 1, 49)} 0\n*update 0 0 0\n`;
     case 'music': return `*bgm_on ${n('track', 1, 1)} ${p.bgmOperands.join(' ')}\n`;
     case 'stopMusic': return '*bgm_off ' + (engine === 'forest' ? '0' : '0 0') + '\n';
     case 'voice': return `*voice ${n('voice', 1, 0, 0xffffffff)} 0 0 0\n`;
@@ -179,7 +182,7 @@ function mutate(text, doc, operation, engine) {
         if (g.edges.filter(e => e.source === node.id && e.sourceHandle === (operation.handle || 'next')).length > 1)
             throw new Error('Edit complex control flow in source');
         if (edge?.token) return [{ start: edge.token.start, end: edge.token.end, text: target }];
-        if (node.meta.kind === 'end' || [3, 4, 14].some(op => node.commands.some(c => c.opcode === op))) throw new Error('This output port cannot be connected');
+        if (node.meta.kind === 'end' || [3, 4, 12, 14, 16].some(op => node.commands.some(c => c.opcode === op))) throw new Error('This output port cannot be connected');
         const terminal = node.commands.at(-1);
         if (terminal?.opcode === 8) return [{ start: terminal.start, end: terminal.end, text: '*goto ' + target + eol }];
         return [{ start: node.end, end: node.end, text: '*goto ' + target + eol }];
@@ -188,7 +191,9 @@ function mutate(text, doc, operation, engine) {
         if (node.id === stop) throw new Error('The disconnected-edge destination must stay empty');
         const terminal = node.commands.find(c => [3, 4, 5, 8, 12, 14, 16].includes(c.opcode));
         const terminalEvent = node.events.find(e => e.commands.includes(terminal));
+        if (operation.event === 'return' && node.commands.some(c => [3, 4, 12, 14, 16].includes(c.opcode))) throw new Error('Use return in a paragraph without branching');
         return [{ start: terminalEvent?.start ?? terminal?.start ?? node.end, end: terminalEvent?.start ?? terminal?.start ?? node.end,
+            ...(operation.event === 'return' && terminal ? { end: terminal.end } : {}),
             text: nl(';@editor-event ' + operation.event + '\n' + event(operation.event, operation.fields || {}, engine) + ';@editor-event-end\n') }];
     }
     if (operation.type === 'setToken') {

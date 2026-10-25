@@ -6,5 +6,15 @@
   "Save this file before checking or compiling?": "是否先保存此文件，再检查或编译？",
   "The tool did not return TSC diagnostics.": "工具未返回 TSC 检查结果，请使用支持 --check-tsc 的 LiarsoftTool。",
   "GSC compilation failed.": "GSC 编译失败。",
-  "GSC written: {0}": "已生成 GSC：{0}"
+  "GSC written: {0}": "已生成 GSC：{0}",
+  "TSC editor: {0}": "TSC 编辑器：{0}", "Open a scene in a TSC project first.": "请先打开 TSC 工程中的场景。",
+  "Target engine": "目标引擎", "Unpacked game resource working copy": "解包后的游戏资源工作副本", "Parent folder for the new project": "新工程的上级文件夹",
+  "New project folder name": "新工程文件夹名称", "Use a simple folder name": "请输入不含路径分隔符的文件夹名",
+  "First scene number": "首个场景编号", "Choose a number from 0000 to 32767": "请输入 0000 至 32767 的编号", "New scene number": "新场景编号",
+  "Save project files before building?": "构建前是否保存工程文件？", "Building TSC project": "正在构建 TSC 工程", "Build written: {0}": "已生成构建：{0}",
+  "Resource kind": "资源类型", "background": "背景", "sprite": "立绘", "music": "音乐", "sound": "音效", "voice": "语音", "nameplate": "姓名牌",
+  "Import resource": "导入资源", "Resource name": "资源名称", "Resource number (existing numbers replace resources only in exported output)": "资源编号（已有编号仅在导出目录替换资源）", "Invalid resource number": "资源编号无效",
+  "Variable name": "变量名称", "Register number: choose a free register; original game scripts may already use it": "寄存器编号：请确认未被原游戏脚本使用", "Choose a register from 16 to 6999": "请输入 16 至 6999 的寄存器编号",
+  "Character name": "角色名称", "Nameplate number (gfNNN); 999 means narration": "姓名牌编号（gfNNN）；999 表示旁白", "Choose a number from 0 to 999": "请输入 0 至 999 的编号", "This nameplate is already registered": "该姓名牌已登记",
+  "Source changed; wait for the graph to refresh": "源码已改变，请等待剧情图刷新", "Only the first LWG frame is previewed": "仅预览 LWG 的第一帧"
 }

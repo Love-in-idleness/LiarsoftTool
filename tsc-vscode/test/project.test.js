@@ -6,6 +6,7 @@ const path = require('node:path');
 const p = require('../src/project');
 const g = require('../src/graph');
 const { runTool } = require('../src/tool');
+const { wav } = require('./media-fixture');
 const tool = process.env.LIARSOFTTOOL_PATH || path.resolve(__dirname, '../../build/liarsofttool');
 const temp = fs.mkdtemp(path.join(os.tmpdir(), 'tsc-project-'));
 after(async () => fs.rm(await temp, { recursive: true, force: true }));
@@ -86,4 +87,12 @@ test('malformed audio fails rather than copying junk to the exported game', asyn
     await p.importAsset(project, wav, 'sound', 'Broken', 4);
     await assert.rejects(p.buildProject(project, tool));
     await assert.rejects(fs.access(path.join(project.root, 'build', 'wav', '0004.wav')));
+});
+test('valid PCM audio previews and exports unchanged with native grouped voice paths', async () => {
+    const project = await fixture('sevenbridge'), file = path.join(await temp, 'tone.wav'), audio = wav(); await fs.writeFile(file, audio);
+    await p.importAsset(project, file, 'voice', 'Test voice', 10001);
+    const preview = await p.previewFile(file, path.join(project.root, 'audio-cache'), tool);
+    assert.deepEqual(await fs.readFile(preview), audio);
+    const result = await p.buildProject(project, tool);
+    assert.deepEqual(await fs.readFile(path.join(result.output, 'voice', '1', '0001.wav')), audio);
 });

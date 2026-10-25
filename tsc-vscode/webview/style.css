@@ -1,0 +1,20 @@
+:root { font-family: var(--vscode-font-family, sans-serif); color: var(--vscode-foreground, #ddd); background: var(--vscode-editor-background, #202124); }
+* { box-sizing: border-box; } body { padding: 0; margin: 0; } button, input, select, textarea { font: inherit; }
+button { color: var(--vscode-button-foreground, white); background: var(--vscode-button-background, #2463a6); border: 1px solid transparent; border-radius: 4px; padding: 6px 9px; cursor: pointer; }
+button:hover { filter: brightness(1.12); } button:disabled { opacity: .45; cursor: default; } button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--vscode-focusBorder, #50aaff); }
+input, select, textarea { width: 100%; color: var(--vscode-input-foreground, #eee); background: var(--vscode-input-background, #303236); border: 1px solid var(--vscode-input-border, #555); border-radius: 3px; padding: 5px; }
+textarea { min-height: 70px; resize: vertical; } label { display: block; margin: 9px 0; font-size: 12px; } label small { opacity: .65; } h1 { font-size: 17px; margin: 0 auto 0 0; } h2 { font-size: 16px; } h3 { font-size: 14px; }
+header, .toolbar { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; padding: 10px; border-bottom: 1px solid var(--vscode-panel-border, #444); }
+.toolbar span { margin-left: auto; font-size: 12px; opacity: .7; } .notice, .error { padding: 10px; } .notice { background: var(--vscode-textBlockQuote-background, #333); } .error { white-space: pre-wrap; color: var(--vscode-errorForeground, #ff8080); }
+.workspace { display: grid; grid-template-columns: minmax(350px, 1fr) 300px; height: 62vh; min-height: 420px; }
+.canvas { min-width: 0; } aside { overflow: auto; padding: 12px; border-left: 1px solid var(--vscode-panel-border, #444); } article { margin: 12px 0; border: 1px solid var(--vscode-panel-border, #555); padding: 9px; }
+.story-node { width: 230px; min-height: 115px; padding: 13px 48px 12px 13px; border-radius: 7px; color: var(--vscode-foreground, #ddd); background: var(--vscode-sideBar-background, #262a30); border: 1px solid var(--vscode-panel-border, #666); box-shadow: 0 3px 8px #0003; }
+.story-node.selected { outline: 2px solid var(--vscode-focusBorder, #50aaff); } .story-node strong, .story-node code, .story-node small { display: block; overflow: hidden; text-overflow: ellipsis; } .story-node small { color: #82afd9; margin-bottom: 6px; }
+.story-node code { font-size: 10px; opacity: .6; margin-top: 5px; } .story-node p { font-size: 11px; white-space: normal; overflow: hidden; max-height: 45px; } .port-label { position: absolute; right: 7px; font-size: 9px; max-width: 42px; overflow: hidden; white-space: nowrap; }
+.react-flow__handle { width: 10px; height: 10px; background: #75b2ed; } .react-flow__edge.selected path { stroke: #f2af49; stroke-width: 3; }
+.react-flow__controls-button { color: var(--vscode-foreground, #ddd); background: var(--vscode-sideBar-background, #262a30); }
+.preview { display: grid; grid-template-columns: 260px 1fr; gap: 15px; padding: 14px; border-top: 1px solid var(--vscode-panel-border, #444); }
+.stage-wrap { overflow: auto; max-height: 620px; } .stage { background: #000; position: relative; isolation: isolate; overflow: hidden; color: white; }
+.stage > img { position: absolute; max-width: none; } .stage > p { padding: 20px; } .dialogue { position: absolute; bottom: 0; left: 0; width: 100%; height: 140px; background: #000b; display: flex; padding: 10px; }
+.dialogue img { max-width: 174px; height: min-content; position: static; } .dialogue p { margin: 0; white-space: pre-wrap; font-size: 22px; padding-left: 10px; line-height: 1.6; } .preview audio { width: 100%; margin: 10px 0; } .warning { color: var(--vscode-editorWarning-foreground, #e8b15b); font-size: 12px; }
+@media (max-width: 800px) { .workspace { grid-template-columns: minmax(250px, 1fr) 240px; } .preview { grid-template-columns: 1fr; } }

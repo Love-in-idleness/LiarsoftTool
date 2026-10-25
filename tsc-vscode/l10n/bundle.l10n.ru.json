@@ -6,5 +6,15 @@
   "Save this file before checking or compiling?": "Сохранить файл перед проверкой или компиляцией?",
   "The tool did not return TSC diagnostics.": "Программа не вернула диагностику TSC. Нужна версия LiarsoftTool с поддержкой --check-tsc.",
   "GSC compilation failed.": "Ошибка компиляции GSC.",
-  "GSC written: {0}": "GSC записан: {0}"
+  "GSC written: {0}": "GSC записан: {0}",
+  "TSC editor: {0}": "Редактор TSC: {0}", "Open a scene in a TSC project first.": "Сначала откройте сцену проекта TSC.",
+  "Target engine": "Целевой движок", "Unpacked game resource working copy": "Рабочая копия распакованных ресурсов игры", "Parent folder for the new project": "Родительская папка нового проекта",
+  "New project folder name": "Имя папки проекта", "Use a simple folder name": "Введите имя папки без разделителей пути",
+  "First scene number": "Номер первой сцены", "Choose a number from 0000 to 32767": "Введите номер от 0000 до 32767", "New scene number": "Номер новой сцены",
+  "Save project files before building?": "Сохранить файлы проекта перед сборкой?", "Building TSC project": "Сборка проекта TSC", "Build written: {0}": "Сборка записана: {0}",
+  "Resource kind": "Тип ресурса", "background": "Фон", "sprite": "Персонаж", "music": "Музыка", "sound": "Звук", "voice": "Голос", "nameplate": "Табличка имени",
+  "Import resource": "Импорт ресурса", "Resource name": "Название ресурса", "Resource number (existing numbers replace resources only in exported output)": "Номер ресурса (замена существующих номеров только в экспортированной сборке)", "Invalid resource number": "Недопустимый номер ресурса",
+  "Variable name": "Название переменной", "Register number: choose a free register; original game scripts may already use it": "Номер регистра: убедитесь, что он свободен в исходных сценариях", "Choose a register from 16 to 6999": "Введите регистр от 16 до 6999",
+  "Character name": "Имя персонажа", "Nameplate number (gfNNN); 999 means narration": "Номер таблички (gfNNN); 999 — повествование", "Choose a number from 0 to 999": "Введите номер от 0 до 999", "This nameplate is already registered": "Эта табличка уже зарегистрирована",
+  "Source changed; wait for the graph to refresh": "Исходник изменён; дождитесь обновления графа", "Only the first LWG frame is previewed": "Показан только первый кадр LWG"
 }

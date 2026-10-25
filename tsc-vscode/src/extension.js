@@ -4,6 +4,7 @@ const { runTool } = require('./tool');
 
 function activate(context, vscode = require('vscode')) {
     const t = vscode.l10n.t;
+    const authoring = require('./authoring').register(context, vscode);
     const output = vscode.window.createOutputChannel('LiarsoftTool TSC');
     const problems = vscode.languages.createDiagnosticCollection('codex-tsc');
     const checks = new Map(), compiling = new Set();
@@ -22,7 +23,7 @@ function activate(context, vscode = require('vscode')) {
         if (!vscode.workspace.isTrusted) {
             vscode.window.showWarningMessage(t('Trust this workspace before running LiarsoftTool.')); return;
         }
-        const doc = vscode.window.activeTextEditor?.document;
+        const doc = authoring.activeDocument() || vscode.window.activeTextEditor?.document;
         if (!eligible(doc)) { vscode.window.showWarningMessage(t('Open a local TSC file first.')); return; }
         if (doc.isDirty) {
             const save = t('Save');

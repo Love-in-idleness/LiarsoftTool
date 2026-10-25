@@ -1,5 +1,7 @@
 {
-  "description": "TSC highlighting, compiler-backed diagnostics and local GSC compilation.",
+  "description": "Graphical TSC story authoring for Forest/SevenBridge, highlighting, checking and GSC compilation.",
+  "graph": "Open story graph", "newProject": "New TSC project", "newScene": "New scene", "buildProject": "Build TSC project",
+  "importAsset": "Import resource", "addVariable": "Add named variable", "addCharacter": "Add character", "projectSettings": "Open project settings",
   "trust": "Highlighting works in Restricted Mode. Checking and compilation require a trusted workspace.",
   "check": "Check saved file",
   "compile": "Compile saved file to GSC",

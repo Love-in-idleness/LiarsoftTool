@@ -18,12 +18,13 @@ test('current TSC token patterns and metadata, strings, labels, expressions', ()
     assert(new RegExp(strings.patterns[0].match).test('\\n'));
     assert(new RegExp(strings.patterns[1].match).test('\\q'));
 });
-test('Chinese and Russian strings cover manifest and runtime messages', () => {
+test('Chinese, Russian and Japanese strings cover manifest and runtime messages', () => {
     const keys = Object.keys(read('package.nls.json')).sort();
-    for (const language of ['ru', 'zh-cn']) {
+    for (const language of ['ru', 'zh-cn', 'ja']) {
         assert.deepEqual(Object.keys(read(`package.nls.${language}.json`)).sort(), keys);
         const strings = read(`l10n/bundle.l10n.${language}.json`);
-        const source = fs.readFileSync(path.join(root, 'src/extension.js'), 'utf8');
+        const source = ['extension', 'authoring'].map(name => fs.readFileSync(path.join(root, 'src', name + '.js'), 'utf8')).join('\n');
         for (const [, text] of source.matchAll(/\bt\('([^']+)'/g)) assert(strings[text], `Missing ${language}: ${text}`);
+        for (const [, text] of source.matchAll(/\b(?:input|choose)\('([^']+)'/g)) assert(strings[text], `Missing ${language}: ${text}`);
     }
 });

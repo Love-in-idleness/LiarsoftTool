@@ -1,0 +1,10 @@
+{
+  "description": "Forest/SevenBridge 向けの TSC グラフ編集、構文強調、検証と GSC コンパイル。",
+  "graph": "シナリオグラフを開く", "newProject": "TSC プロジェクトを新規作成", "newScene": "シーンを新規作成", "buildProject": "TSC プロジェクトをビルド",
+  "importAsset": "素材を追加", "addVariable": "名前付き変数を追加", "addCharacter": "キャラクターを追加", "projectSettings": "プロジェクト設定を開く",
+  "trust": "制限モードでは構文強調のみ利用できます。検証とコンパイルにはワークスペースの信頼が必要です。",
+  "check": "保存済みファイルを検証", "compile": "保存済みファイルを GSC にコンパイル",
+  "path": "インストール済み LiarsoftTool。PATH にない場合は絶対パスを指定してください。自動ダウンロードはしません。",
+  "encoding": "検証とコンパイルに使用するゲームの出力エンコーディングです。TSC ソースは UTF-8 です。",
+  "output": "GSC 出力先。絶対パスまたは TSC からの相対パス。空欄では TSC の隣に出力し、既存 GSC を置換する場合があります。"
+}

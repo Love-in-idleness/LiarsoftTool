@@ -18,4 +18,6 @@ __pycache__/
 *.bak
 RELEASE_NOTES*.md
 tsc-vscode/node_modules/
+tsc-vscode/dist/
+output/playwright/
 !tsc-vscode/test/
