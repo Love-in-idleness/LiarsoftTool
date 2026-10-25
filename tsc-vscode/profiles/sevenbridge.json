@@ -1,0 +1,6 @@
+{
+  "id": "sevenbridge", "name": "SevenBridge", "byteFormat": "modern-36", "schema": "rscript18",
+  "width": 800, "height": 600, "bgmOperands": [1, 0], "selectOperands": [0, 0, 0],
+  "evidence": "SBridge_jp.exe sha256 c7d5fc38cf0c354a61d056b607cf1367b2529557e9e0407d0b0fdf12771b35e3: dispatch 0x41cc40, three-operand locmode 0x420220, folder 0x4204e0, single-channel SE 0x3e-0x40. Original scr/2001 and scr/1309. See rscript2renpy/sevenbridge/NATIVE_EVIDENCE.",
+  "entryGuide": "Use the Japanese game working copy. Original start: 0100 -> 0110 -> 2001. Export the first scene as 2001.gsc to replace this story target in the copy. Preserve original startup/menu scripts and resources. No executable is copied or patched."
+}

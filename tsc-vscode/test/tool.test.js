@@ -39,7 +39,7 @@ test('real compiler checks without writing and compiles saved source', async () 
     assert.equal(failed.code, 1); assert.equal(await fs.readFile(output, 'utf8'), 'PREVIOUS');
     assert.equal((await fs.stat(output)).mtimeMs, time);
     await fs.writeFile(source, header + '*end\n');
-    const valid = await runTool(tool, ['--check-tsc', '--diagnostics=json', source]);
+    const valid = await runTool(tool, ['--check-tsc', '--diagnostics=json', '-e', 'CP932', source]);
     assert.equal(valid.code, 0); assert.deepEqual(JSON.parse(valid.stdout), { diagnostics: [] });
     assert.equal(await fs.readFile(output, 'utf8'), 'PREVIOUS');
     const compiled = await runTool(tool, ['-e', 'CP932', '-o', output, source]);

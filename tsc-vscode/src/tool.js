@@ -4,7 +4,7 @@ function runTool(executable, args, options = {}) {
     return new Promise((resolve, reject) => {
         const child = spawn(executable, args, {
             cwd: options.cwd, signal: options.signal, shell: false, windowsHide: true,
-            stdio: ['ignore', 'pipe', 'pipe']
+            stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe']
         });
         let stdout = '', stderr = '', finished = false;
         const timer = setTimeout(() => {
@@ -17,7 +17,7 @@ function runTool(executable, args, options = {}) {
         }
         function collect(name, value) {
             if (name === 'stdout') stdout += value; else stderr += value;
-            if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > 8 * 1024 * 1024) {
+            if (Buffer.byteLength(stdout) + Buffer.byteLength(stderr) > (options.maxOutput || 8 * 1024 * 1024)) {
                 child.kill(); finish(new Error('LiarsoftTool output is too large'));
             }
         }
@@ -25,6 +25,10 @@ function runTool(executable, args, options = {}) {
         child.stdout.on('data', value => collect('stdout', value));
         child.stderr.on('data', value => collect('stderr', value));
         child.once('error', error => finish(error));
+        if (options.input !== undefined) {
+            child.stdin.on('error', error => { if (error.code !== 'EPIPE') finish(error); });
+            child.stdin.end(options.input, 'utf8');
+        }
         child.once('close', (code, signal) => signal
             ? finish(new Error(`LiarsoftTool stopped (${signal})`))
             : finish(null, { code, stdout, stderr }));

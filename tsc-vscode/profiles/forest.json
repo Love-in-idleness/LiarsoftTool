@@ -1,0 +1,6 @@
+{
+  "id": "forest", "name": "Forest", "byteFormat": "legacy-28", "schema": "early",
+  "width": 800, "height": 600, "bgmOperands": [1], "selectOperands": [2, 0, 0],
+  "evidence": "Original scr/0000 (locmode/folder), scr/2100 (TXT/select/load/audio), and CodeX early command layouts. VM addressing: shared tsc_vm.py and original 0x1800/0x1900/0xa800 sequences.",
+  "entryGuide": "Create a working copy. The original start path calls 1000; export your scene as 1000.gsc to replace that call target in the copy. Original startup/menu scripts and resources are still required. Never install over the original game."
+}
