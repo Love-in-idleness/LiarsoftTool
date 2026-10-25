@@ -15,6 +15,10 @@ async function run() {
     const extension = vscode.extensions.getExtension('love-in-idleness.liarsofttool-tsc');
     assert(extension, 'Development extension not discovered');
     await extension.activate();
+    const { languageId, translator } = require('../src/messages');
+    const language = languageId(vscode.env.language);
+    if (process.env.TSC_HOST_LANGUAGE) assert.equal(language, languageId(process.env.TSC_HOST_LANGUAGE));
+    assert.equal(vscode.l10n.t('Save'), translator(language)('Save'));
     const doc = await vscode.workspace.openTextDocument(source);
     await vscode.window.showTextDocument(doc);
     assert.equal(doc.languageId, 'codex-tsc');
@@ -38,6 +42,6 @@ async function run() {
     assert.equal((await fs.readFile(path.join(project.root, 'build', 'scr', '2001.gsc'))).readUInt32LE(4), 36);
     await vscode.commands.executeCommand('vscode.openWith', scene, 'default');
     assert(vscode.window.activeTextEditor.document.uri.toString() === scene.toString());
-    console.log('OK: actual VS Code extension host, diagnostics, compilation, SevenBridge graph/build/source switch');
+    console.log('OK: actual VS Code extension host, diagnostics, compilation, SevenBridge graph/build/source switch; language=' + language);
 }
 module.exports = { run };

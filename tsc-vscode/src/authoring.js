@@ -4,10 +4,13 @@ const crypto = require('node:crypto');
 const model = require('./graph');
 const projects = require('./project');
 const { staticState } = require('./preview');
+const { languageId } = require('./messages');
 function register(context, vscode) {
     const t = vscode.l10n.t, states = new Set();
     const executable = doc => vscode.workspace.getConfiguration('liarsofttool', doc.uri).get('path');
-    const fail = error => vscode.window.showErrorMessage(t('TSC editor: {0}', error.message));
+    const errorText = error => t(error.messageKey || error.message, ...(error.messageArgs || []));
+    const fail = error => vscode.window.showErrorMessage(t('TSC editor: {0}', errorText(error)));
+    const titles = () => ({ start: t('Start'), end: t('End') });
     const trusted = () => { if (!vscode.workspace.isTrusted) throw new Error(t('Trust this workspace before running LiarsoftTool.')); };
     const active = () => [...states].find(s => s.panel.active);
     const project = async () => {
@@ -31,7 +34,7 @@ function register(context, vscode) {
             if (!name) return;
             const scene = await input('First scene number', engine.id === 'forest' ? 1000 : 2001, value => /^\d{4,5}$/.test(value) && Number(value) <= 32767 ? null : t('Choose a number from 0000 to 32767'));
             if (!scene) return;
-            const created = await projects.createProject(path.join(parent[0].fsPath, name), engine.id, resources[0].fsPath, scene);
+            const created = await projects.createProject(path.join(parent[0].fsPath, name), engine.id, resources[0].fsPath, scene, titles());
             const uri = vscode.Uri.file(path.join(created.root, 'scr', String(Number(scene)).padStart(4, '0') + '.tsc'));
             await vscode.commands.executeCommand('vscode.openWith', uri, 'liarsofttool.graph');
         },
@@ -40,7 +43,7 @@ function register(context, vscode) {
             const number = await input('New scene number', 1001, value => /^\d{4,5}$/.test(value) && Number(value) <= 32767 ? null : t('Choose a number from 0000 to 32767'));
             if (!number) return;
             const file = await projects.safePath(p.root, 'scr/' + String(Number(number)).padStart(4, '0') + '.tsc');
-            await projects.install(file, model.newScene(p.config.profile));
+            await projects.install(file, model.newScene(p.config.profile, titles()));
             await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(file), 'liarsofttool.graph');
         },
         async editTscGraph() {
@@ -121,7 +124,7 @@ function register(context, vscode) {
                     const graph = model.graph(text, inspected);
                     state.snapshot = { text, inspected, graph, version }; state.project = config;
                     await post({ type: 'document', version, graph, config: config?.config, profiles: model.profiles, readOnly: !graph.editable });
-                } catch (error) { if (!controller.signal.aborted) { state.snapshot = null; await post({ type: 'failure', message: error.message }); } }
+                } catch (error) { if (!controller.signal.aborted) { state.snapshot = null; await post({ type: 'failure', message: errorText(error) }); } }
             }
             state.refresh = refresh;
             const subscriptions = [vscode.workspace.onDidChangeTextDocument(event => {
@@ -170,13 +173,13 @@ function register(context, vscode) {
                                 layer.uri = panel.webview.asWebviewUri(vscode.Uri.file(await convert(asset.file))).toString();
                                 layer.x += asset.x || 0; layer.y += asset.y || 0;
                                 if (asset.firstFrame) visual.warnings.push(t('Only the first LWG frame is previewed'));
-                            } catch (error) { visual.warnings.push(error.message); }
+                            } catch (error) { visual.warnings.push(errorText(error)); }
                         }
                         if (visual.dialogue && visual.dialogue.speaker !== 999) {
                             try {
                                 const asset = await sourceAsset('grps', visual.dialogue.speaker);
                                 visual.nameplate = panel.webview.asWebviewUri(vscode.Uri.file(await convert(asset.file))).toString();
-                            } catch (error) { visual.warnings.push(error.message); }
+                            } catch (error) { visual.warnings.push(errorText(error)); }
                         }
                         if (generation === state.previewGeneration && doc.version === snapshot.version) await post({ type: 'preview', node: message.node, visual });
                     }
@@ -187,7 +190,7 @@ function register(context, vscode) {
                         const uri = panel.webview.asWebviewUri(vscode.Uri.file(await convert(file))).toString();
                         if (doc.version === snapshot.version) await post({ type: 'audio', uri });
                     }
-                } catch (error) { await post({ type: 'error', message: error.message }); }
+                } catch (error) { await post({ type: 'error', message: errorText(error) }); }
             })];
             panel.onDidDispose(() => {
                 state.disposed = true; state.controller?.abort(); clearTimeout(state.timer); states.delete(state);
@@ -197,7 +200,7 @@ function register(context, vscode) {
             });
             const nonce = crypto.randomBytes(18).toString('base64'), webview = panel.webview;
             const uri = file => webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'dist', file));
-            const language = /^(zh|ru|ja)/.exec(vscode.env.language)?.[1] || 'en';
+            const language = languageId(vscode.env.language);
             webview.html = `<!DOCTYPE html><html lang="${language}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; media-src ${webview.cspSource}; script-src 'nonce-${nonce}'; style-src ${webview.cspSource} 'unsafe-inline';"><link rel="stylesheet" href="${uri('editor.css')}"></head><body><div id="root"></div><script nonce="${nonce}" src="${uri('editor.js')}"></script></body></html>`;
         }
     };

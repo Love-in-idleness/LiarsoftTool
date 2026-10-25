@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const os = require('node:os');
 const { profile, newScene, integer } = require('./graph');
 const { runTool } = require('./tool');
+const { userError } = require('./messages');
 const manifest = 'tsc.project.json';
 const encodings = ['CP932', 'GBK', 'CP1251', 'UTF-8', 'GB18030', 'CP950', 'CP949', ...[1250, 1252, 1253, 1254, 1255, 1256, 1257, 1258].map(n => 'CP' + n)];
 function within(root, file) { const relative = path.relative(root, file); return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative)); }
@@ -63,7 +64,7 @@ async function findProject(source) {
         const parent = path.dirname(directory); if (parent === directory) return null; directory = parent;
     }
 }
-async function createProject(directory, engine, resources, scene) {
+async function createProject(directory, engine, resources, scene, titles) {
     profile(engine); integer(Number(scene), 0, 32767);
     resources = await fs.realpath(resources);
     directory = path.join(await fs.realpath(path.dirname(directory)), path.basename(directory));
@@ -72,7 +73,7 @@ async function createProject(directory, engine, resources, scene) {
     const config = { version: 1, profile: engine, encoding: 'CP932', resources: path.resolve(resources),
         output: 'build', assets: [], characters: [], variables: [] };
     await install(path.join(directory, manifest), JSON.stringify(config, null, 2) + '\n');
-    await install(path.join(directory, 'scr', String(scene).padStart(4, '0') + '.tsc'), newScene(engine));
+    await install(path.join(directory, 'scr', String(scene).padStart(4, '0') + '.tsc'), newScene(engine, titles));
     return { root: directory, config };
 }
 async function saveProject(project) {
@@ -116,8 +117,8 @@ async function buildProject(project, executable) {
     for (const name of sources) {
         const source = await safePath(root, path.join('scr', name)), text = await fs.readFile(source, 'utf8');
         const result = await inspect(text, executable);
-        if (result.diagnostics.length) throw new Error(name + ': ' + result.diagnostics[0].message);
-        if (result.byteFormat !== profile(config.profile).byteFormat || (config.profile === 'forest' && result.schema !== 'early')) throw new Error(name + ': incompatible engine dialect');
+        if (result.diagnostics.length) throw userError('{0}: {1}', name, result.diagnostics[0].message);
+        if (result.byteFormat !== profile(config.profile).byteFormat || (config.profile === 'forest' && result.schema !== 'early')) throw userError('{0}: incompatible engine dialect', name);
         const checked = await runTool(executable, ['--check-tsc', '--diagnostics=json', '-e', config.encoding, source]);
         if (checked.code !== 0) throw new Error(checked.stdout || checked.stderr);
         inspected.push({ name, source, document: result });
@@ -126,11 +127,11 @@ async function buildProject(project, executable) {
     for (const item of inspected) for (const line of item.document.lines) {
         if (![12, 15, 200].includes(line.opcode)) continue;
         const number = Number(line.tokens[line.opcode === 200 ? 2 : 1]?.value);
-        if (!Number.isInteger(number)) throw new Error(item.name + ': dynamic scene calls must be resolved in source before building');
+        if (!Number.isInteger(number)) throw userError('{0}: dynamic scene calls must be resolved in source before building', item.name);
         if (!sceneNumbers.has(number)) {
             const name = String(number).padStart(4, '0');
             const present = await Promise.all(['.tsc', '.gsc'].map(async ext => fs.access(await safePath(resources, 'scr/' + name + ext)).then(() => true, () => false)));
-            if (!present.some(Boolean)) throw new Error(item.name + ': missing called scene ' + name);
+            if (!present.some(Boolean)) throw userError('{0}: missing called scene {1}', item.name, name);
         }
     }
     for (const asset of config.assets) await fs.access(await safePath(root, asset.source));
@@ -182,7 +183,7 @@ async function baseResource(project, folder, id, engine = project.config.profile
             try { await fs.access(file); return { file, x: first.x, y: first.y, firstFrame: true }; } catch (error) { if (error.code !== 'ENOENT') throw error; }
         }
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
-    throw new Error('Resource not found: ' + base);
+    throw userError('Resource not found: {0}', base);
 }
 async function previewFile(file, cache, executable) {
     const ext = path.extname(file).toLowerCase();

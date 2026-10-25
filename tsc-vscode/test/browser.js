@@ -7,10 +7,12 @@ const crypto = require('node:crypto');
 const { createProject, saveProject, importAsset } = require('../src/project');
 const { bmp, wav } = require('./media-fixture');
 const { register } = require('../src/authoring');
+const { translator } = require('../src/messages');
 (async () => {
+    const language = process.env.TSC_UI_LANGUAGE || 'en', t = translator(language);
     const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'tsc-browser-')), resources = path.join(temp, 'resources');
     await fs.mkdir(resources);
-    const project = await createProject(path.join(temp, 'story'), 'sevenbridge', resources, 2001);
+    const project = await createProject(path.join(temp, 'story'), 'sevenbridge', resources, 2001, { start: t('Start'), end: t('End') });
     project.config.variables = [{ name: 'Score', register: 20 }]; project.config.characters = [{ name: 'Narrator', speaker: 999 }]; await saveProject(project);
     const image = path.join(temp, 'background.bmp'), sound = path.join(temp, 'tone.wav');
     await fs.writeFile(image, bmp(800, 600, [35, 60, 90])); await fs.writeFile(sound, wav());
@@ -23,11 +25,11 @@ const { register } = require('../src/authoring');
     const disposable = { dispose() {} }, prefix = '/' + crypto.randomUUID();
     const notify = message => { for (const stream of subscribers) stream.write('data: ' + JSON.stringify(message) + '\n\n'); };
     const vscode = {
-        l10n: { t: (text, value) => text.replace('{0}', value) }, env: { language: process.env.TSC_UI_LANGUAGE || 'en' },
+        l10n: { t }, env: { language },
         Uri: { file: uri, joinPath: (base, ...parts) => uri(path.join(base.fsPath, ...parts)) }, Range: class { constructor(start, end) { Object.assign(this, { start, end }); } },
         WorkspaceEdit: class { edits = []; replace(file, range, text) { this.edits.push({ range, text }); } }, ProgressLocation: { Notification: 1 },
         commands: { registerCommand: () => disposable, executeCommand: async () => {} },
-        window: { registerCustomEditorProvider: () => disposable, withProgress: (_, callback) => callback(), showWarningMessage: async () => 'Save',
+        window: { registerCustomEditorProvider: () => disposable, withProgress: (_, callback) => callback(), showWarningMessage: async () => t('Save'),
             showInformationMessage: message => notify({ type: 'error', message }), showErrorMessage: message => notify({ type: 'error', message }) },
         workspace: { isTrusted: true, textDocuments: [doc], getConfiguration: () => ({ get: () => process.env.LIARSOFTTOOL_PATH || path.resolve(__dirname, '../../build/liarsofttool') }),
             onDidChangeTextDocument: callback => { handlers.change = callback; return disposable; }, applyEdit: async edit => {

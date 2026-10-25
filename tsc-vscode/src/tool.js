@@ -1,4 +1,5 @@
 const { spawn } = require('node:child_process');
+const { userError } = require('./messages');
 
 function runTool(executable, args, options = {}) {
     return new Promise((resolve, reject) => {
@@ -30,7 +31,7 @@ function runTool(executable, args, options = {}) {
             child.stdin.end(options.input, 'utf8');
         }
         child.once('close', (code, signal) => signal
-            ? finish(new Error(`LiarsoftTool stopped (${signal})`))
+            ? finish(userError('LiarsoftTool stopped ({0})', signal))
             : finish(null, { code, stdout, stderr }));
     });
 }

@@ -13,7 +13,8 @@ The extension lives on `codex/tsc-vscode`, not the Marketplace. It does not gene
 3. Search settings for `liarsofttool` and set the installed executable path. The extension never downloads a compiler.
 
 Operations require Workspace Trust. In a remote workspace, install the compiler on the remote host too.
-Restricted Mode provides source highlighting only. The interface follows VS Code's English, Chinese, Russian or Japanese language setting.
+Restricted Mode provides source highlighting only. Menus, editor panels and extension messages follow VS Code's Chinese, Japanese, English or Russian setting; other languages fall back to English.
+The interface language does not change project encoding or existing story text. Compiler diagnostics and system errors retain their original wording.
 
 ## Start a story
 
@@ -69,7 +70,7 @@ Use Node.js 22 or newer and a built LiarsoftTool from this branch:
 ```bash
 npm ci
 npm test
-npm run package -- --out ../build/liarsofttool-tsc-0.1.0.vsix
+npm run package -- --out ../build/liarsofttool-tsc-0.2.0.vsix
 ```
 
 Tests accept `LIARSOFTTOOL_PATH`. `npm run build` bundles the offline frontend.

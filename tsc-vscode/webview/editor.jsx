@@ -10,7 +10,10 @@ const send = value => vscode.postMessage(value);
 const ariaLabelConfig = {
     'controls.ariaLabel': t('Control Panel'), 'controls.zoomIn.ariaLabel': t('Zoom In'), 'controls.zoomOut.ariaLabel': t('Zoom Out'),
     'controls.fitView.ariaLabel': t('Fit View'), 'controls.interactive.ariaLabel': t('Toggle Interactivity'), 'minimap.ariaLabel': t('Mini Map'),
+    'handle.ariaLabel': t('Connection port'),
     'node.a11yDescription.default': t('Select a node with Enter or Space; use the sidebar to edit.'),
+    'node.a11yDescription.keyboardDisabled': t('Select a node with Enter or Space; use the sidebar to edit.'),
+    'node.a11yDescription.ariaLiveMessage': ({ x, y }) => t('Moved node to X {0}, Y {1}', x, y),
     'edge.a11yDescription.default': t('Select an edge with Enter or Space; use Disconnect to remove it.')
 };
 function StoryNode({ data, selected }) {
@@ -59,7 +62,7 @@ function App() {
             const ports = choice ? Array.from({ length: optionCount(choice) }, (_, i) => ({ id: String(i), label: choice.tokens[8 + i]?.value || t(String(i)) })) :
                 branch ? [{ id: 'true', label: t('true') }, { id: 'false', label: t('false') }] : kind === 'End' ? [] : [{ id: 'next', label: t('next') }];
             const say = node.commands.find(c => c.opcode === 81);
-            return { id: node.id, type: 'story', position: node.position, selected: node.id === selected,
+            return { id: node.id, type: 'story', position: node.position, selected: node.id === selected, ariaLabel: t('Node {0}', node.meta.title || node.id),
                 data: { id: node.id, kind, title: node.meta.title || node.id, ports, summary: say?.tokens[6]?.value.replace(/^\^g\d{3}/, '').slice(0, 60) } };
         }));
     }, [state, selected]);
@@ -74,7 +77,10 @@ function App() {
     const variableOptions = state?.config?.variables || [];
     const addNode = kind => {
         if (kind === 'condition' && !variableOptions.length) { setError(t('Add a named variable first')); return; }
-        edit({ type: 'addNode', kind, title: t(kind[0].toUpperCase() + kind.slice(1)), fields: kind === 'condition' ? { register: variableOptions[0].register } : {} });
+        const fields = kind === 'condition' ? { register: variableOptions[0].register } : kind === 'choice' ? {
+            choices: [{ text: t('Yes'), target: '_editor_stop' }, { text: t('No'), target: '_editor_stop' }]
+        } : {};
+        edit({ type: 'addNode', kind, title: t(kind[0].toUpperCase() + kind.slice(1)), fields });
     };
     const onNodesChange = useCallback(changes => setNodes(old => applyNodeChanges(changes, old)), []);
     useEffect(() => {
@@ -89,13 +95,13 @@ function App() {
         {state?.readOnly && <div className="notice">{t('Fix source errors before graphical editing')}</div>}
         <div className="toolbar">{['paragraph', 'condition', 'choice', 'end'].map(kind => <button key={kind} onClick={() => addNode(kind)} disabled={disabled || !state.config}>{t(kind[0].toUpperCase() + kind.slice(1))} +</button>)}
             <button disabled={disabled || !edge} onClick={() => { const current = state.graph.edges.find(e => e.id === edge); if (current) edit({ type: 'disconnect', node: current.source, handle: current.sourceHandle }); setEdge(null); }}>{t('Disconnect selected edge')}</button>
-            <span role="status">{pending ? t('Refreshing…') : state?.config?.profile}</span></div>
+            <span role="status">{pending ? t('Refreshing…') : state?.profiles?.[state?.config?.profile]?.name}</span></div>
         <div className="workspace"><section className="canvas" aria-label={t('Story graph')} onKeyUp={event => {
             if (event.key.startsWith('Arrow') && event.target.closest('.react-flow__node')) {
                 const current = flowView.current?.getNode(selected);
                 if (current) edit({ type: 'move', node: current.id, x: current.position.x, y: current.position.y });
             }
-        }}><ReactFlow nodes={nodes} edges={(state?.graph.edges || []).map(e => ({ ...e, label: t(e.sourceHandle), selected: e.id === edge }))}
+        }}><ReactFlow nodes={nodes} edges={(state?.graph.edges || []).map(e => ({ ...e, label: t(e.sourceHandle), selected: e.id === edge, ariaLabel: t('Connection from {0} to {1}', e.source, e.target) }))}
             ariaLabelConfig={ariaLabelConfig}
             onInit={instance => { flowView.current = instance; }}
             onSelectionChange={({ nodes, edges }) => { if (nodes.length === 1) select(nodes[0].id); if (edges.length === 1) setEdge(edges[0].id); }}
@@ -110,7 +116,7 @@ function App() {
                 onBlur={e => { if (e.target.value !== (node.meta.title || node.id)) edit({ type: 'title', node: node.id, title: e.target.value }); }} /></label>
             <label>{t('Label')}<input key={node.id} defaultValue={node.id} disabled={disabled || node.id === '_editor_stop'} onKeyDown={e => {
                 if (e.key === 'Enter' && e.target.value !== node.id) edit({ type: 'rename', node: node.id, name: e.target.value });
-            }} /><small>{t('Rename label')}: Enter</small></label>
+            }} /><small>{t('Rename label')}: {t('Enter')}</small></label>
             <button disabled={disabled} onClick={() => edit({ type: 'deleteNode', node: node.id })}>{t('Delete node')}</button>
             {node.commands.filter(c => c.opcode >= 0x4000 && c.opcode < 0xa000 && /^0x[4-9]800$/i.test(c.tokens[1]?.value)).map(c => <section key={c.start}>
                 <h3>{t('Condition')}</h3><label>{t('register')}<select value={c.tokens[3].value} disabled={disabled} onChange={e => changeToken(c, 3, e.target.value)}>
@@ -141,7 +147,7 @@ function App() {
                 <button disabled={disabled} onClick={() => edit({ type: 'moveEvent', node: node.id, command: item.start, direction: 'down' })}>{t('Move down')}</button>{' '}
                 <button disabled={disabled} onClick={() => edit({ type: 'deleteEvent', node: node.id, command: item.start })}>{t('Delete')}</button></article>)}
             <details><summary>{t('Raw parameters')}</summary>{node.commands.map(c => <article key={c.start}><code>{c.tokens[0]?.value}</code>
-                {c.tokens.slice(1).map((token, i) => <label key={state.version + ':' + i}>#{i + 1} {token.role}
+                {c.tokens.slice(1).map((token, i) => <label key={state.version + ':' + i}>#{i + 1} {t(token.role)}
                     {token.quoted ? <textarea defaultValue={token.value} disabled={disabled} onBlur={e => { if (e.target.value !== token.value) changeToken(c, i + 1, e.target.value); }} /> :
                         <input defaultValue={token.value} disabled={disabled || token.role === 'target'} onBlur={e => { if (e.target.value !== token.value) changeToken(c, i + 1, e.target.value); }} />}</label>)}
                 <button disabled={disabled} onClick={() => edit({ type: 'deleteEvent', node: node.id, command: c.start })}>{t('Delete')}</button></article>)}</details>

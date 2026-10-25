@@ -95,11 +95,11 @@ function metadata(node, values, eol) {
     const meta = { ...node.meta, ...values };
     return { start: node.metadata?.start ?? node.label.start, end: node.metadata?.end ?? node.label.start, text: marker + JSON.stringify(meta) + eol };
 }
-function newScene(engine) {
+function newScene(engine, titles = { start: 'Start', end: 'End' }) {
     const p = profile(engine);
     return `;@gsc-byte-format ${p.byteFormat}\n;@gsc-schema ${p.schema}\n` +
-        `${marker}${JSON.stringify({ title: 'Start', kind: 'paragraph', x: 0, y: 0 })}\n:start\n*goto ${stop}\n` +
-        `${marker}${JSON.stringify({ title: 'End', kind: 'end', x: 280, y: 0 })}\n:${stop}\n*end\n`;
+        `${marker}${JSON.stringify({ title: titles.start, kind: 'paragraph', x: 0, y: 0 })}\n:start\n*goto ${stop}\n` +
+        `${marker}${JSON.stringify({ title: titles.end, kind: 'end', x: 280, y: 0 })}\n:${stop}\n*end\n`;
 }
 function flow(kind, fields, engine) {
     const p = profile(engine), target = label(fields.target || stop);

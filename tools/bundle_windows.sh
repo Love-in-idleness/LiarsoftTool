@@ -41,7 +41,7 @@ mkdir -p "$destination/docs"
 cp "$root"/docs/*.md "$destination/docs/"
 if [[ -f "$root/tsc-vscode/README.md" ]]; then
     mkdir -p "$destination/tsc-vscode"
-    cp "$root"/tsc-vscode/README*.md "$destination/tsc-vscode/"
+    cp "$root"/tsc-vscode/*.md "$destination/tsc-vscode/"
 fi
 mkdir -p "$destination/share/doc/LiarsoftTool"
 cp "$root/docs/THIRD_PARTY_AUDIO_LICENSES.md" "$root/docs/THIRD_PARTY_UCHARDET_LICENSES.md" "$destination/share/doc/LiarsoftTool/"
