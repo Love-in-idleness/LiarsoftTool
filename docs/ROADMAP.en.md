@@ -1,26 +1,28 @@
-# Development roadmap
+# Roadmap and experimental branches
 
 [中文](ROADMAP.zh.md) | [English](ROADMAP.en.md) | [Русский](ROADMAP.ru.md) | [日本語](ROADMAP.ja.md)
 
-[Project guide](../README.en.md)
+[Main guide](../README.en.md)
 
-## Current sequence
+## Main program
 
-1. Make converter fixes required for the Japanese SevenBridge port in rscript2renpy.
-2. Replace the GUI with C++ calling GTK4/libadwaita's C API. Verify Linux and Windows minimal windows and packages first; provide system/light/dark themes and English, Russian, Simplified Chinese and Japanese.
-3. Add browsing without prior extraction: directories, XFL, LWG and nested archives, reading on demand and previewing images, audio, text, GSC/TSC and raw bytes in memory.
-4. Develop highlighting, checking and local-compiler invocation on the independent `codex/tsc-vscode` branch. Reuse the C++ checker and expose a check-only CLI that writes no GSC.
+The main program provides resource conversion, a GTK4/libadwaita GUI, and browsing/previews without prior unpacking.
+Further work focuses on format compatibility, cross-platform usability, and shared interfaces for editing tools.
+See the main guide for current usage; this page is not an operation manual.
 
-Keep common conversion entry points, options and defaults. Browsing does not change inputs; export and conversion require explicit user action.
-Provide Chinese, English, Russian and Japanese documentation together. Do not automatically push, release or raise versions.
-This is a plan, not a list of shipped features.
+## Experimental branches
 
-## Graphical TSC editor: first version on its own branch
+| Branch | Contents |
+| --- | --- |
+| `codex/tsc-vscode` | [VS Code extension and graphical TSC authoring](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/tsc-vscode/tsc-vscode/README.en.md): highlighting, checking, compilation, and story editing; SevenBridge and Forest profiles |
+| `codex/rscript-runtime` | [Windows runtime loader and optional DLLs](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/rscript-runtime/runtime/README.en.md): loose-resource overrides and experimental UTF-8 support |
 
-The latest scope adds paragraph/event/connection authoring, source switching, static resource previews and native-engine export on `codex/tsc-vscode`.
-Japanese SevenBridge is the priority, with a Forest profile retained; other games are not being added.
-This first version still needs original-game acceptance. It is not an engine simulator and is not merged into master. See the [guide](../tsc-vscode/README.en.md).
+These branches are not merged into the main program and may not share every main-branch feature or resource-format update.
+Read the relevant branch guide and test against your target game.
 
-Experimental `--pure-renpy` is a long-term rscript2renpy goal: see its
-[roadmap](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.en.md).
-Do not implement that backend or add a placeholder option in this phase.
+## Long-term goals
+
+Improve semantic TSC authoring and resource management. Full engine emulation and a universal game runner are not current editor features.
+
+The native Ren'Py backend `--pure-renpy` is tracked in the separate
+[rscript2renpy roadmap](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.en.md) and is not implemented.

@@ -1,6 +1,28 @@
-# Windows のビルドとパッケージ作成
+# ビルドとパッケージ
 
 [中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md) | [日本語](BUILDING.ja.md)
+
+[メインガイド](../README.ja.md)
+
+コマンドはリポジトリ直下で実行します。CMake 3.10+、C++17 コンパイラー、WebP、
+Vorbis/Ogg、uchardet 静的ライブラリ、libcurl 7.85+ が必要で、Unix では iconv も使います。
+GUI には GTK4 4.10+、libadwaita 1.5+、gettext、pkg-config、
+音声プレビューには GTK メディアバックエンドと GStreamer base/good プラグインが必要です。
+
+## Linux
+
+Debian / Ubuntu（パッケージの版が上記の要件を満たすこと）：
+
+```bash
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2
+ctest --test-dir build --output-on-failure
+```
+
+プログラムは `build/liarsofttool` と `build/liarsofttool-gui` です。
+CLI のみなら設定時に `-DBUILD_GUI=OFF` を追加し、GUI とプレビューの依存を省けます。
+開発環境はビルド側に必要なもので、配布バイナリの利用者に一式を要求するものではありません。
 
 ## MSYS2 UCRT64
 
@@ -45,15 +67,3 @@ cmake --build build/win -j2
 ```
 
 GUI には同じ ABI の GTK4/libadwaita 開発ファイルと pkg-config 設定も必要です。UCRT64 と MINGW64、異なるスレッドモデルなどを混在させないでください。
-
-## GTK4 移行用の確認ウィンドウ
-
-本体は C++ から GTK4/libadwaita の C API を呼びます。次の独立した最小ウィンドウは、作成、テーマ切替、終了の確認用で、変換機能はありません。GTK4 と libadwaita 1.4 以降が必要です。
-
-```bash
-cmake -S tests/gtk4 -B build/gtk4-probe
-cmake --build build/gtk4-probe -j2
-ctest --test-dir build/gtk4-probe --output-on-failure
-```
-
-Windows では独立した MSYS2 UCRT64 環境に `gcc`、`cmake`、`pkgconf`、`libadwaita` の UCRT64 パッケージを導入して実行します。以前の MINGW64 GTKmm ライブラリは流用しません。

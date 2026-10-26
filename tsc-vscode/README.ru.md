@@ -3,7 +3,7 @@
 [中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 Создавайте сценарии TSC в VS Code из эпизодов, событий и связей, затем компилируйте GSC для оригинального движка.
-Сейчас приоритет — **японская SevenBridge**; профиль Forest также включён.
+Доступны профили **японской SevenBridge** и Forest.
 Расширение находится в ветке `codex/tsc-vscode`, не в Marketplace. Оно не создаёт проекты Ren’Py, не копирует и не изменяет EXE игры.
 
 ## Установка
@@ -68,13 +68,13 @@ Forest использует `legacy-28 / early`, первая сюжетная �
 Нужны Node.js 22 или новее и собранный LiarsoftTool из этой ветки:
 
 ```bash
+cd tsc-vscode
 npm ci
 npm test
-npm run package -- --out ../build/liarsofttool-tsc-0.2.0.vsix
+npm run package -- --out liarsofttool-tsc.vsix
 ```
 
 Тесты принимают `LIARSOFTTOOL_PATH`. `npm run build` собирает автономный интерфейс.
-`node test/browser.js` запускает временный изолированный проект SevenBridge только на localhost; выход удаляет его.
 
 [Интерфейсы и данные движка](AUTHORING.ru.md) · [Справочник TSC](../docs/GSC_OPCODE_REFERENCE.ru.md)
 

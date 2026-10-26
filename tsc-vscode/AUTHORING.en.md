@@ -22,7 +22,7 @@ Build preflights all scripts, target encoding and resolvable scene calls before 
 Resolve dynamic calls in source first. Output must not overlap scr, assets or resources; symlinks inside these paths are rejected.
 Files use sibling temporary replacements. There is no whole-project transaction: fix resource conversion failures and rebuild.
 
-## SevenBridge-first profile
+## SevenBridge profile
 
 Target: Japanese `SBridge_jp.exe`, SHA-256:
 
@@ -33,7 +33,7 @@ c7d5fc38cf0c354a61d056b607cf1367b2529557e9e0407d0b0fdf12771b35e3
 [Original-program evidence](https://github.com/Love-in-idleness/rscript2renpy/blob/main/sevenbridge/NATIVE_EVIDENCE.en.md):
 dispatch `0x41cc40`, three-operand locmode `0x420220`, folder `0x4204e0`,
 SE cases `0x3e–0x40`, voice path builder `0x41b5b0`.
-Defaults are checked against this game's scripts, not inferred from another title. The original EXE was not executed for this task.
+Defaults are checked against this game's scripts, not inferred from another title. These are static findings, not native-engine runtime verification.
 
 | Event | SevenBridge output shape | Script evidence |
 | --- | --- | --- |
@@ -58,3 +58,6 @@ Node tests cover source preservation, Unicode, conditions/choices, events, path 
 `test/host.js` checks diagnostics, the graph, SevenBridge build and source switching in the real VS Code extension host.
 `test/browser.js` drives the real provider/compiler with isolated test data.
 These checks are not game playthroughs. Native Windows paths, actual typography and complete story behavior still need manual acceptance.
+
+Run `npm test` in `tsc-vscode/` for shared editor checks; set `LIARSOFTTOOL_PATH` to select the compiler.
+`node test/browser.js` serves an isolated temporary SevenBridge project on localhost and cleans it on exit; no game assets are required.

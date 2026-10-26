@@ -22,7 +22,7 @@ return/end/jump 後の命令はソースに残しますが、実行可能なロ�
 出力先と scr・assets・素材を重複させず、内部のシンボリックリンクも拒否します。
 同じディレクトリの一時ファイルで置換しますが、プロジェクト全体のトランザクションではありません。素材の失敗は修正して再ビルドしてください。
 
-## SevenBridge を優先する設定
+## SevenBridge の設定
 
 対象は日本語版 `SBridge_jp.exe`、SHA-256：
 
@@ -33,7 +33,7 @@ c7d5fc38cf0c354a61d056b607cf1367b2529557e9e0407d0b0fdf12771b35e3
 [元プログラムの根拠](https://github.com/Love-in-idleness/rscript2renpy/blob/main/sevenbridge/NATIVE_EVIDENCE.ja.md)：
 分岐処理 `0x41cc40`、3 引数 locmode `0x420220`、folder `0x4204e0`、
 効果音 cases `0x3e–0x40`、音声パス構築 `0x41b5b0`。
-初期値は本作のソースで確認し、他作品から推測しません。この作業で元 EXE は実行していません。
+初期値は本作のソースで確認し、他作品から推測しません。静的な根拠であり、原エンジンの実動作検証ではありません。
 
 | イベント | SevenBridge 出力形式 | 根拠 |
 | --- | --- | --- |
@@ -58,3 +58,6 @@ Node テストはソース保持、Unicode、条件・選択、イベント、�
 `test/host.js` は実際の VS Code で診断、グラフ、SevenBridge ビルド、ソースへの切り替えを検証します。
 `test/browser.js` は本物の provider とコンパイラーを隔離したテストデータで動かします。
 ゲームの通しプレイではありません。ネイティブ Windows のパス、実際の文字組みと物語全体は手動確認が必要です。
+
+`tsc-vscode/` で `npm test` を実行し、コンパイラーは `LIARSOFTTOOL_PATH` で指定できます。
+`node test/browser.js` は localhost 限定の一時 SevenBridge プロジェクトを提供し、終了時に消去します。ゲーム素材は不要です。

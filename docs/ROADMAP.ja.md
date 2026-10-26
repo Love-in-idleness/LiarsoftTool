@@ -1,22 +1,28 @@
-# 開発計画
+# 開発計画と実験ブランチ
 
 [中文](ROADMAP.zh.md) | [English](ROADMAP.en.md) | [Русский](ROADMAP.ru.md) | [日本語](ROADMAP.ja.md)
 
-[プロジェクトの説明](../README.ja.md)
+[メインガイド](../README.ja.md)
 
-## 開発順序
+## 主プログラム
 
-1. rscript2renpy の SevenBridge 日本語版移植に必要な変換修正。
-2. C++ から GTK4/libadwaita の C API を呼ぶ共通 GUI。最小ウィンドウとパッケージを Linux/Windows で先に確認し、システム連動・ライト・ダーク、中国語・英語・ロシア語・日本語を提供。
-3. 事前展開なしの閲覧。フォルダー、XFL、LWG、入れ子のアーカイブを必要時に読み、画像、音声、テキスト、GSC/TSC、バイト列をメモリー内でプレビュー。
-4. 独立ブランチ `codex/tsc-vscode` でハイライト、検査、ローカルコンパイラー呼び出しを開発。C++ の検査を共有し、GSC を出力しない CLI を提供。
+主プログラムはリソース変換、GTK4/libadwaita GUI、事前展開なしの閲覧とプレビューを提供します。
+今後は形式の互換性、各 OS での使いやすさ、編集ツール用の共通 API を改善します。
+現在の操作方法はメインガイドを参照してください。
 
-共通変換入口、引数、既定値は維持します。閲覧は入力を変更せず、書き出しと変換は利用者の明示操作で行います。文書は中国語・英語・ロシア語・日本語を分けて同期します。自動 push、公開、バージョン変更は行いません。これは計画であり、実装済み機能の一覧ではありません。
+## 実験ブランチ
 
-## グラフィカル TSC エディター：独立ブランチの初版
+| ブランチ | 内容 |
+| --- | --- |
+| `codex/tsc-vscode` | [VS Code 拡張と TSC グラフィカル編集](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/tsc-vscode/tsc-vscode/README.ja.md)：ハイライト、検査、コンパイル、物語編集。SevenBridge と Forest のプロファイル |
+| `codex/rscript-runtime` | [Windows ローダーと任意 DLL](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/rscript-runtime/runtime/README.ja.md)：非梱包素材の優先読込と実験的 UTF-8 対応 |
 
-最新の方針により `codex/tsc-vscode` で段落・イベント・接続の編集、ソースへの切り替え、静止画プレビューと元のエンジン用出力を提供しています。
-日本語版 SevenBridge を優先し、Forest 設定も保持します。他作品の拡張は行いません。
-元のゲームでの手動確認が必要な初版であり、エンジンのシミュレーターでも master への統合済み機能でもありません。[案内](../tsc-vscode/README.ja.md)を参照してください。
+主プログラムへは未統合で、主ブランチの全機能や形式更新と同時には進まない場合があります。
+対象ブランチのガイドを読み、対象ゲームで確認してください。
 
-実験的 `--pure-renpy` は rscript2renpy の[長期計画](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.ja.md)です。本段階ではバックエンドや仮のオプションを実装しません。
+## 長期目標
+
+意味に基づく TSC 創作とリソース管理を改善します。エンジンの完全再現や全作品共通のゲーム実行器は現在の編集機能ではありません。
+
+通常の Ren'Py を生成する `--pure-renpy` は独立した
+[rscript2renpy の計画](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.ja.md)で管理し、未実装です。

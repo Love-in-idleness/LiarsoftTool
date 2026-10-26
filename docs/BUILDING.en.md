@@ -1,8 +1,28 @@
-# Windows builds and packaging
+# Building and packaging
 
 [中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md) | [日本語](BUILDING.ja.md)
 
-[Project guide](../README.en.md)
+[Main guide](../README.en.md)
+
+Run commands from the repository root. You need CMake 3.10+, a C++17 compiler, WebP,
+Vorbis/Ogg, a static uchardet library, and libcurl 7.85+; Unix also needs iconv.
+The GUI additionally needs GTK4 4.10+, libadwaita 1.5+, gettext, and pkg-config.
+Audio previews need a GTK media backend and GStreamer's base/good plugins.
+
+## Linux
+
+Debian / Ubuntu, with package repositories meeting the minimum versions above:
+
+```bash
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2
+ctest --test-dir build --output-on-failure
+```
+
+Executables are `build/liarsofttool` and `build/liarsofttool-gui`.
+Add `-DBUILD_GUI=OFF` at configuration for CLI only; GUI and preview dependencies can be omitted.
+Build dependencies are for the build host, not a development environment that release users must install.
 
 ## MSYS2 UCRT64
 
@@ -55,17 +75,3 @@ cmake --build build/win -j2
 
 GUI builds additionally need matching GTK4/libadwaita development libraries and pkg-config files.
 Use one target, runtime and thread model throughout; do not mix UCRT64 and MINGW64 libraries.
-
-## GTK4 migration probe for developers
-
-The production GUI calls GTK4/libadwaita's C API from C++. This independent minimal window verifies creation,
-system/light/dark themes and closing, not conversion. It requires GTK4 and libadwaita 1.4 or newer.
-
-```bash
-cmake -S tests/gtk4 -B build/gtk4-probe
-cmake --build build/gtk4-probe -j2
-ctest --test-dir build/gtk4-probe --output-on-failure
-```
-
-On Windows install the UCRT64 packages for `gcc`, `cmake`, `pkgconf` and `libadwaita`
-in a separate MSYS2 UCRT64 environment, then run these commands. Do not reuse the old MINGW64 GTKmm stack.

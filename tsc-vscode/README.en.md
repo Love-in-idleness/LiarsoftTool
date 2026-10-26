@@ -3,7 +3,7 @@
 [中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 Create TSC stories in VS Code with paragraph nodes, events and connections, then compile GSC for the original engine.
-**Japanese SevenBridge is the current priority**; a Forest profile is also included.
+Profiles are available for **Japanese SevenBridge** and Forest.
 The extension lives on `codex/tsc-vscode`, not the Marketplace. It does not generate Ren’Py projects or create, copy or patch game executables.
 
 ## Install
@@ -68,13 +68,13 @@ The older Windows conversion entry point still has system-code-page path limits;
 Use Node.js 22 or newer and a built LiarsoftTool from this branch:
 
 ```bash
+cd tsc-vscode
 npm ci
 npm test
-npm run package -- --out ../build/liarsofttool-tsc-0.2.0.vsix
+npm run package -- --out liarsofttool-tsc.vsix
 ```
 
 Tests accept `LIARSOFTTOOL_PATH`. `npm run build` bundles the offline frontend.
-`node test/browser.js` serves an isolated temporary SevenBridge test project on localhost; exit to remove it.
 
 [Interfaces and engine evidence](AUTHORING.en.md) · [TSC reference](../docs/GSC_OPCODE_REFERENCE.en.md)
 

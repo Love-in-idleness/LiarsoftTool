@@ -3,7 +3,7 @@
 [中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 在 VS Code 中用段落、事件和连线编写 TSC，再编译成原引擎使用的 GSC。
-本轮优先适配 **SevenBridge 日文版**；同时保留 Forest 配置。插件在 `codex/tsc-vscode` 分支，不在扩展市场发布。
+提供 **SevenBridge 日文版**与 Forest 配置。插件在 `codex/tsc-vscode` 分支，不在扩展市场发布。
 它不是 Ren’Py 生成器，也不会创建、复制或修改游戏 EXE。
 
 ## 安装
@@ -69,13 +69,13 @@ Windows 旧转换入口仍受系统代码页的路径限制；失败时应使用
 需要 Node.js 22 或更新版，以及已构建的本分支 LiarsoftTool：
 
 ```bash
+cd tsc-vscode
 npm ci
 npm test
-npm run package -- --out ../build/liarsofttool-tsc-0.2.0.vsix
+npm run package -- --out liarsofttool-tsc.vsix
 ```
 
 测试可用 `LIARSOFTTOOL_PATH` 指定编译器。
-`npm run build` 生成离线使用的前端；`node test/browser.js` 启动仅监听本机的临时 SevenBridge 测试工程，退出即清理。
 
 [接口与引擎依据](AUTHORING.zh.md) · [TSC 指令参考](../docs/GSC_OPCODE_REFERENCE.zh.md)
 

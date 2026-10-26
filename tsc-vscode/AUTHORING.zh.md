@@ -23,7 +23,7 @@ C++ 的 `inspectTsc` 与编译器共享 tokenizer、参数表和标签检查；C
 动态场景调用须先在源码中解决。输出与 scr、assets、资源目录不得重叠；目录中的符号链接不接受。
 写入采用同目录临时文件替换。构建不是整工程事务，素材转换中途失败后应修复并重新构建。
 
-## SevenBridge 优先配置
+## SevenBridge 配置
 
 目标为日文 `SBridge_jp.exe`，SHA-256：
 
@@ -35,7 +35,7 @@ c7d5fc38cf0c354a61d056b607cf1367b2529557e9e0407d0b0fdf12771b35e3
 [SevenBridge 原程序依据](https://github.com/Love-in-idleness/rscript2renpy/blob/main/sevenbridge/NATIVE_EVIDENCE.zh.md)。
 分派为 `0x41cc40`，三参数 locmode 为 `0x420220`，folder 为 `0x4204e0`，
 音效为 cases `0x3e–0x40`，语音路径组成为 `0x41b5b0`。
-当前使用原始脚本核对参数，不从其他游戏猜默认值；未为本任务运行原游戏 EXE。
+参数依据原始脚本核对；以上是静态依据，不是原引擎运行验证。
 
 | 事件 | SevenBridge 输出形状 | 原始脚本依据 |
 | --- | --- | --- |
@@ -61,3 +61,6 @@ Node 测试覆盖源码保留、Unicode、条件/选择、原生事件、路径�
 `test/host.js` 用实际 VS Code 扩展宿主检查诊断、图形页、SevenBridge 构建与源码切换。
 `test/browser.js` 通过真实 provider 与本机编译器驱动前端，素材和脚本均为隔离测试数据。
 不把这些检查等同原游戏游玩；原生 Windows 路径、实际文字效果和完整故事仍需人工验收。
+
+在 `tsc-vscode/` 中运行 `npm test` 检查公共编辑行为，可用 `LIARSOFTTOOL_PATH` 指定编译器。
+`node test/browser.js` 启动仅监听 localhost 的临时 SevenBridge 测试工程，退出时清理；无需真实游戏素材。

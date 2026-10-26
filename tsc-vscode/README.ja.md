@@ -3,7 +3,7 @@
 [中文](README.zh.md) | [English](README.en.md) | [Русский](README.ru.md) | [日本語](README.ja.md)
 
 VS Code の段落ノード、イベントと接続で TSC を作成し、元のエンジン用 GSC にコンパイルします。
-現在は **SevenBridge 日本語版を優先**し、Forest 用設定も同梱しています。
+**SevenBridge 日本語版**と Forest の設定を提供します。
 `codex/tsc-vscode` ブランチで開発中で、Marketplace では公開していません。Ren’Py プロジェクトの生成や、ゲーム EXE の作成・コピー・変更は行いません。
 
 ## インストール
@@ -68,13 +68,13 @@ Windows の旧変換入口にはシステムコードページのパス制限が
 Node.js 22 以降と、このブランチでビルドした LiarsoftTool が必要です。
 
 ```bash
+cd tsc-vscode
 npm ci
 npm test
-npm run package -- --out ../build/liarsofttool-tsc-0.2.0.vsix
+npm run package -- --out liarsofttool-tsc.vsix
 ```
 
 テストのコンパイラーは `LIARSOFTTOOL_PATH` で指定できます。`npm run build` はオフライン用フロントエンドを生成します。
-`node test/browser.js` は一時的な SevenBridge テストプロジェクトを localhost のみで公開し、終了時に削除します。
 
 [インターフェースとエンジンの根拠](AUTHORING.ja.md) · [TSC 命令一覧](../docs/GSC_OPCODE_REFERENCE.ja.md)
 

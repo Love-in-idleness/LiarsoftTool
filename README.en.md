@@ -4,107 +4,72 @@
 
 ![LiarsoftTool](image.png)
 
-LiarsoftTool handles resources from CodeX RScript games, including titles by
-Liar-soft and raiL-soft. It packs and unpacks archives, converts images and audio,
-and extracts or rebuilds scripts.
-The current version does not convert game EXE files.
+A resource tool for CodeX RScript games: pack and unpack archives, convert images and audio,
+and extract, edit, and rebuild GSC scripts. It targets works by Liar-soft, raiL-soft, and related creators;
+support varies by game. Game EXE conversion is not available.
 
-To port a game to Ren'Py, use it with
-[rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy).
+To generate Ren'Py projects, use the separate [rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy) project.
 
-## Getting started
+## Installation and first use
 
-Windows provides separate compressed, single-file GUI and CLI executables.
-Download the one you need and run it directly; no extraction is required.
-Linux provides separate GUI and CLI binaries. Grant execute permission after downloading; no extraction is needed.
-The GUI includes its translations but still requires the system libraries listed below.
-Source builds produce `liarsofttool-gui` and the command-line program `liarsofttool`.
+Download the program for your system from [Releases](https://github.com/Love-in-idleness/LiarsoftTool/releases).
+GUI and CLI are separate downloads: compressed single-file EXEs on Windows, standalone binaries on Linux.
+Grant execute permission on Linux. The GUI needs GTK4 4.10+ and libadwaita 1.5+;
+audio previews also need a GTK media backend and GStreamer Ogg/Vorbis plugins. The Windows GUI bundles media runtimes.
+For source builds, see [Building](docs/BUILDING.en.md).
 
-Work on a copy of your game resources. Output normally goes beside the input
-and rebuilding may overwrite files with the same name.
+Work on copies of game files. Output defaults to the input's directory and may overwrite files with the same name.
 
-In the GUI:
+1. Add files or folders to Conversion tasks, or drag them into the window.
+2. Check encoding and output paths; select recursion, pack-only, or unpack-only as needed.
+3. Start conversion. Copy the full error details if something fails.
 
-1. Add files or folders, or drag them into the window.
-2. Encoding defaults to `auto` for GSC detection. Select an encoding manually if the result is ambiguous or looks wrong: usually CP932 for Japanese or GBK for Chinese patches.
-3. Set Recursive, Pack only or Unpack only as needed, then check Conversion tasks and output paths.
-4. Start conversion. Use **Copy details** to copy a complete error report.
+GUI and CLI both export GSC to TSC by default. Choose **GSC→TXT** in the GUI for dialogue-only extraction.
+Resource encoding defaults to `auto`, detecting GSC encoding. Short text or mixed encodings may need a manual choice.
+Japanese usually uses CP932 and Chinese patches GBK. GSC compilation, packing, and encoding checks require an explicit encoding;
+`auto` does not detect archive filenames or other legacy text, which still use CP932.
 
-Both the GUI and CLI export GSC to TSC by default.
-Enable **GSC→TXT** in the GUI to extract translation text.
+## Browsing and previews
 
-Detection also applies to GSC previews. Short text may be inconclusive; ASCII cannot identify the original encoding. Check the result.
-Packing, checking or creating GSC requires an explicit encoding. In `auto`, archive names and other legacy text still use CP932.
+Resource browsing opens folders, XFL, LWG, and nested archives without unpacking them first.
+Select an entry to view images, play audio, read text, display GSC as read-only TSC, or inspect paged hexadecimal bytes.
+Images support zoom and transparent backgrounds; audio supports pause, seeking, and volume.
+Change encoding for garbled text; TSC always uses UTF-8.
 
-Click **Check for updates** to check manually and open the GitHub releases page.
-The application never connects on startup or downloads and installs updates automatically.
+Browsing does not modify inputs. Export raw bytes does not convert formats.
+To convert an archive entry, export it first and add it to Conversion tasks.
 
-## Resource browsing
+Preferences hold conversion options, system/light/dark themes, and interface language.
+The UI supports Chinese, English, Russian, and Japanese, defaulting to the system language.
+A manual language change takes effect after restart.
+Update checks are manual and open the release page; no automatic download or installation occurs.
 
-Open a folder, XFL or LWG in Resources. Double-click entries to enter folders or
-nested archives. Select an entry to preview images, audio or text, or decompile
-GSC into a read-only TSC view. Change the encoding if needed; TSC always uses UTF-8.
-Unsupported or damaged files remain available in the paginated hex view.
+## Editing scripts
 
-Browsing and previews neither unpack nor modify the input. Export original bytes
-saves only the selected entry, without conversion. To convert an embedded entry,
-export it first, then add it to Conversion tasks. Standalone files can be added directly.
+- TXT: enter translations after `>` and rebuild using the original GSC as a reference.
+- TSC: edit complete commands and text, then compile with the target game's encoding. TSC itself is UTF-8.
 
-Images support zoom and transparency. Audio supports playback, pause, seeking and
-volume. Audio previews need a GTK media backend and GStreamer Ogg/Vorbis plugins;
-the Windows GUI executable includes them.
+GSC→TSC is experimental. Keep the original GSC and generated labels and metadata.
+Successful conversion does not establish compatibility with every engine version.
+See the [TSC reference](docs/GSC_OPCODE_REFERENCE.en.md) for commands.
 
-## Command-line help
+## VS Code extension
 
-For supported formats, options and conversion examples, run:
+This branch includes the experimental [CodeX TSC extension](tsc-vscode/README.en.md) for highlighting, checking, compiling, and graphical story authoring.
+It provides SevenBridge and Forest profiles. Build its VSIX separately; it is not installed with the main program or merged into `master`.
+
+## Help and documentation
+
+Program help is the source for options, supported formats, and conversion examples:
 
 ```bash
 liarsofttool -h
 ```
 
-## Translating scripts
+[Documentation](docs/README.en.md) · [Building](docs/BUILDING.en.md) · [Roadmap](docs/ROADMAP.en.md)
 
-For dialogue-only changes, edit the text after `>` in TXT and import it using
-the original GSC as the reference. For full script editing, export TSC, edit
-its commands and text, then compile it back. Save TSC as UTF-8 and choose
-the encoding used by the target game when compiling GSC.
-Available encodings are CP932 / Windows-31J, GBK, GB18030, Big5 / CP950,
-Korean CP949, Windows CP1250–CP1258 and UTF-8. Conversion and resource previews
-share the same encoding choices.
-
-GSC→TSC is experimental and does not support every game. Keep the original GSC,
-and retain generated labels and metadata in TSC.
-See the [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md).
-
-## Building from source
-
-Requires a C++17 compiler, CMake, WebP, Vorbis/Ogg, uchardet (including its static library) and libcurl 7.85 or newer. The GUI also requires
-GTK4 4.10, libadwaita 1.5 or newer, and gettext. Windows and Linux share the same frontend.
-Preferences contain conversion options, the system/light/dark theme and the interface
-language. English, Russian, Simplified Chinese and Japanese are supported; language changes apply after restart.
-
-On Debian / Ubuntu:
-
-```bash
-sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j2
-```
-
-Executables are in `build/`. Add `-DBUILD_GUI=OFF` when configuring a CLI-only
-build. See [build instructions](docs/BUILDING.en.md) for Windows and packaging.
-
-## Further reading
-
-The [VS Code TSC extension](tsc-vscode/README.en.md) provides highlighting, checks, compilation and graphical story authoring, prioritizing SevenBridge with a Forest profile retained.
-It is maintained only on `codex/tsc-vscode`, packaged locally as a VSIX, not published to the Marketplace.
-
-See the [roadmap](docs/ROADMAP.en.md) for planned work.
-
-[Documentation](docs/README.en.md) · [TSC command reference](docs/GSC_OPCODE_REFERENCE.en.md)
-
-Use game resources you legally own. Successful conversion does not guarantee
-compatibility with every engine version; test edited resources in the game.
+For reports, include program version, input type, encoding, and full error details.
+Use legally owned resources; do not upload game files publicly.
 
 ## License and credits
 

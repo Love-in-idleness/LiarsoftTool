@@ -2,17 +2,18 @@
 
 [中文](JEANNE_KAGEROU_ENGINE_AUDIT.zh.md) | [English](JEANNE_KAGEROU_ENGINE_AUDIT.en.md) | [Русский](JEANNE_KAGEROU_ENGINE_AUDIT.ru.md) | [日本語](JEANNE_KAGEROU_ENGINE_AUDIT.ja.md)
 
+This developer reference describes file formats and the identified native samples. Font and line-break analysis of EXEs does not imply EXE conversion is available; that production entry point is disabled.
+
 [Documentation](README.en.md) · [User guide](../README.en.md)
 
-2026-10-04 static evidence for fonts, LWG names and media. Originals were neither run nor rewritten.
-Only confirmed font machine-code patterns and LWG-name handling were added to the shared converter.
+Static evidence for fonts, LWG names and media. Originals were neither run nor rewritten.
 
 ## Files
 
 | File | SHA-256 | PE FileVersion |
 | --- | --- | --- |
-| `res_ft/exe/j.exe` | `7cb856bdbc5c61d9606734b30fd83bac880a3eff9829112f0ddf203e3026c4a6` | 1, 11, 0, 3 |
-| `res_ft/exe/kagerou.exe` | `f02998fae350945f4de4dc7eab47997e1e2d9b8aa43d49740a80aad893dcde9b` | 1, 9, 0, 0 |
+| `j.exe` | `7cb856bdbc5c61d9606734b30fd83bac880a3eff9829112f0ddf203e3026c4a6` | 1, 11, 0, 3 |
+| `kagerou.exe` | `f02998fae350945f4de4dc7eab47997e1e2d9b8aa43d49740a80aad893dcde9b` | 1, 9, 0, 0 |
 
 Both are apparently unpacked PE32/i386, ImageBase `0x400000`. Addresses are VAs, not file offsets.
 Resource versions are not release dates.
@@ -41,15 +42,12 @@ a font patch does not change all ANSI APIs.
 
 ## LWG names and XML
 
-Kagerou's grps.xfl has 46 empty entries; 23 names are Photoshop-style `</Layer set>`.
-Empty entries were retained with `empty="1"`, but unescaped names broke .meta.xml in
-cgview, excompane, extrmenu, fontcompane and scview, including ElementTree consumers.
-The common extractor escapes `& < > " '`; the packer decodes the five XML entities once, not recursively
-(e.g. literal &lt; must not be decoded twice). File lookup uses the extractor's filesystem-character replacement;
-nonempty reserved-character layers rebind their image while LWG stores the original name.
-All 32 LWG archives across both games extract/repack identically, preserving empty names, coordinates, flags and order.
-All 32 XML files parse with ElementTree. Re-extract old malformed XML from original archives;
-production Ren'Py projects were not overwritten in this analysis.
+The `kagerou.exe` sample's `grps.xfl` contains 46 empty entries, including 23 Photoshop-style `</Layer set>` names.
+These names are archive data, not XML markup; empty entries must not be discarded.
+
+Extraction escapes `& < > " '` in names. Packing decodes one XML-entity layer only, so literal `&lt;` is not decoded again.
+Image lookup uses the same filesystem-character replacements as extraction; LWG retains original names.
+Preserve empty-entry markers, coordinates, flags, and order. Re-extract malformed XML from the original archive.
 
 ## Image and audio paths
 
@@ -66,14 +64,6 @@ Checked dispatch agrees with implementation. Real WCGs were all `0x0271`; no new
 Static dispatch is not all-variant resource testing, and output PNG does not prove native engine PNG support.
 Scanning included every top-level XFL and nested XFL/LWG, including seven Jeanne voice subarchives,
 five Kagerou voice subarchives and thumbnail subarchives, not just the first files.
-
-| Check | Jeanne, 16 top-level XFL | Kagerou, 9 top-level XFL |
-| --- | ---: | ---: |
-| WCG decoded | 2431 | 1462 |
-| LWG decoded and round-tripped | 10 | 22 |
-| Ogg-in-WAV extract/wrap/extract, identical Ogg | 4551 | 3698 |
-| PCM correctly retained | 115 | 0 |
-| Failures | 0 | 0 |
 
 Jeanne voice.xfl/0001.wav extracted Ogg fully decoded with FFmpeg. Container checks and byte round-trips do not validate
 in-game duration, sound or ACM-driver compatibility. No new audio conversion defect was established.
