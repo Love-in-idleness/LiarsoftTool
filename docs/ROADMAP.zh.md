@@ -10,12 +10,14 @@
 后续工作重点是格式兼容性、跨平台使用体验和编辑工具所需的公共接口。
 当前功能用法见主说明，不以本页替代操作指南。
 
+[RScript Runtime](https://github.com/Love-in-idleness/LiarsoftTool/blob/master/runtime/README.zh.md) 在主分支提供实验性的 Windows 加载器与可选 DLL，
+用于散装资源覆盖和 UTF-8 适配。默认不构建，使用前请阅读运行时指南。
+
 ## 实验分支
 
 | 分支 | 内容 |
 | --- | --- |
 | `codex/tsc-vscode` | [VS Code 插件与图形化 TSC 创作](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/tsc-vscode/tsc-vscode/README.zh.md)：高亮、检查、编译、剧情编辑；适配 SevenBridge 与 Forest 配置 |
-| `codex/rscript-runtime` | [Windows 运行时加载器与可选 DLL](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/rscript-runtime/runtime/README.zh.md)：优先加载散装资源及实验性 UTF-8 支持 |
 
 这些分支未合入主程序，不保证与主分支的全部功能和资源格式同步。
 使用前阅读对应分支说明；兼容性以目标游戏实际测试为准。
