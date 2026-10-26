@@ -2,9 +2,11 @@
 
 [中文](KHIME_ALBATROSS_ENGINE_AUDIT.zh.md) | [English](KHIME_ALBATROSS_ENGINE_AUDIT.en.md) | [Русский](KHIME_ALBATROSS_ENGINE_AUDIT.ru.md) | [日本語](KHIME_ALBATROSS_ENGINE_AUDIT.ja.md)
 
+This developer reference describes file formats and the identified native samples. Font and line-break analysis of EXEs does not imply EXE conversion is available; that production entry point is disabled.
+
 [Documentation](README.en.md) · [User guide](../README.en.md)
 
-2026-10-04 static evidence for fonts, archives, images and audio. Originals were read, not run or modified;
+Static evidence for fonts, archives, images and audio. Originals were read, not run or modified;
 conversion results went to temporary directories. Conclusions apply only to the specified builds.
 
 ## File identity
@@ -16,7 +18,7 @@ conversion results went to temporary directories. Conclusions apply only to the 
 
 Both PE32/i386, ImageBase `0x400000`; addresses are VAs. Resource versions are not release dates.
 Chinese patch EXEs in the same directories were outside this comparison.
-Albatross .text (`0x72000` bytes) and .rdata (`0xb000`) match res_ft/exe/kagerou.exe byte-for-byte at identical section addresses.
+Albatross .text (`0x72000` bytes) and .rdata (`0xb000`) match kagerou.exe byte-for-byte at identical section addresses.
 Font, line-break, channel and audio evidence in the [Kagerou audit](JEANNE_KAGEROU_ENGINE_AUDIT.en.md) therefore applies;
 this does not make game resources or scripts identical.
 
@@ -53,17 +55,6 @@ No new audio-container defect was confirmed. Exported PNG/Ogg does not imply nat
 Every normally named top-level XFL was scanned recursively, including embedded XFL/LWG.
 Khime's actual script archive is `scr.xfl.` (trailing dot); it was inspected as XFL by content,
 without renaming the user's file or changing CLI extension rules.
-
-| Check | Khime | Albatross |
-| --- | ---: | ---: |
-| Normally named top-level XFL | 10 | 10 |
-| WCG decoded | 1845 | 1484 |
-| LWG decoded/extracted/rebuilt identically | 15 | 20 |
-| Empty LWG entries retained | 0 | 36 |
-| .meta.xml parsed by ElementTree | 15 | 20 |
-| Ogg-in-WAV extract/wrap/extract, identical Ogg | 3084 | 3961 |
-| PCM correctly retained | 0 | 140 |
-| Failures | 0 | 0 |
 
 Albatross includes `</Layer set>` names; prior XML escaping preserves names, empty entries, coordinates, flags, order and payload.
 Extracted Ogg from KhimeKusaritop/voice.xfl/0001.wav and Albatross/voice.xfl/0015.wav fully decoded with FFmpeg.

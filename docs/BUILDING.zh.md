@@ -1,6 +1,28 @@
-# Windows 构建与打包
+# 构建与打包
 
 [中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md) | [日本語](BUILDING.ja.md)
+
+[主说明](../README.zh.md)
+
+所有命令在仓库根目录执行。需要 CMake 3.10+、C++17 编译器、WebP、Vorbis/Ogg、
+libcurl 7.85+；Unix 还需 iconv。
+GUI 另需 GTK4 4.10+、libadwaita 1.5+、gettext 和 pkg-config。
+音频预览需要 GTK 媒体后端和 GStreamer 的基础／常用插件。
+
+## Linux
+
+Debian / Ubuntu（软件源须满足上述最低版本）：
+
+```bash
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2
+ctest --test-dir build --output-on-failure
+```
+
+程序为 `build/liarsofttool` 和 `build/liarsofttool-gui`。
+仅构建 CLI 时，配置阶段加 `-DBUILD_GUI=OFF`，可省去 GUI 和媒体预览依赖。
+编译依赖属于构建机，不必要求下载发布程序的用户安装整套开发环境。
 
 ## MSYS2 UCRT64
 
@@ -56,18 +78,3 @@ cmake --build build/win -j2
 
 GUI 还需匹配的 GTK4/libadwaita 开发库和 pkg-config 配置。
 所有编译器和库应使用同一目标及运行时；不要混用 UCRT64/MINGW64 或不同线程模型。
-
-## GTK4 迁移检查（开发用）
-
-正式 GUI 使用 C++ 调用 GTK4/libadwaita 的 C API。这个独立的最小窗口用于
-验证窗口创建、浅色／深色／系统主题切换及关闭；不提供转换功能。
-需要 GTK4 和 libadwaita 1.4 及以上。
-
-```bash
-cmake -S tests/gtk4 -B build/gtk4-probe
-cmake --build build/gtk4-probe -j2
-ctest --test-dir build/gtk4-probe --output-on-failure
-```
-
-Windows 在独立的 MSYS2 UCRT64 环境中安装 `gcc`、`cmake`、`pkgconf` 和
-`libadwaita` 对应的 UCRT64 包，再执行上述命令。不要复用 MINGW64 的旧 GTKmm 库。

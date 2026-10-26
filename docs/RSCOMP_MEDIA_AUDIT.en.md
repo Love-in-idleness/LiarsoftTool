@@ -2,9 +2,11 @@
 
 [中文](RSCOMP_MEDIA_AUDIT.zh.md) | [English](RSCOMP_MEDIA_AUDIT.en.md) | [Русский](RSCOMP_MEDIA_AUDIT.ru.md) | [日本語](RSCOMP_MEDIA_AUDIT.ja.md)
 
+This developer reference describes file formats and the identified native samples. Font and line-break analysis of EXEs does not imply EXE conversion is available; that production entry point is disabled.
+
 [Documentation](README.en.md) · [User guide](../README.en.md)
 
-Two compiler versions' command layouts, distinct from media decoding. Static checks dated 2026-10-08:
+Two compiler versions' command layouts, distinct from media decoding. Static checks of these builds:
 hashes, PE imports/exports, strings and targeted disassembly; DLLs were not loaded or executed.
 
 ## Samples
@@ -12,9 +14,9 @@ hashes, PE imports/exports, strings and targeted disassembly; DLLs were not load
 | Path | Bytes | PE timestamp | Compile RVA | SHA-256 |
 | --- | ---: | --- | --- | --- |
 | `CodeXRScript/OC用パッチ/data/RsComp.dll` | 364611 | 2008-07-22 | `0x124e` | `6c65c3545a559b6e4a01d54fdb2f57ad4e605b27dc73959cde18bd3468f3cb30` |
-| `res_ft/UBAI/RsComp.dll` | 90112 | 2012-10-14 | `0x7090` | `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9` |
+| `RsComp.dll (2012)` | 90112 | 2012-10-14 | `0x7090` | `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9` |
 
-ubai/RsComp.dll matches sample 2, not a third version. PE timestamps alone do not prove release dates.
+PE timestamps alone do not prove release dates.
 Both x86 PE32, export only Compile, statically import only KERNEL32.dll and USER32.dll.
 
 ## Positive evidence: command compilation, not codecs
@@ -52,7 +54,7 @@ See [audio boundaries](AUDIO_PROCESSING_AUDIT.en.md).
 Files are ID3-tagged MPEG Layer III, but oc_reference/bgmlist.html places bgmsv/TrackNN.mp3 links in the audition column.
 CodeXRScript/readme.txt (CP932) describes browser reference material; the installation list contains images, scripts,
 RsComp.dll and version.dat, not bgmsv. This does not establish native MP3 playback.
-All three res_ft/exe/{Cannonball,Forest,kagerou}.exe contain `%s\\\\Track%02d.wav` and `%s\\\\%04d.wav`,
+All three {Cannonball,Forest,kagerou}.exe contain `%s\\\\Track%02d.wav` and `%s\\\\%04d.wav`,
 not .mp3 or bgmsv signatures. Cannonball references the former at `0x0042c71c`, the latter including `0x004136ae`;
 mpegvideo at `0x00431f8f` belongs to a different media path, not evidence for MP3 in BGM/WAV loading.
 For these samples MP3 is documentation audition material, not a supported same-name WAV replacement.

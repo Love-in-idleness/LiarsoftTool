@@ -75,12 +75,6 @@ The same Files / Resources / Unicode DLLs handle both samples; no SevenBridge-sp
 `imports.cpp` parses ordinary PE imports and rejects missing APIs or existing hook conflicts.
 SevenBridge's `FindFirstFileA` concerns saves/directories, not resource preflight; MCI video bypasses this override path.
 
-REA evidence: fallback `ev_aa340a6409c9a54a1f26c89c1852b42989d52f080dee22121653bcb1bfd57bba`,
-GSC `ev_4b709b26aef633c9dadc5343ecb2fe26276667c62df7e3982a280d53464ee4a3`,
-parser `ev_fc6c754911df3df1c51c4883f8919a561b03506db554063b44fbab618c6d3916`,
-glyphs `ev_3560688f91be6c3ed92c87c94570b236b6514478bc63db0e127f59bf0a61b4b4`,
-CRT `ev_c4c5f4527fa369b4af23870e6b73666994f8b60fe2041741d8fa196910bd6c12`.
-
 ## Unicode integration
 
 The parser at `0x438790` walks single- and double-byte characters; `0x438836–0x438842` builds
@@ -93,8 +87,6 @@ using `0x44c165` to query the system `GetACP`. The Unicode module therefore also
 own named `GetACP` import return 932, so internal double-byte IDs work on non-Japanese systems.
 System-default requests to `IsDBCSLeadByteEx` also use 932; other explicit codepages retain their meaning.
 This changes neither Windows regional settings nor other modules' `GetACP` calls.
-REA evidence: `ev_fec16cd0f7502d87c643ce4be10a0f513fed452271d3d9e2470c33a9fc4ff9a2`
-and `ev_17e895a8bdb39082341c3f9bdb782e5e4ef09b18431096f0819b17088726f365`.
 
 The first version preserves instructions and text controls. Characters that round-trip losslessly
 through CP932 retain their original bytes; other BMP characters receive stable IDs in CP932's
@@ -117,7 +109,6 @@ with no supplementary-plane support or general complex shaping.
 SevenBridge's `0x43e450` writes character classes to the layout array after drawing:
 `0` ordinary, `1` no line start, `2` no line end. `0x43e540–0x43e798` compares `SI`;
 branches converge at `0x43e7cc` and `0x43e7b3`, with the ordinary path at `0x43e79a`.
-REA evidence: `ev_f04c03afdea665d7bdadec40a14e679ddbec0d74637f99ddd47b90b02e821f43`.
 
 [native_kinsoku.cpp](src/native_kinsoku.cpp) validates full ASCII/CP932 comparison groups,
 conditional jumps, and common targets, for immediate and `MOV EAX / CMP SI, AX` forms.
@@ -141,17 +132,16 @@ on disk. It does not establish cross-version compatibility. Each new engine stil
 calling conventions, data structures, and drawing paths. These observations informed the integration
 choice; its proprietary implementation was neither copied nor made a dependency.
 
-## Verification boundaries
+## Checks and limits
 
-Portable tests cover override priorities, invalid resources without fallback, path boundaries,
-component layout, unchanged inputs, and glyph dictionaries. Windows / Wine tests additionally
-cover pre-entry loading, ABI and failure rollback, file APIs, and Unicode GDI drawing.
-Synthetic import-table tests and actual game startup checks are separate; startup does not verify
-full gameplay, old saves, or every font. Native Windows and other file/rendering protocols need separate acceptance.
+Portable tests cover resource priority, invalid overrides without fallback, path boundaries, component layout,
+unchanged inputs, and glyph dictionaries. Enable tests using the [build guide](README.en.md#building-and-validation),
+then run CTest in your build directory.
 
-On an independent game copy, Wine checks reached the opening and title and loaded actual TSC / PNG overrides.
-The same generic override and Unicode paths have been checked in Forest and SevenBridge, without per-game code.
-Japanese, simplified Chinese, Latin characters outside CP932, and text color controls in the test script
-were confirmed in the original engine's rendered frame.
-The manual helper [game_smoke.cpp](tests/game_smoke.cpp) terminates only its own verified child game process.
-It is not a default CTest test, and game fixtures are not included.
+Windows/Wine checks also need pre-entry loading, ABI, initialization rollback, file APIs, and Unicode GDI drawing.
+Synthetic import tables do not replace real engine checks. For a new game, use an independent copy to check
+startup, title, overrides, and text, then full routes, old saves, fonts, and DLL combinations.
+
+The manual entry point is [game_smoke.cpp](tests/game_smoke.cpp). It terminates only its own verified child process,
+is not a default CTest test, and includes no game resources.
+Static analysis, automated checks, and Wine do not replace native Windows acceptance.

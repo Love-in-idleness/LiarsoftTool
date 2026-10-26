@@ -57,19 +57,11 @@ RsComp二版は32-bit、Compile exportのRVAは0x124e/0x7090。Forestは0x412eb0
 
 アドレスとheaderは違っても同期file protocolは共通です。同じFiles/Resources/Unicodeを使い、専用DLLを追加しません。imports.cppは普通importを解析し、API不足とhook競合を拒否。FindFirstFileAはセーブ/ディレクトリ用途で資源事前探索ではなく、MCI動画は迂回します。
 
-REA: fallback `ev_aa340a6409c9a54a1f26c89c1852b42989d52f080dee22121653bcb1bfd57bba`、
-GSC `ev_4b709b26aef633c9dadc5343ecb2fe26276667c62df7e3982a280d53464ee4a3`、
-parser `ev_fc6c754911df3df1c51c4883f8919a561b03506db554063b44fbab618c6d3916`、
-glyph `ev_3560688f91be6c3ed92c87c94570b236b6514478bc63db0e127f59bf0a61b4b4`、
-CRT `ev_c4c5f4527fa369b4af23870e6b73666994f8b60fe2041741d8fa196910bd6c12`。
-
 ## Unicode 接続
 
 Forest parser0x438790は一/二byteを歩き、0x438836–0x438842で16-bit字、0x438866で二byte進行。0x4453e0/0x445760/0x445ab0/0x445e70付近はANSI GDIで、UTF-8を直接渡すと分断します。ファイル符号化の変更だけでは不十分です。
 
 0x44880cはCRT表0x48fa00、0x44bfb8は初期化、0x44c165はGetACP。Unicodeはゲーム自身の名前付きGetACPを932にし、日本語外環境でも二byteIDを使います。IsDBCSLeadByteExのシステム既定要求も932、明示された別pageは保持。Windows全体や別moduleのGetACPは変更しません。
-REA `ev_fec16cd0f7502d87c643ce4be10a0f513fed452271d3d9e2470c33a9fc4ff9a2`、
-`ev_17e895a8bdb39082341c3f9bdb782e5e4ef09b18431096f0819b17088726f365`。
 
 命令・制御符を保持し、CP932で無損失往復できる字は原bytes、他BMP字はCP932 F0–F9の安定IDへ。描画はIDを実Unicodeへ戻します。
 
@@ -84,7 +76,6 @@ REA `ev_fec16cd0f7502d87c643ce4be10a0f513fed452271d3d9e2470c33a9fc4ff9a2`、
 ## UTF-8 禁則
 
 SevenBridge0x43e450は描画後layout配列に0普通/1行頭禁止/2行末禁止を記入。0x43e540–0x43e798がSIを比較し、0x43e7cc/0x43e7b3へ合流、普通0x43e79a。
-REA `ev_f04c03afdea665d7bdadec40a14e679ddbec0d74637f99ddd47b90b02e821f43`。
 
 [native_kinsoku.cpp](src/native_kinsoku.cpp)はASCII/CP932全比較群、条件分岐、共通targetを確認し、即値型とMOV EAX/CMP SI,AX型を扱います。process内bridgeはstack整列、register/flags/FPU/SIMD保存、glyph tokenからUnicode復元、[kinsoku.json](kinsoku.json)分類。単字へ戻せないnative packed値は元分類を維持。認識できなければUnicode初期化失敗。ディスクEXEやTSC改行は変えません。
 
@@ -96,8 +87,15 @@ rsinit.dllはOpenGL export361個、埋込resource、runtime hookを持ちます�
 
 DLLでディスクEXEを書かず資源・window・textを変更できる証拠ですが、版横断互換を証明しません。新engineにはcall規約、構造、描画の確認が必要。選択の参考にしただけで、専有実装はコピーせず依存もしません。
 
-## 検証範囲
+## 検証方法と範囲
 
-portable testは優先度、不正overrideでfallbackしないこと、パス境界、部品配置、原入力不変、辞書を確認。Windows/Wineは入口前装入、ABI、失敗回退、file API、Unicode GDIを追加検査します。合成import表と実ゲーム起動は別で、起動成功は全プレイ・旧セーブ・全字体を意味しません。Windows実機と別protocolは別途確認します。
+共通テストは優先順位、壊れた置換素材を下位へ戻さないこと、パス境界、部品配置、
+入力の非変更、字形辞書を対象とします。[ビルド手順](README.ja.md#ビルドと確認)でテストを有効化し、自分のビルド先で CTest を実行します。
 
-独立コピーのWineで冒頭・タイトルまで進み、実TSC/PNGを装入しました。同一汎用経路をForest/SevenBridgeで使用し、原エンジンframeで日本語、簡体字、CP932外ラテン、色制御を確認しました。[game_smoke.cpp](tests/game_smoke.cpp)は自分が確認して作成した子processのみ終了する手動helperで、既定CTestではなく、ゲームfixtureも非同梱です。
+Windows／Wine では入口前の読込、ABI、初期化失敗時の復旧、ファイル API、Unicode GDI も確認します。
+合成 import 表は実エンジンの確認を代替しません。新しいゲームは独立コピーで起動、タイトル、
+置換素材、文字を確認し、その後に全ルート、旧セーブ、フォント、DLL の組合せを調べます。
+
+手動確認は [game_smoke.cpp](tests/game_smoke.cpp) を参照してください。
+自分で作成・照合した子プロセスだけを終了し、既定の CTest には含めず、ゲーム素材も同梱しません。
+静的解析、自動テスト、Wine は Windows 実機での受入確認を代替しません。

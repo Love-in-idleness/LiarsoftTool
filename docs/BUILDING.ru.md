@@ -1,6 +1,28 @@
-# Сборка и упаковка для Windows
+# Сборка и упаковка
 
 [中文](BUILDING.zh.md) | [English](BUILDING.en.md) | [Русский](BUILDING.ru.md) | [日本語](BUILDING.ja.md)
+
+[Основное руководство](../README.ru.md)
+
+Выполняйте команды из корня репозитория. Нужны CMake 3.10+, компилятор C++17, WebP,
+Vorbis/Ogg, libcurl 7.85+; в Unix также iconv.
+Для GUI дополнительно нужны GTK4 4.10+, libadwaita 1.5+, gettext и pkg-config.
+Аудиопросмотр требует медиабэкенд GTK и плагины GStreamer base/good.
+
+## Linux
+
+Debian / Ubuntu с репозиториями, содержащими указанные минимальные версии:
+
+```bash
+sudo apt install build-essential cmake pkg-config libwebp-dev libvorbis-dev libogg-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j2
+ctest --test-dir build --output-on-failure
+```
+
+Программы находятся в `build/liarsofttool` и `build/liarsofttool-gui`.
+Для одного CLI при настройке добавьте `-DBUILD_GUI=OFF`; зависимости GUI и просмотра можно исключить.
+Средства разработки нужны машине сборки, а не каждому пользователю готового выпуска.
 
 ## MSYS2 UCRT64
 
@@ -57,19 +79,3 @@ cmake --build build/win -j2
 GUI также требует соответствующих библиотек GTK4/libadwaita и конфигурации pkg-config.
 Компилятор и библиотеки должны использовать один целевой ABI и CRT.
 Не смешивайте UCRT64/MINGW64 или разные модели потоков.
-
-## Проверка миграции на GTK4
-
-Рабочий GUI вызывает C API GTK4/libadwaita из C++. Отдельный тест проверяет API
-для проверки создания окна, системной/светлой/тёмной темы и закрытия.
-Преобразования файлов в тесте нет. Нужны GTK4 и libadwaita 1.4 или новее.
-
-```bash
-cmake -S tests/gtk4 -B build/gtk4-probe
-cmake --build build/gtk4-probe -j2
-ctest --test-dir build/gtk4-probe --output-on-failure
-```
-
-В Windows установите UCRT64-пакеты `gcc`, `cmake`, `pkgconf` и `libadwaita`
-в отдельной среде MSYS2 UCRT64, затем выполните те же команды.
-Не используйте старые библиотеки GTKmm из MINGW64.

@@ -2,10 +2,12 @@
 
 [中文](EVERMAIDEN_ENGINE_AUDIT.zh.md) | [English](EVERMAIDEN_ENGINE_AUDIT.en.md) | [Русский](EVERMAIDEN_ENGINE_AUDIT.ru.md) | [日本語](EVERMAIDEN_ENGINE_AUDIT.ja.md)
 
+This developer reference describes file formats and the identified native samples. Font and line-break analysis of EXEs does not imply EXE conversion is available; that production entry point is disabled.
+
 [Documentation](README.en.md) · [User guide](../README.en.md)
 
 Historical static records for audio, fonts, punctuation and GSC loading. Conclusions are build-specific.
-On 2026-10-04 the target was the user-supplied Chinese patch `Evermaiden/startup_CHS.exe`, not the official Japanese EXE.
+The sample is the Chinese patch `Evermaiden/startup_CHS.exe`, not the official Japanese EXE.
 Do not generalize patch behaviour to all official programs.
 
 - PE32/x86, 1,016,832 bytes, ImageBase `0x400000`.
@@ -24,7 +26,7 @@ The fix retains header/page/parameter checks and adds only the verified tag. Wri
 and codec extension, rebuilding lengths, sample count and padding from OGG. No unverified modes were enabled.
 CLI extraction → write-back → extraction yields identical OGG. FFmpeg fully decodes it to PCM with SHA-256
 `44f63c38a8646a87b4dbc65148c0f3db2bdcc6822d905d7e191a013fcd0ff1ce`.
-Tests cover tag preservation and rejection of unsupported `0x6750`. Commit: `2f88429`.
+Tests cover tag preservation and rejection of unsupported `0x6750`.
 
 ## 2. Optimized line-break tables not recognized
 
@@ -62,7 +64,6 @@ The final ten were originally GBK font parameters: uniform CP932 is not identica
 - XFL: `0x47629b–0x4762f8` uses lstrcmpiA binary search. ASCII case-folded lexical order agrees,
   but arbitrary non-ASCII names are not guaranteed equivalent to Windows NLS sorting.
 - GSC loads near `0x404faf`; serialization at `0x405458` includes the 36-byte header.
-  All 208 GBK scripts round-tripped structurally without whole-file gsc-raw fallback.
 
 ## Limits
 
@@ -70,7 +71,7 @@ IsDBCSLeadByteEx still uses CP_ACP, e.g. `0x44dc33–0x44dc35`. Font/table patch
 use matching Windows locale or Locale Emulator. Cross-code-page execution needs further character/API analysis,
 not just font replacement or blindly changing all PUSH 0. Original visuals, line breaking, playback and native Windows remain user checks.
 
-## 2026-10-09: official Japanese GSC loading and execution
+## official Japanese GSC loading and execution
 
 Separate target: `Evermaiden/startup_jp.exe`, SHA-256
 `88820f28b8f770b486407e55dda28266c6fec42145192d5bc8ad5be21ab895af`.
@@ -86,9 +87,3 @@ PE32, ImageBase `0x400000`; VAs below. Not run or modified.
 Japanese 0001.gsc entries TOP1/click/TOP2 are at `0xa6 / 0x25c / 0x7da`; 2190.gsc REP002 is at `0xd9c`.
 Unedited round-trips hide stale offsets: edit instruction length before an entry to expose the bug.
 Names, slot 0 and extra padding remain; no full code/string backup is added. Re-export old TSC with nonempty entries or numeric insub operands.
-
-All 208 Japanese and 205 current Chinese GSC files structurally round-tripped; inserting wait 1 before real entries shifts targets by 6.
-Both corpora passed ASan/UBSan. Regressions: CannonBall JP 626 / ZH 437, Forest 103, Khime 341, Albatross 91.
-CLI/GTK rebuilt, eight CTests passed. The 413 Evermaiden TSC exports each corpus has ten entries, and 6385 / 6103 insub sites.
-Consumers must accept insub labels and relocate by entry labels. Necessary rscript2renpy reading/lowering and tests were updated,
-without changing game resources or generated projects. Non-ASCII entry-name transcoding, unknown opcode meanings and game routes remain outside this evidence.

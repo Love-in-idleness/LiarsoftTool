@@ -7,16 +7,17 @@
 ## Usage and builds
 
 - [Overview and use](../README.en.md); CLI help: `liarsofttool -h`.
-- [Windows builds and packaging](BUILDING.en.md)
+- [Source builds and packaging](BUILDING.en.md)
 - [TSC command reference](GSC_OPCODE_REFERENCE.en.md)
-- [RScript Runtime usage and builds](../runtime/README.en.md)
+- [RScript Runtime usage and build](../runtime/README.en.md)
 - [Audio dependency licenses, original text](THIRD_PARTY_AUDIO_LICENSES.md)
 
 ## Developer references
 
 - [Roadmap](ROADMAP.en.md)
 - [TSC diagnostics API](TSC_DIAGNOSTICS.en.md)
-- [Runtime DLL interface](../runtime/SDK.en.md)
+- [Runtime DLL API](../runtime/SDK.en.md)
+- [Runtime native evidence](../runtime/ENGINE_AUDIT.en.md)
 - [Working agreements](../AGENTS.en.md)
 
 The following records document particular binaries, not a universal engine specification.
@@ -28,7 +29,6 @@ The following records document particular binaries, not a universal engine speci
 - [Jeanne / Kagerou](JEANNE_KAGEROU_ENGINE_AUDIT.en.md)
 - [CNMI trial](CNMI_TRIAL_ENGINE_AUDIT.en.md)
 - [RsComp.dll and media commands](RSCOMP_MEDIA_AUDIT.en.md)
-- [Runtime integration: Forest, RsComp, and the Albatross DLL](../runtime/ENGINE_AUDIT.en.md)
 
 ## Development checks
 
