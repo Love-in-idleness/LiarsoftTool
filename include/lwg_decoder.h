@@ -42,6 +42,18 @@ struct LwgEntry {
     uint32_t size = 0;          // original size (for repacking)
 };
 
+struct LwgMetadataEntry {
+    std::string name;
+    int32_t x = 0, y = 0;
+    uint8_t flag = 0;
+    bool empty = false;
+};
+
+struct LwgMetadata {
+    uint32_t width = 0, height = 0;
+    std::vector<LwgMetadataEntry> entries;
+};
+
 class LwgDecoder {
 public:
     static constexpr const char* MAGIC = "LG\x01\x00";
@@ -70,6 +82,9 @@ public:
 /// Pack a directory (with .meta.xml) into an LWG archive.
 class LwgPacker {
 public:
+    /// Read the same layout used by directory packing, without reading payloads.
+    static LwgMetadata readMetadata(const std::filesystem::path& directory);
+
     /// Pack a directory into LWG binary data.
     /// The directory must contain a .meta.xml file.
     /// `encoding` is the filename encoding for the archive.

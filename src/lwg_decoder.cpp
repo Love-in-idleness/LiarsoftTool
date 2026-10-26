@@ -12,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
+#include <limits>
 
 namespace fs = std::filesystem;
 
@@ -154,25 +155,23 @@ void LwgDecoder::extractToDirectory(const Archive& archive, const std::string& d
 //   <Canvas><Width>N</Width><Height>N</Height><Items>
 //     <Item x="N" y="N" flag="N">name</Item>
 //   </Items></Canvas>
-struct MetaEntry {
-    std::string name;
-    int32_t x = 0, y = 0;
-    uint8_t flag = 40; // default LWGFlags.Image2
-    bool empty = false; // Explicit zero-data entry, not a missing image file.
-};
-struct MetaInfo {
-    uint32_t width = 0, height = 0;
-    std::vector<MetaEntry> entries;
-};
+static LwgMetadata parseMetaXml(const fs::path& filePath) {
+    const auto bytes = readFile(filePath);
+    const std::string xml(bytes.begin(), bytes.end());
+    convertEncoding(xml, "UTF-8", "UTF-8", true);
+    LwgMetadata info;
 
-static MetaInfo parseMetaXml(const std::string& filePath) {
-    std::ifstream in(filePath);
-    if (!in) throw std::runtime_error("Cannot open .meta.xml: " + filePath);
-    std::stringstream ss;
-    ss << in.rdbuf();
-    std::string xml = ss.str();
-
-    MetaInfo info;
+    auto number = [](const std::string& value, int64_t minimum, int64_t maximum) {
+        size_t consumed = 0;
+        const auto parsed = std::stoll(value, &consumed);
+        if (value.find_first_not_of(" \t\r\n", consumed) != std::string::npos ||
+            parsed < minimum || parsed > maximum)
+            throw std::runtime_error("Invalid integer in .meta.xml: " + value);
+        return parsed;
+    };
+    if (xml.find("<Canvas>") == std::string::npos ||
+        xml.find("</Canvas>") == std::string::npos || xml.find('\0') != std::string::npos)
+        throw std::runtime_error("Invalid .meta.xml: missing Canvas or embedded NUL");
 
     // Parse Width
     auto extractTag = [&](const std::string& tag) -> std::string {
@@ -186,13 +185,13 @@ static MetaInfo parseMetaXml(const std::string& filePath) {
         return xml.substr(start, end - start);
     };
 
-    info.width  = static_cast<uint32_t>(std::stoul(extractTag("Width")));
-    info.height = static_cast<uint32_t>(std::stoul(extractTag("Height")));
+    info.width  = static_cast<uint32_t>(number(extractTag("Width"), 0, UINT32_MAX));
+    info.height = static_cast<uint32_t>(number(extractTag("Height"), 0, UINT32_MAX));
 
     // Parse Items
     auto itemsStart = xml.find("<Items>");
     auto itemsEnd = xml.find("</Items>");
-    if (itemsStart == std::string::npos || itemsEnd == std::string::npos)
+    if (itemsStart == std::string::npos || itemsEnd == std::string::npos || itemsEnd < itemsStart)
         throw std::runtime_error("Invalid .meta.xml: missing <Items>");
 
     std::string itemsXml = xml.substr(itemsStart, itemsEnd - itemsStart + 8);
@@ -202,14 +201,16 @@ static MetaInfo parseMetaXml(const std::string& filePath) {
         auto itemStart = itemsXml.find("<Item ", pos);
         if (itemStart == std::string::npos) break;
         auto itemTagEnd = itemsXml.find(">", itemStart);
-        if (itemTagEnd == std::string::npos) break;
+        if (itemTagEnd == std::string::npos)
+            throw std::runtime_error("Invalid .meta.xml: unterminated Item");
         std::string tagContent = itemsXml.substr(itemStart + 6, itemTagEnd - itemStart - 6);
 
         auto itemClose = itemsXml.find("</Item>", itemTagEnd);
-        if (itemClose == std::string::npos) break;
+        if (itemClose == std::string::npos)
+            throw std::runtime_error("Invalid .meta.xml: unterminated Item");
         std::string name = itemsXml.substr(itemTagEnd + 1, itemClose - itemTagEnd - 1);
 
-        MetaEntry me;
+        LwgMetadataEntry me;
         me.name = xmlName(name, false);
 
         auto getAttr = [&](const std::string& attr) -> std::string {
@@ -217,18 +218,28 @@ static MetaInfo parseMetaXml(const std::string& filePath) {
             if (ap == std::string::npos) return "0";
             ap += attr.size() + 2;
             auto ae = tagContent.find("\"", ap);
+            if (ae == std::string::npos)
+                throw std::runtime_error("Invalid .meta.xml: unterminated attribute");
             return tagContent.substr(ap, ae - ap);
         };
 
-        me.x    = static_cast<int32_t>(std::stol(getAttr("x")));
-        me.y    = static_cast<int32_t>(std::stol(getAttr("y")));
-        me.flag = static_cast<uint8_t>(std::stoul(getAttr("flag")));
-        me.empty = getAttr("empty") == "1";
+        me.x    = static_cast<int32_t>(number(getAttr("x"), INT32_MIN, INT32_MAX));
+        me.y    = static_cast<int32_t>(number(getAttr("y"), INT32_MIN, INT32_MAX));
+        me.flag = static_cast<uint8_t>(number(getAttr("flag"), 0, UINT8_MAX));
+        me.empty = number(getAttr("empty"), 0, 1) == 1;
 
         info.entries.push_back(me);
         pos = itemClose + 7;
     }
     return info;
+}
+
+LwgMetadata LwgPacker::readMetadata(const fs::path& directory) {
+    const auto metaPath = findLwgMetadata(directory);
+    if (metaPath.empty())
+        throw std::runtime_error("No .meta.xml found in directory. "
+                                 "Extract LWG first to generate one.");
+    return parseMetaXml(metaPath);
 }
 
 std::vector<uint8_t> LwgPacker::pack(
@@ -239,13 +250,13 @@ std::vector<uint8_t> LwgPacker::pack(
         throw std::runtime_error("No .meta.xml found in directory. "
                                  "Extract LWG first to generate one.");
 
-    MetaInfo meta = parseMetaXml(metaPath.string());
+    const auto meta = readMetadata(dirPath);
     if (meta.entries.empty())
         throw std::runtime_error("No entries found in .meta.xml: " + metaPath.string());
 
     // Read file data for each entry
     struct PackEntry {
-        MetaEntry meta;
+        LwgMetadataEntry meta;
         std::vector<uint8_t> data;
     };
     std::vector<PackEntry> packEntries;

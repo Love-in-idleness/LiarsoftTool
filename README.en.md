@@ -53,6 +53,11 @@ GSC→TSC is experimental. Keep the original GSC and generated labels and metada
 Successful conversion does not establish compatibility with every engine version.
 See the [TSC reference](docs/GSC_OPCODE_REFERENCE.en.md) for commands.
 
+## Experimental runtime
+
+[RScript Runtime](runtime/README.en.md) provides a Windows loader, optional DLLs, loose-resource overrides, and UTF-8 adaptation.
+The runtime and converter are maintained together on the main branch. Runtime builds are off by default; see its guide for building and use.
+
 ## Help and documentation
 
 Program help is the source for options, supported formats, and conversion examples:

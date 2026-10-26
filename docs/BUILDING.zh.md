@@ -78,3 +78,9 @@ cmake --build build/win -j2
 
 GUI 还需匹配的 GTK4/libadwaita 开发库和 pkg-config 配置。
 所有编译器和库应使用同一目标及运行时；不要混用 UCRT64/MINGW64 或不同线程模型。
+
+## 可选运行时
+
+运行时与转换器在同一主分支维护。常规构建不包含它；在主工程配置时添加
+`-DBUILD_RUNTIME=ON` 可启用公共运行时与测试。Windows 加载器和功能 DLL
+也可独立构建，依赖与命令见 [RScript Runtime](../runtime/README.zh.md#构建与验证)。

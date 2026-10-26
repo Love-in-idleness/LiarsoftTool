@@ -67,3 +67,10 @@ cmake --build build/win -j2
 ```
 
 GUI には同じ ABI の GTK4/libadwaita 開発ファイルと pkg-config 設定も必要です。UCRT64 と MINGW64、異なるスレッドモデルなどを混在させないでください。
+
+## 任意のランタイム
+
+ランタイムは変換器と同じ主ブランチで管理し、通常のビルドには含めません。
+主プロジェクトの設定に `-DBUILD_RUNTIME=ON` を追加すると共通ランタイムとテストを有効にできます。
+Windows ローダーと機能 DLL は独立してビルドすることもできます。
+依存関係とコマンドは [RScript Runtime](../runtime/README.ja.md#ビルドと確認)を参照してください。

@@ -3,6 +3,7 @@ project(LiarsoftTool VERSION 2.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(BUILD_RUNTIME "Build the experimental RScript runtime and its tests" OFF)
 find_package(Threads REQUIRED)
 find_package(CURL 7.85 REQUIRED)
 
@@ -317,4 +318,9 @@ endforeach()
 if(BUILD_TESTING)
     target_link_libraries(wav_ogg_test PRIVATE "${VORBISENC_LIBRARY}")
     target_link_libraries(gui_common_test PRIVATE "${VORBISENC_LIBRARY}")
+endif()
+
+# Separate configuration of runtime/ does not require GTK or update checks.
+if(BUILD_RUNTIME)
+    add_subdirectory(runtime)
 endif()

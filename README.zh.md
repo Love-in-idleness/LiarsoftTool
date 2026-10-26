@@ -48,6 +48,11 @@ GUI 与 CLI 默认都将 GSC 导出为 TSC；只需对话文本时，在 GUI 选
 GSC→TSC 为实验性功能。保留原 GSC 和自动生成的标签、元数据，
 不要把转换成功等同于所有引擎版本兼容。指令含义见 [TSC 参考](docs/GSC_OPCODE_REFERENCE.zh.md)。
 
+## 实验性运行时
+
+[RScript Runtime](runtime/README.zh.md) 提供 Windows 加载器、可选 DLL、散装资源覆盖与 UTF-8 适配。
+运行时与转换器在主分支统一维护，默认不构建；构建和使用方法见运行时指南。
+
 ## 帮助与文档
 
 命令参数、支持格式和转换示例以软件内帮助为准：

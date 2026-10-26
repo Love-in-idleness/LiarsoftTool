@@ -9,12 +9,15 @@
 - [Overview and use](../README.en.md); CLI help: `liarsofttool -h`.
 - [Source builds and packaging](BUILDING.en.md)
 - [TSC command reference](GSC_OPCODE_REFERENCE.en.md)
+- [RScript Runtime usage and build](../runtime/README.en.md)
 - [Audio dependency licenses, original text](THIRD_PARTY_AUDIO_LICENSES.md)
 
 ## Developer references
 
 - [Roadmap](ROADMAP.en.md)
 - [TSC diagnostics API](TSC_DIAGNOSTICS.en.md)
+- [Runtime DLL API](../runtime/SDK.en.md)
+- [Runtime native evidence](../runtime/ENGINE_AUDIT.en.md)
 - [Working agreements](../AGENTS.en.md)
 
 The following records document particular binaries, not a universal engine specification.

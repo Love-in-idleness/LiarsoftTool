@@ -75,3 +75,10 @@ cmake --build build/win -j2
 
 GUI builds additionally need matching GTK4/libadwaita development libraries and pkg-config files.
 Use one target, runtime and thread model throughout; do not mix UCRT64 and MINGW64 libraries.
+
+## Optional runtime
+
+The runtime is maintained with the converter on the main branch and is excluded from normal builds.
+Configure the main project with `-DBUILD_RUNTIME=ON` to enable the shared runtime and tests.
+The Windows loader and feature DLLs can also be built separately; see
+[RScript Runtime](../runtime/README.en.md#building-and-validation) for dependencies and commands.
