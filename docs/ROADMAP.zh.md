@@ -1,26 +1,28 @@
-# 开发规划
+# 开发规划与实验分支
 
 [中文](ROADMAP.zh.md) | [English](ROADMAP.en.md) | [Русский](ROADMAP.ru.md) | [日本語](ROADMAP.ja.md)
 
-## 本轮顺序
+[主说明](../README.zh.md)
 
-1. 配合 rscript2renpy 完成 SevenBridge 日文移植所需的转换修复。
-2. GUI 改用 C++ 调用 GTK4/libadwaita C API。先验证 Linux、Windows 最小窗口和打包，
-   再替换旧界面；提供系统／浅色／深色主题与英语、俄语、简体中文、日语。
-3. 增加不预先解包的资源浏览：普通目录、XFL、LWG 和嵌套归档，按需读取，
-   在内存中预览图像、音频、文本、GSC/TSC 和原始字节。
-4. 在独立的 `codex/tsc-vscode` 分支开发 VS Code 插件：高亮、检查与调用本机编译器。
-   检查复用 C++ 核心，提供只检查、不输出 GSC 的命令行接口。
+## 主程序
 
-界面保留公共转换入口、现有选项和默认值。资源预览不修改输入，导出和转换
-必须由使用者触发。使用说明同步维护中英俄日四语，不自动推送、发布或提高版本。
-本页是规划，不是已实现功能清单。
+主程序提供资源转换、GTK4/libadwaita 图形界面，以及无需预先解包的资源浏览与预览。
+后续工作重点是格式兼容性、跨平台使用体验和编辑工具所需的公共接口。
+当前功能用法见主说明，不以本页替代操作指南。
 
-## 长期规划：图形化 TSC 编辑器
+## 实验分支
 
-未来按对白、资源、条件、选项和流程等语义提供创作界面，复用 LiarsoftTool
-的检查和编译能力。具体交互和支持范围另行确定，本轮不实现、不预建编辑器框架。
+| 分支 | 内容 |
+| --- | --- |
+| `codex/tsc-vscode` | [VS Code 插件与图形化 TSC 创作](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/tsc-vscode/tsc-vscode/README.zh.md)：高亮、检查、编译、剧情编辑；适配 SevenBridge 与 Forest 配置 |
+| `codex/rscript-runtime` | [Windows 运行时加载器与可选 DLL](https://github.com/Love-in-idleness/LiarsoftTool/blob/codex/rscript-runtime/runtime/README.zh.md)：优先加载散装资源及实验性 UTF-8 支持 |
 
-实验性 `--pure-renpy` 属于 rscript2renpy 的长期目标，见
-[对应规划](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.md)。
-本轮不添加该开关，也不实现原生 Ren'Py 生成后端。
+这些分支未合入主程序，不保证与主分支的全部功能和资源格式同步。
+使用前阅读对应分支说明；兼容性以目标游戏实际测试为准。
+
+## 长期目标
+
+继续完善基于语义的 TSC 创作与资源管理。完整引擎模拟、通用游戏运行器不属于现有编辑器功能。
+
+原生 Ren'Py 生成后端 `--pure-renpy` 由独立的
+[rscript2renpy 规划](https://github.com/Love-in-idleness/rscript2renpy/blob/main/docs/ROADMAP.zh.md)维护，尚未实现。

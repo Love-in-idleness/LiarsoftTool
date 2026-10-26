@@ -5,7 +5,7 @@
 ## Использование и сборка
 
 - [Обзор и работа с программой](../README.ru.md); справка CLI — `liarsofttool -h`.
-- [Сборка и упаковка Windows](BUILDING.ru.md)
+- [Сборка и упаковка](BUILDING.ru.md)
 - [Справочник TSC](GSC_OPCODE_REFERENCE.ru.md)
 - [Лицензии аудиобиблиотек](THIRD_PARTY_AUDIO_LICENSES.md)
 

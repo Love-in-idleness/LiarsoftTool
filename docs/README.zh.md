@@ -7,7 +7,7 @@
 ## 使用与构建
 
 - [项目介绍与使用](../README.zh.md)；命令行帮助运行 `liarsofttool -h`。
-- [Windows 构建与打包](BUILDING.zh.md)
+- [源码构建与打包](BUILDING.zh.md)
 - [TSC 指令参考](GSC_OPCODE_REFERENCE.zh.md)
 - [音频依赖许可证](THIRD_PARTY_AUDIO_LICENSES.md)
 

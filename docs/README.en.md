@@ -7,7 +7,7 @@
 ## Usage and builds
 
 - [Overview and use](../README.en.md); CLI help: `liarsofttool -h`.
-- [Windows builds and packaging](BUILDING.en.md)
+- [Source builds and packaging](BUILDING.en.md)
 - [TSC command reference](GSC_OPCODE_REFERENCE.en.md)
 - [Audio dependency licenses, original text](THIRD_PARTY_AUDIO_LICENSES.md)
 

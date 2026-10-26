@@ -2,21 +2,23 @@
 
 [中文](RSCOMP_MEDIA_AUDIT.zh.md) | [English](RSCOMP_MEDIA_AUDIT.en.md) | [Русский](RSCOMP_MEDIA_AUDIT.ru.md) | [日本語](RSCOMP_MEDIA_AUDIT.ja.md)
 
+本页是文件格式与原程序的开发参考，结论限于标明的样本。涉及 EXE 的字体和禁则分析不表示主程序提供 EXE 转换；该入口已禁用。
+
 [返回文档目录](README.zh.md)
 
 两版编译器的媒体命令布局，以及与媒体解码的区别。日常操作见 [主说明](../README.zh.md)。
 以下保留样本与静态分析记录，结论只适用于标明的构建。
 
-核对日期：2026-10-08。只做哈希、PE 导入/导出、字符串和定点反汇编，未加载或执行 DLL。
+只做哈希、PE 导入/导出、字符串和定点反汇编，未加载或执行 DLL。
 
 ## 样本
 
 | 路径 | 字节数 | PE 时间戳 | Compile RVA | SHA-256 |
 | --- | ---: | --- | --- | --- |
 | `CodeXRScript/OC用パッチ/data/RsComp.dll` | 364611 | 2008-07-22 | `0x124e` | `6c65c3545a559b6e4a01d54fdb2f57ad4e605b27dc73959cde18bd3468f3cb30` |
-| `res_ft/UBAI/RsComp.dll` | 90112 | 2012-10-14 | `0x7090` | `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9` |
+| `RsComp.dll (2012)` | 90112 | 2012-10-14 | `0x7090` | `0b1c3cdfc1587f576c30c09b3faa329e88e18fdaddfc0655d1ad398c1654a6a9` |
 
-`ubai/RsComp.dll` 与第二个样本逐字节相同，不是第三个版本。PE 时间戳只是文件字段，不独立证明发布日期。
+PE 时间戳只是文件字段，不独立证明发布日期。
 两者都是 x86 PE32，仅导出 `Compile`，静态导入库均只有 `KERNEL32.dll` 和 `USER32.dll`。
 
 ## 正面证据：媒体命令的编译，不是媒体编解码
@@ -54,7 +56,7 @@
 `oc_reference` 是在浏览器打开的参考资料；追加安装清单只有图片、脚本、`RsComp.dll`
 和 `version.dat`，没有安装 `bgmsv`。这不能证明原引擎会直接使用 MP3。
 
-静态交叉核对 `res_ft/exe/{Cannonball,Forest,kagerou}.exe`：三者均有
+静态交叉核对 `{Cannonball,Forest,kagerou}.exe`：三者均有
 `%s\\Track%02d.wav` 与 `%s\\%04d.wav` 路径模板，未检出 `.mp3` 或 `bgmsv` 特征。
 Cannonball 中前者的调用引用位于 `0x0042c71c`，后者包括 `0x004136ae`；
 `mpegvideo` 的引用位于 `0x00431f8f`，是另一条媒体路径，不能据此将 MP3 放进 BGM/WAV 路径。

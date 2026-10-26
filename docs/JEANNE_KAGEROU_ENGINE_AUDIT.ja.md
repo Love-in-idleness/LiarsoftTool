@@ -2,16 +2,18 @@
 
 [中文](JEANNE_KAGEROU_ENGINE_AUDIT.zh.md) | [English](JEANNE_KAGEROU_ENGINE_AUDIT.en.md) | [Русский](JEANNE_KAGEROU_ENGINE_AUDIT.ru.md) | [日本語](JEANNE_KAGEROU_ENGINE_AUDIT.ja.md)
 
+形式と特定の原プログラムに関する開発資料です。EXE の字体・禁則解析は EXE 変換機能の提供を意味せず、製品側の入口は無効です。
+
 [文書一覧](README.ja.md) · [利用ガイド](../README.ja.md)
 
-2026-10-04 の字体、LWG 名、メディアの静的解析です。原本は起動・変更せず、確認済みの字体機械語形状と LWG 名処理のみ共通変換器に追加しました。
+字体、LWG 名、メディアの静的解析です。原本は起動・変更せず、確認済みの字体機械語形状と LWG 名処理のみ共通変換器に追加しました。
 
 ## 対象
 
 | ファイル | SHA-256 | PE FileVersion |
 | --- | --- | --- |
-| `res_ft/exe/j.exe` | `7cb856bdbc5c61d9606734b30fd83bac880a3eff9829112f0ddf203e3026c4a6` | 1, 11, 0, 3 |
-| `res_ft/exe/kagerou.exe` | `f02998fae350945f4de4dc7eab47997e1e2d9b8aa43d49740a80aad893dcde9b` | 1, 9, 0, 0 |
+| `j.exe` | `7cb856bdbc5c61d9606734b30fd83bac880a3eff9829112f0ddf203e3026c4a6` | 1, 11, 0, 3 |
+| `kagerou.exe` | `f02998fae350945f4de4dc7eab47997e1e2d9b8aa43d49740a80aad893dcde9b` | 1, 9, 0, 0 |
 
 いずれも未パックと見られる PE32/i386、ImageBase `0x400000`。アドレスはファイル位置でなく VA。リソース版は発売日を証明しません。
 
@@ -31,11 +33,15 @@ IAT アドレスだけ可変とし、観測した形状全体を照合して cha
 
 50/53 比較の禁則表は j.exe `0x44d104 / 0x45aca6`、kagerou.exe `0x4499d4 / 0x455126`。ASCII 拡張三つは不変で、新意味は追加しません。字体変更だけでは ANSI API 全体は変わらず、実行環境のコードページが必要です。
 
-## LWG 名と XML
+## LWG の名前と XML
 
-Kagerou の grps.xfl に空項目 46、うち 23 は Photoshop 形式の `</Layer set>` 名です。`empty="1"` は保持されていましたが、未 escape 名が cgview、excompane、extrmenu、fontcompane、scview の .meta.xml を壊し、ElementTree で読めませんでした。
+試料 `kagerou.exe` の `grps.xfl` には 46 個の空項目があり、23 個は Photoshop 形式の `</Layer set>` という名前です。
+名前はアーカイブのデータであり、XML タグとして直接書かず、空項目も捨てません。
 
-共通抽出は `& < > " '` を escape、作成器は五つの XML entity を一度だけ戻します。文字列 &lt; を二重デコードしません。画像検索には抽出側と同じファイル名置換を使い、LWG には原名を保持します。両ゲーム全 32 LWG は空項目、座標、flags、順を含めて完全往復し、全 XML が読めます。既存の壊れた XML は原アーカイブから再抽出してください。この調査で本番 Ren'Py 工程は上書きしていません。
+展開時は名前の `& < > " '` をエスケープし、梱包時は XML 実体を一段だけ復元します。
+文字列としての `&lt;` を二重にデコードしません。画像検索には展開時と同じファイル名置換を使い、
+LWG 内には元の名前を保存します。空項目の印、座標、Flag、順序も保持します。
+壊れた XML は原アーカイブから再展開してください。
 
 ## 画像と音声の経路
 
@@ -49,13 +55,5 @@ Kagerou の grps.xfl に空項目 46、うち 23 は Photoshop 形式の `</Laye
 | 圧縮音声 ACM open | `0x46f253` | `0x46c8e3` |
 
 分岐は実装と一致。実 WCG は全て `0x0271`、新しい LIM サンプルなし。静的分岐確認は全形式テストではなく、PNG 出力成功は原エンジン PNG 対応を意味しません。全トップ XFL と内部 XFL/LWG、Jeanne 音声子アーカイブ七つ、Kagerou 五つ、thumbnail も調査しました。
-
-| 検査 | Jeanne (トップ XFL 16) | Kagerou (9) |
-| --- | ---: | ---: |
-| WCG decode | 2431 | 1462 |
-| LWG decode・往復 | 10 | 22 |
-| Ogg-in-WAV 抽出・格納・再抽出一致 | 4551 | 3698 |
-| PCM 原状保持 | 115 | 0 |
-| 失敗 | 0 | 0 |
 
 Jeanne voice.xfl/0001.wav の Ogg は FFmpeg 全デコード済み。コンテナー検査・完全往復はゲーム内再生長、音、ACM 互換性を保証しません。新しい音声変換不具合は確定しませんでした。
