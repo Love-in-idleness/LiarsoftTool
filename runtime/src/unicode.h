@@ -11,6 +11,11 @@
 
 namespace liarsoft::runtime {
 
+struct GlyphUsage {
+    size_t reserved = 0, historical = 0, required = 0, remaining = 0;
+    bool fits = true;
+};
+
 // Legacy RScript renderers use 16-bit DBCS characters and font-cache keys. Keep the
 // original character walker, using unused CP932 EUDC slots as lossless glyph IDs.
 class GlyphTokens {
@@ -23,6 +28,7 @@ public:
     bool containsTokens(std::string_view transport) const;
     void reserveNative(std::string_view cp932);
     size_t size() const;
+    GlyphUsage measure(const std::vector<std::string>& texts);
     std::vector<uint8_t> serialize() const;
     void restore(const std::vector<uint8_t>& bytes);
 

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "preflight.h"
 
 namespace rscript {
 
@@ -44,5 +45,7 @@ struct LaunchOptions {
 };
 
 DWORD launch(const LaunchOptions& options);
+liarsoft::runtime::CheckResult check_launch(const LaunchOptions& options, bool full,
+    const liarsoft::runtime::CheckProgress& progress = {});
 
 } // namespace rscript

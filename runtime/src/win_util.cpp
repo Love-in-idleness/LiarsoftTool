@@ -2,6 +2,8 @@
 #include "rscript_plugin.h"
 #include "kinsoku.h"
 #include "utf8_text.h"
+#include "pe_image.h"
+#include <cstdio>
 
 #include <tlhelp32.h>
 #include <psapi.h>
@@ -229,22 +231,7 @@ std::wstring quote_argument(const std::wstring& text) {
 }
 
 WORD pe_machine(const std::wstring& path) {
-    Handle file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                            FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (file.value == INVALID_HANDLE_VALUE) win_fail(L"Open executable or DLL");
-    IMAGE_DOS_HEADER dos{};
-    DWORD read = 0;
-    if (!ReadFile(file.value, &dos, sizeof(dos), &read, nullptr) || read != sizeof(dos) ||
-        dos.e_magic != IMAGE_DOS_SIGNATURE || dos.e_lfanew < static_cast<LONG>(sizeof(dos)))
-        fail(L"Invalid PE header: " + path);
-    LARGE_INTEGER position{};
-    position.QuadPart = dos.e_lfanew;
-    if (!SetFilePointerEx(file.value, position, nullptr, FILE_BEGIN)) win_fail(L"Seek PE header");
-    struct { DWORD signature; IMAGE_FILE_HEADER file; } header{};
-    if (!ReadFile(file.value, &header, sizeof(header), &read, nullptr) || read != sizeof(header) ||
-        header.signature != IMAGE_NT_SIGNATURE)
-        fail(L"Invalid PE header: " + path);
-    return header.file.Machine;
+    return liarsoft::runtime::PeImage::read(std::filesystem::path(path)).machine;
 }
 
 std::wstring read_kinsoku(const std::wstring& path) {
@@ -274,30 +261,33 @@ const wchar_t* packet_string(const HostInitPacket* packet, uint32_t offset) {
     return nullptr;
 }
 
+liarsoft::runtime::CheckResult check_launch(const LaunchOptions& options, bool full,
+    const liarsoft::runtime::CheckProgress& progress) {
+    liarsoft::runtime::CheckOptions check;
+    check.game = options.game;
+    check.root = options.root;
+    check.kinsoku = options.kinsoku;
+    check.launcher = module_path();
+    check.host = std::filesystem::path(parent_path(module_path())) / L"RScriptHost.dll";
+    for (const auto& path : options.plugins) check.plugins.emplace_back(path);
+    return liarsoft::runtime::checkCompatibility(check, full, progress);
+}
+
 DWORD launch(const LaunchOptions& supplied) {
+    const auto checked = check_launch(supplied, false);
+    if (!checked.ok()) fail(utf16(checked.text().c_str()));
+    if (!supplied.plugins.empty()) std::fputs(checked.text().c_str(), stdout);
     LaunchOptions options = supplied;
     options.game = full_path(options.game);
     options.root = options.root.empty() ? parent_path(options.game) : full_path(options.root);
-    DWORD attributes = GetFileAttributesW(options.root.c_str());
-    if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY))
-        fail(L"Resource directory does not exist: " + options.root);
-    if (options.plugins.size() > max_plugins) fail(L"Too many enabled DLLs (maximum 64)");
     const bool unicode = std::any_of(options.plugins.begin(), options.plugins.end(), [](const std::wstring& plugin) {
         const auto name = plugin.substr(plugin.find_last_of(L"\\/") + 1);
         return _wcsicmp(name.c_str(), L"RScriptUnicode.dll") == 0;
     });
     if (options.kinsoku.empty() && unicode) options.kinsoku = parent_path(module_path()) + L"\\kinsoku.json";
     const auto kinsoku = options.kinsoku.empty() ? std::wstring{} : read_kinsoku(full_path(options.kinsoku));
-    WORD target_machine = pe_machine(options.game);
     std::wstring host = parent_path(module_path()) + L"\\RScriptHost.dll";
-    if (!options.plugins.empty()) {
-        if (target_machine != pe_machine(module_path())) fail(L"Launcher and game architectures do not match");
-        if (pe_machine(host) != target_machine) fail(L"Host and game architectures do not match");
-        for (auto& plugin : options.plugins) {
-            plugin = full_path(plugin);
-            if (pe_machine(plugin) != target_machine) fail(L"DLL and game architectures do not match: " + plugin);
-        }
-    }
+    for (auto& plugin : options.plugins) plugin = full_path(plugin);
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};

@@ -60,7 +60,8 @@ def main():
         shutil.copy2(installed / "loader_plugin.dll", installed / "RScriptUnicode.dll")
         run(["RScriptUnicode.dll"], False)
         (installed / "kinsoku.json").write_text(rules, encoding="utf-8")
-        assert "plugin=initialized" in run(["RScriptUnicode.dll"], True, expected=rules)
+        # A built-in module now also needs its engine dependency at preflight.
+        run(["RScriptUnicode.dll"], False, expected=rules)
         (installed / "kinsoku.json").unlink()
         assert "plugin=initialized" in run(["loader_plugin.dll"], True)
         run([], False, root / "missing rules.json")
@@ -76,6 +77,23 @@ def main():
         run(["loader_bad_abi.dll"], False)
         run(["missing.dll"], False)
         run(["loader_plugin.dll", "loader_plugin.dll"], False)
+        marker.unlink(missing_ok=True)
+        snapshot = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in installed.iterdir() if p.is_file()}
+        for plugins, success in (([], True), (["loader_plugin.dll"], True),
+                                  (["loader_bad_abi.dll"], True), (["missing.dll"], False)):
+            command = prefix + [str(installed / "RScriptLauncher.exe"), "--check", "--game",
+                windows_path(installed / "loader_game.exe"), "--resources", windows_path(root)]
+            for plugin in plugins:
+                command += ["--plugin", windows_path(installed / plugin)]
+            process = subprocess.run(command, env=environment, capture_output=True, timeout=90)
+            assert (process.returncode == 0) == success, (command, process.stdout, process.stderr)
+            assert not marker.exists(), "Read-only check executed the game entry point"
+        assert all(p.read_bytes() == contents and p.stat().st_mtime_ns == timestamp
+                   for p, (contents, timestamp) in snapshot.items()), "Check changed input files"
+        conflict = prefix + [str(installed / "RScriptLauncher.exe"), "--check", "--wait", "--game",
+                             windows_path(installed / "loader_game.exe")]
+        assert subprocess.run(conflict, env=environment, capture_output=True, timeout=90).returncode != 0
+        assert not marker.exists()
         run(["RScriptHost.dll"], False)
         (installed / "RScriptHost.dll").unlink()
         assert "host=0" in run([], True)

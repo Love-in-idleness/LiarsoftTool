@@ -40,42 +40,47 @@ std::vector<size_t> nativeSlots(std::string_view bytes) {
     return result;
 }
 
-} // namespace
-
-std::string GlyphTokens::encode(std::string_view text) {
-    struct Character { char16_t cp; std::string native; };
-    std::vector<Character> characters;
-    std::vector<size_t> usedNative;
-    std::set<char16_t> required;
-    std::lock_guard<std::mutex> lock(mutex_);
+struct Character { char16_t cp; std::string native; };
+std::vector<Character> characters(std::string_view text,
+    std::unordered_map<char16_t, std::string>& cache) {
+    std::vector<Character> result;
     for (size_t offset = 0; offset < text.size();) {
         const auto start = offset;
-        const uint32_t cp = nextUtf8(text, offset);
-        if (cp == 0) throw std::runtime_error("A runtime script string contains NUL");
-        // shortcut: the original glyph renderer consumes one UTF-16 unit; add
-        // shaping and glyph-index delivery before accepting supplementary text.
-        if (cp > 0xffff)
-            throw std::runtime_error("Unicode renderer does not support supplementary characters");
-        Character character{char16_t(cp), {}};
-        const std::string scalar(text.substr(start, offset - start));
-        const auto cached = nativeEncoding_.find(character.cp);
-        if (cached != nativeEncoding_.end()) character.native = cached->second;
-        else {
+        const auto cp = nextUtf8(text, offset);
+        if (!cp) throw std::runtime_error("A runtime script string contains NUL");
+        // shortcut: the native renderer consumes one UTF-16 unit; add shaping
+        // and glyph-index delivery before accepting supplementary characters.
+        if (cp > 0xffff) throw std::runtime_error("Unicode renderer does not support supplementary characters");
+        const auto value = char16_t(cp);
+        auto found = cache.find(value);
+        if (found == cache.end()) {
+            std::string native;
+            const std::string scalar(text.substr(start, offset - start));
             try {
                 auto encoded = convertEncoding(scalar, "UTF-8", "CP932", true);
                 if (convertEncoding(encoded, "CP932", "UTF-8", true) == scalar)
-                    character.native = std::move(encoded);
-            } catch (const std::runtime_error&) {
-                // A lossless internal token, not '?' or a best-fit substitute.
-            }
-            nativeEncoding_.emplace(character.cp, character.native);
+                    native = std::move(encoded);
+            } catch (const std::runtime_error&) {}
+            found = cache.emplace(value, std::move(native)).first;
         }
+        result.push_back({value, found->second});
+    }
+    return result;
+}
+
+} // namespace
+
+std::string GlyphTokens::encode(std::string_view text) {
+    std::vector<size_t> usedNative;
+    std::set<char16_t> required;
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto decoded = characters(text, nativeEncoding_);
+    for (const auto& character : decoded) {
         if (character.native.empty()) required.insert(character.cp);
         else {
             const auto slots = nativeSlots(character.native);
             usedNative.insert(usedNative.end(), slots.begin(), slots.end());
         }
-        characters.push_back(std::move(character));
     }
 
     for (const auto slot : usedNative)
@@ -102,7 +107,7 @@ std::string GlyphTokens::encode(std::string_view text) {
         tokens_.emplace(cp, tokenValue(slot));
         glyphs_[slot] = cp;
     }
-    for (const auto& character : characters) {
+    for (const auto& character : decoded) {
         if (!character.native.empty()) output += character.native;
         else {
             const auto token = tokens_.at(character.cp);
@@ -111,6 +116,30 @@ std::string GlyphTokens::encode(std::string_view text) {
         }
     }
     return output;
+}
+
+GlyphUsage GlyphTokens::measure(const std::vector<std::string>& texts) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto reserved = native_;
+    std::set<char16_t> required;
+    for (const auto& text : texts) {
+        for (const auto& character : characters(text, nativeEncoding_)) {
+            if (character.native.empty()) {
+                if (!tokens_.count(character.cp)) required.insert(character.cp);
+            } else for (const auto slot : nativeSlots(character.native)) {
+                if (glyphs_[slot]) throw std::runtime_error("Native EUDC conflicts with an allocated Unicode glyph token");
+                reserved[slot] = true;
+            }
+        }
+    }
+    GlyphUsage usage;
+    for (const auto slot : reserved) usage.reserved += slot;
+    usage.historical = tokens_.size();
+    usage.required = required.size();
+    const auto available = capacity - usage.reserved - usage.historical;
+    usage.fits = usage.required <= available;
+    usage.remaining = usage.fits ? available - usage.required : 0;
+    return usage;
 }
 
 void GlyphTokens::reserveNative(std::string_view text) {

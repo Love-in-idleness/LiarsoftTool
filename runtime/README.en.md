@@ -17,7 +17,7 @@ They do not need to be placed in the game directory. Open the launcher:
 
 1. Select the game EXE in **Game executable**.
 2. Select an **Override resources** directory, or leave it empty to use the game directory.
-3. Check the DLLs you need and click **Start game**.
+3. Select the DLLs, run **Check compatibility**, then click **Start game**.
 
 Test with a game copy first: even though extensions do not rewrite resources, the game itself may write saves.
 
@@ -34,6 +34,28 @@ With everything unchecked, the original game runs without DLL injection. Changes
 **Add DLL...** adds another DLL, initially unchecked. Load trusted files only:
 native DLLs can access or modify the entire game process; there is no sandbox.
 See the [DLL development guide](SDK.en.md). No Wiki DLL is included, and DLLs cannot be unloaded while playing.
+
+## Preflight checks
+
+**Check compatibility** checks the selected game, DLLs and override scripts in the background,
+with progress and a **Cancel check** button. Changing the game, override directory or DLL selection
+invalidates the previous result. The check only reads files: it does not run the game, load extension
+DLLs, or create or modify a glyph dictionary.
+
+**ERROR** identifies a definite fault that blocks startup. **PENDING** means static analysis cannot
+confirm a capability; DLL initialization must still verify it. **INCOMPLETE** and **CANCELLED**
+are not successful checks. Glyph statistics separate native reserved slots, historical mappings,
+new mappings required by the patch, and remaining capacity. Lossless CP932 characters need no new
+mapping. Problems are reported per script, continuing after damaged files.
+
+`--check` performs the full check and exits; it cannot be combined with `--wait`.
+See `RScriptLauncher --help` for arguments. Definite errors or incomplete checks return nonzero;
+information and pending verification alone return zero. Normal startup repeats only lightweight
+checks, without compiling the whole patch.
+
+A standalone build without the built-in game modules provides basic checks only and explicitly
+reports that full script checking is unavailable. Static checks cannot verify all font glyphs,
+actual import addresses or other DLLs' hook conflicts; native testing remains necessary.
 
 ## Resource overrides
 
