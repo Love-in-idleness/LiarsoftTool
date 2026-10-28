@@ -61,6 +61,7 @@ int wmain(int argc, wchar_t** argv) {
         require(CreateProcessW(argv[1], command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process), "Cannot run launcher fixture");
         std::pair<DWORD,HWND*> find{process.dwProcessId, &window};
         require(wait([&] { EnumWindows(findWindow, reinterpret_cast<LPARAM>(&find)); return window != nullptr; }), "Launcher window did not appear");
+        require(wait([&] { return IsWindowVisible(window) && GetDlgItem(window, 109); }), "Launcher controls did not finish initialization");
         SendMessageW(GetDlgItem(window, 101), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(exe.c_str()));
         SendMessageW(GetDlgItem(window, 103), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(root.c_str()));
         const auto list = GetDlgItem(window, 105);
@@ -72,11 +73,14 @@ int wmain(int argc, wchar_t** argv) {
         SIZE_T written = 0;
         require(WriteProcessMemory(process.hProcess, remoteItem, &checked, sizeof(checked), &written) && written == sizeof(checked), "Cannot set list-view test state");
         for (unsigned index = 0; index < 2; ++index)
-            SendMessageW(list, LVM_SETITEMSTATE, index, reinterpret_cast<LPARAM>(remoteItem));
+            require(SendMessageW(list, LVM_SETITEMSTATE, index, reinterpret_cast<LPARAM>(remoteItem)) != FALSE, "Cannot enable the test DLLs");
         VirtualFreeEx(process.hProcess, remoteItem, 0, MEM_RELEASE);
         const auto button = GetDlgItem(window, 108), report = GetDlgItem(window, 109);
         SendMessageW(window, WM_COMMAND, MAKEWPARAM(108, BN_CLICKED), reinterpret_cast<LPARAM>(button));
-        require(wait([&] { return text(button) == L"Cancel check"; }), "Background check did not start");
+        if (!wait([&] { return text(button) == L"Cancel check"; })) {
+            std::wcerr << L"Button: " << text(button) << L"\nReport: " << text(report) << L'\n';
+            throw std::runtime_error("Background check did not start");
+        }
         // Editing while the worker runs must invalidate both progress and result.
         const auto changed = root / "different.exe";
         SendMessageW(GetDlgItem(window, 101), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(changed.c_str()));
