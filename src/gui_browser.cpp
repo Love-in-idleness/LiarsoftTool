@@ -6,6 +6,7 @@
 #include <adwaita.h>
 #include <libintl.h>
 #include <algorithm>
+#include <cstring>
 #include <iomanip>
 #include <memory>
 #include <optional>
@@ -167,12 +168,24 @@ void applyResult(Browser* b, Result& result, const Request& input) {
                 throw std::runtime_error(cairo_status_to_string(cairo_surface_status(b->imageSurface)));
             zoomImage(b); gtk_stack_set_visible_child_name(GTK_STACK(b->stack), "image");
         } else if (result.error.empty() && preview.kind == PreviewKind::Audio) {
-            auto* bytes = new std::vector<uint8_t>(std::move(preview.audio));
-            auto* storage = g_bytes_new_with_free_func(bytes->data(), bytes->size(),
-                +[](gpointer data) { delete static_cast<std::vector<uint8_t>*>(data); }, bytes);
-            auto* stream = g_memory_input_stream_new_from_bytes(storage);
-            b->media = gtk_media_file_new_for_input_stream(stream);
-            g_object_unref(stream); g_bytes_unref(storage);
+            b->media = gtk_media_file_new();
+            // The older GStreamer backend asserts on GInputStream. Its data:
+            // URI source keeps preview bytes in memory on all supported GTKs.
+            if (gtk_get_minor_version() < 22 && g_str_has_prefix(G_OBJECT_TYPE_NAME(b->media), "GtkGst")) {
+                const bool ogg = preview.audio.size() >= 4 && !std::memcmp(preview.audio.data(), "OggS", 4);
+                auto* encoded = g_base64_encode(preview.audio.data(), preview.audio.size());
+                auto* uri = g_strdup_printf("data:%s;base64,%s", ogg ? "audio/ogg" : "audio/x-wav", encoded);
+                auto* file = g_file_new_for_uri(uri);
+                gtk_media_file_set_file(GTK_MEDIA_FILE(b->media), file);
+                g_object_unref(file); g_free(uri); g_free(encoded);
+            } else {
+                auto* bytes = new std::vector<uint8_t>(std::move(preview.audio));
+                auto* storage = g_bytes_new_with_free_func(bytes->data(), bytes->size(),
+                    +[](gpointer data) { delete static_cast<std::vector<uint8_t>*>(data); }, bytes);
+                auto* stream = g_memory_input_stream_new_from_bytes(storage);
+                gtk_media_file_set_input_stream(GTK_MEDIA_FILE(b->media), stream);
+                g_object_unref(stream); g_bytes_unref(storage);
+            }
             gtk_media_controls_set_media_stream(GTK_MEDIA_CONTROLS(b->mediaControls), b->media);
             gtk_media_stream_set_volume(b->media, gtk_range_get_value(GTK_RANGE(b->volume)));
             g_signal_connect_object(b->media, "notify::error", reinterpret_cast<GCallback>(+[](GtkMediaStream* media, GParamSpec*, GtkWidget* root) {

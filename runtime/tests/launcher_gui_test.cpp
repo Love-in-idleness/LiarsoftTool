@@ -2,6 +2,7 @@
 #define UNICODE
 #endif
 #include <windows.h>
+#include <commctrl.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -63,8 +64,16 @@ int wmain(int argc, wchar_t** argv) {
         SendMessageW(GetDlgItem(window, 101), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(exe.c_str()));
         SendMessageW(GetDlgItem(window, 103), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(root.c_str()));
         const auto list = GetDlgItem(window, 105);
-        SendMessageW(list, WM_KEYDOWN, VK_HOME, 0); SendMessageW(list, WM_KEYDOWN, VK_SPACE, 0);
-        SendMessageW(list, WM_KEYDOWN, VK_DOWN, 0); SendMessageW(list, WM_KEYDOWN, VK_SPACE, 0);
+        LVITEMW checked{};
+        checked.stateMask = LVIS_STATEIMAGEMASK;
+        checked.state = INDEXTOSTATEIMAGEMASK(2);
+        auto* remoteItem = VirtualAllocEx(process.hProcess, nullptr, sizeof(checked), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        require(remoteItem != nullptr, "Cannot allocate list-view test state");
+        SIZE_T written = 0;
+        require(WriteProcessMemory(process.hProcess, remoteItem, &checked, sizeof(checked), &written) && written == sizeof(checked), "Cannot set list-view test state");
+        for (unsigned index = 0; index < 2; ++index)
+            SendMessageW(list, LVM_SETITEMSTATE, index, reinterpret_cast<LPARAM>(remoteItem));
+        VirtualFreeEx(process.hProcess, remoteItem, 0, MEM_RELEASE);
         const auto button = GetDlgItem(window, 108), report = GetDlgItem(window, 109);
         SendMessageW(window, WM_COMMAND, MAKEWPARAM(108, BN_CLICKED), reinterpret_cast<LPARAM>(button));
         require(wait([&] { return text(button) == L"Cancel check"; }), "Background check did not start");

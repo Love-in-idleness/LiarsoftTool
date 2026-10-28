@@ -21,6 +21,8 @@ jobs:
     env:
       GSK_RENDERER: cairo
       GSETTINGS_BACKEND: memory
+      GTK_A11Y: none
+      GST_PLUGIN_FEATURE_RANK: fakeaudiosink:max
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,7 +30,7 @@ jobs:
       - name: Install build and GUI test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext xvfb xauth dbus-x11 gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext xvfb xauth dbus-x11 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_RUNTIME=ON -DBUILD_TESTING=ON
       - name: Build
@@ -64,6 +66,8 @@ jobs:
     env:
       GSK_RENDERER: cairo
       GSETTINGS_BACKEND: memory
+      GTK_A11Y: none
+      GST_PLUGIN_FEATURE_RANK: fakeaudiosink:max
     steps:
       - name: Keep source line endings
         shell: pwsh
@@ -83,6 +87,7 @@ jobs:
             mingw-w64-ucrt-x86_64-libogg mingw-w64-ucrt-x86_64-uchardet
             mingw-w64-ucrt-x86_64-curl mingw-w64-ucrt-x86_64-gstreamer
             mingw-w64-ucrt-x86_64-gst-plugins-base mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
             mingw-w64-ucrt-x86_64-python
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON

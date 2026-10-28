@@ -96,7 +96,7 @@ struct RemoteBuffer {
     ~RemoteBuffer() { if (data) VirtualFreeEx(process, data, 0, MEM_RELEASE); }
 };
 
-void load_host(HANDLE process, DWORD process_id, const std::wstring& path) {
+uintptr_t load_host(HANDLE process, DWORD process_id, const std::wstring& path) {
     if (path.size() >= 32767) fail(L"The host DLL path is too long");
     RemoteBuffer name(process, path.c_str(), (path.size() + 1) * sizeof(wchar_t));
     struct UnicodeString { USHORT length, capacity; wchar_t* buffer; };
@@ -135,6 +135,10 @@ void load_host(HANDLE process, DWORD process_id, const std::wstring& path) {
     DWORD status = remote_call(process, reinterpret_cast<uintptr_t>(bootstrap.data), nullptr);
     if (static_cast<LONG>(status) < 0)
         fail(L"The game could not load RScriptHost.dll (NTSTATUS " + std::to_wstring(status) + L")");
+    SIZE_T read = 0;
+    if (!ReadProcessMemory(process, output.data, &module, sizeof(module), &read) || read != sizeof(module) || !module)
+        fail(L"Cannot read the host module returned by the Windows loader");
+    return module;
 }
 
 std::vector<unsigned char> make_packet(const LaunchOptions& options, const std::wstring& kinsoku) {
@@ -298,7 +302,7 @@ DWORD launch(const LaunchOptions& supplied) {
     Handle process_handle(process.hProcess), thread_handle(process.hThread);
     try {
         if (!options.plugins.empty()) {
-            load_host(process.hProcess, process.dwProcessId, host);
+            const auto host_address = load_host(process.hProcess, process.dwProcessId, host);
             HMODULE local = LoadLibraryExW(host.c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
             if (!local) win_fail(L"Read host exports");
             auto entry = GetProcAddress(local, "RScriptHost_Initialize");
@@ -308,7 +312,7 @@ DWORD launch(const LaunchOptions& supplied) {
             if (!offset) fail(L"RScriptHost.dll has no initialization entry");
             auto packet = make_packet(options, kinsoku);
             RemoteBuffer remote(process.hProcess, packet.data(), packet.size());
-            DWORD initialized = remote_call(process.hProcess, remote_module(process.dwProcessId, host) + offset, remote.data);
+            DWORD initialized = remote_call(process.hProcess, host_address + offset, remote.data);
             HostInitPacket result{};
             SIZE_T read = 0;
             if (!ReadProcessMemory(process.hProcess, remote.data, &result, sizeof(result), &read) || read != sizeof(result))

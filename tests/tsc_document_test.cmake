@@ -1,6 +1,6 @@
 file(MAKE_DIRECTORY "${TEST_ROOT}/中文 path")
 set(source "${TEST_ROOT}/中文 path/source.tsc")
-file(WRITE "${source}" ";@gsc-byte-format modern-36\r\n;@gsc-schema modern\r\n:entry\r\n*font 1 0 0 0 0 \"中文😀\"\r\n*goto entry\r\n")
+file(WRITE "${source}" ";@gsc-byte-format modern-36\n;@gsc-schema modern\n:entry\n*font 1 0 0 0 0 \"中文😀\"\n*goto entry\n")
 execute_process(COMMAND "${TOOL}" --inspect-tsc "${source}" RESULT_VARIABLE code OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT code EQUAL 0 OR NOT error STREQUAL "" OR NOT output MATCHES "\"version\":1" OR NOT output MATCHES "\"role\":\"target\"")
     message(FATAL_ERROR "Inspection failed: ${output} ${error}")

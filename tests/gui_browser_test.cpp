@@ -106,7 +106,13 @@ gboolean step(gpointer) {
         } else if (stage == 14 && b->media && gtk_media_stream_is_prepared(b->media)) {
             gtk_range_set_value(GTK_RANGE(b->volume), 0.3);
             require(gtk_media_stream_get_volume(b->media) == 0.3, "audio volume not connected");
-            require(G_IS_SEEKABLE(gtk_media_file_get_input_stream(GTK_MEDIA_FILE(b->media))), "audio stream not seekable");
+            if (auto* stream = gtk_media_file_get_input_stream(GTK_MEDIA_FILE(b->media)))
+                require(G_IS_SEEKABLE(stream), "audio stream not seekable");
+            else {
+                auto* uri = g_file_get_uri(gtk_media_file_get_file(GTK_MEDIA_FILE(b->media)));
+                require(g_str_has_prefix(uri, "data:"), "audio preview escaped memory");
+                g_free(uri);
+            }
             require(gtk_media_stream_has_audio(b->media) && gtk_media_stream_get_duration(b->media) > 0, "audio not decoded");
             require(gtk_media_stream_is_seekable(b->media), "audio player cannot seek");
             gtk_media_stream_set_muted(b->media, TRUE);

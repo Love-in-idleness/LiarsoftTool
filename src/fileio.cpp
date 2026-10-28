@@ -27,6 +27,8 @@
 namespace liarsoft {
 
 std::vector<uint8_t> readFile(const std::filesystem::path& path) {
+    if (!std::filesystem::is_regular_file(path))
+        throw std::runtime_error("Not a regular file: " + path.u8string());
     std::ifstream in(path, std::ios::binary | std::ios::ate);
     if (!in) throw std::runtime_error("Cannot open: " + path.string());
     try { return readStream(in); }
