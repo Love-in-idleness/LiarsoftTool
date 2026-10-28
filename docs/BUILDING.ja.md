@@ -9,6 +9,14 @@ Vorbis/Ogg、uchardet 静的ライブラリ、libcurl 7.85+ が必要で、Unix 
 GUI には GTK4 4.10+、libadwaita 1.5+、gettext、pkg-config、
 音声プレビューには GTK メディアバックエンドと GStreamer base/good プラグインが必要です。
 
+## 自動ビルド
+
+[GitHub Actions](../.github/workflows/ci.yml) は push、pull request、手動実行で Linux の
+CLI・GUI・runtime、Windows x64 の本体、Windows x86 の runtime をビルド・検査します。
+32-bit runtime はゲームモジュールあり・なしの両方を検査します。生成したテストデータを使い、
+ゲームの実行やゲーム素材のアップロードは行いません。Release は自動公開しません。
+結果とログはリポジトリの Actions ページを参照してください。
+
 ## Linux
 
 Debian / Ubuntu（パッケージの版が上記の要件を満たすこと）：

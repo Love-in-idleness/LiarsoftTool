@@ -9,6 +9,14 @@ Vorbis/Ogg, a static uchardet library, and libcurl 7.85+; Unix also needs iconv.
 The GUI additionally needs GTK4 4.10+, libadwaita 1.5+, gettext, and pkg-config.
 Audio previews need a GTK media backend and GStreamer's base/good plugins.
 
+## Automated builds
+
+[GitHub Actions](../.github/workflows/ci.yml) builds and tests the Linux CLI, GUI and runtime,
+the Windows x64 application, and the Windows x86 runtime on pushes, pull requests and manual runs.
+The 32-bit runtime is checked with and without the game modules. Tests use generated fixtures;
+they do not run games or upload game resources. The workflow does not publish releases automatically.
+See the repository's Actions page for results and logs.
+
 ## Linux
 
 Debian / Ubuntu, with package repositories meeting the minimum versions above:

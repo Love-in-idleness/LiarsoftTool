@@ -1,0 +1,165 @@
+name: Build and test
+
+on:
+  push:
+    branches: [master, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux CLI, GUI and runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GSK_RENDERER: cairo
+      GSETTINGS_BACKEND: memory
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install build and GUI test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config libwebp-dev libvorbis-dev libogg-dev libuchardet-dev libcurl4-openssl-dev libgtk-4-dev libadwaita-1-dev gettext xvfb xauth dbus-x11 gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_RUNTIME=ON -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: dbus-run-session -- ctest --test-dir build --output-on-failure --timeout 120
+      - name: Check Windows packaging rules
+        run: python3 tests/test_windows_pack.py
+      - name: Upload Linux executables
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-x86_64
+          path: |
+            build/liarsofttool
+            build/liarsofttool-gui
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-test-logs
+          path: build/Testing/Temporary/
+          retention-days: 14
+
+  windows:
+    name: Windows x64 CLI and GTK GUI
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: msys2 {0}
+    env:
+      GSK_RENDERER: cairo
+      GSETTINGS_BACKEND: memory
+    steps:
+      - name: Keep source line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-libadwaita mingw-w64-ucrt-x86_64-gettext-tools
+            mingw-w64-ucrt-x86_64-libwebp mingw-w64-ucrt-x86_64-libvorbis
+            mingw-w64-ucrt-x86_64-libogg mingw-w64-ucrt-x86_64-uchardet
+            mingw-w64-ucrt-x86_64-curl mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-python
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 120
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x64-test-logs
+          path: build/Testing/Temporary/
+          retention-days: 14
+
+  runtime:
+    name: Windows x86 runtime (game modules ${{ matrix.game_modules }})
+    runs-on: windows-2022
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        game_modules: ['ON', 'OFF']
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Keep source line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The injected DLLs must match the original 32-bit game process.
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: MINGW32
+          update: true
+          install: >-
+            curl tar mingw-w64-i686-gcc mingw-w64-i686-cmake
+            mingw-w64-i686-ninja mingw-w64-i686-python
+      - name: Prepare game-module dependencies
+        if: matrix.game_modules == 'ON'
+        run: |
+          pacman -S --needed --noconfirm mingw-w64-i686-libwebp mingw-w64-i686-libvorbis
+          mkdir -p build
+          curl --fail --location --retry 3 https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz -o build/uchardet.tar.xz
+          tar -xf build/uchardet.tar.xz -C build
+          cmake -S build/uchardet-0.0.8 -B build/uchardet -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DBUILD_SHARED_LIBS=OFF -DBUILD_BINARY=OFF -DCMAKE_INSTALL_PREFIX="$PWD/build/deps"
+          cmake --build build/uchardet --parallel 2
+          cmake --install build/uchardet
+      - name: Configure
+        env:
+          GAME_MODULES: ${{ matrix.game_modules }}
+        run: |
+          dependencies=()
+          if [[ "$GAME_MODULES" == ON ]]; then
+            dependencies=(
+              "-DUCHARDET_INCLUDE_DIR=$PWD/build/deps/include"
+              "-DUCHARDET_LIBRARY=$PWD/build/deps/lib/libuchardet.a"
+              "-DWEBP_LIBRARY=$MINGW_PREFIX/lib/libwebp.a"
+              "-DSHARPYUV_LIBRARY=$MINGW_PREFIX/lib/libsharpyuv.a"
+              "-DVORBISFILE_LIBRARY=$MINGW_PREFIX/lib/libvorbisfile.a"
+              "-DVORBIS_LIBRARY=$MINGW_PREFIX/lib/libvorbis.a"
+              "-DVORBISENC_LIBRARY=$MINGW_PREFIX/lib/libvorbisenc.a"
+              "-DOGG_LIBRARY=$MINGW_PREFIX/lib/libogg.a"
+            )
+          fi
+          cmake -S runtime -B build/runtime -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DRSCRIPT_BUILD_GAME_MODULES="$GAME_MODULES" "${dependencies[@]}"
+      - name: Build
+        run: cmake --build build/runtime --parallel 2
+      - name: Test
+        run: ctest --test-dir build/runtime --output-on-failure --timeout 180
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-x86-runtime-${{ matrix.game_modules }}-logs
+          path: build/runtime/Testing/Temporary/
+          retention-days: 14

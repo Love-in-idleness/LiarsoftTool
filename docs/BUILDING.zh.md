@@ -9,6 +9,13 @@ uchardet 静态库及 libcurl 7.85+；Unix 还需 iconv。
 GUI 另需 GTK4 4.10+、libadwaita 1.5+、gettext 和 pkg-config。
 音频预览需要 GTK 媒体后端和 GStreamer 的基础／常用插件。
 
+## 自动构建
+
+[GitHub Actions](../.github/workflows/ci.yml) 在推送、拉取请求和手动触发时构建并测试
+Linux CLI、GUI 和运行时，以及 Windows x64 主程序和 Windows x86 运行时。
+32 位运行时分别检查完整模块与基础构建。测试使用生成的样本，不运行游戏或上传游戏资源；
+工作流不自动发布版本。运行结果与日志见仓库的 Actions 页面。
+
 ## Linux
 
 Debian / Ubuntu（软件源须满足上述最低版本）：
