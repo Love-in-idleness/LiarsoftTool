@@ -2,7 +2,7 @@
   "name": "liarsofttool-tsc",
   "displayName": "CodeX TSC",
   "description": "%description%",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "love-in-idleness",
   "license": "GPL-3.0-only",
   "repository": {
