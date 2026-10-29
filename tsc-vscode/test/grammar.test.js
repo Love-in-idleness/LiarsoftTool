@@ -49,3 +49,10 @@ test('one complete catalog covers frontend, errors and format placeholders in al
     assert.equal(languageId('ru-RU'), 'ru'); assert.equal(languageId('fr'), 'en');
     assert.equal(translator('fr')('dialogue'), 'Dialogue');
 });
+
+
+test("resource encoding choices exclude UTF-8", () => {
+    const encodings = read("package.json").contributes.configuration.properties["liarsofttool.encoding"].enum;
+    assert.ok(!encodings.includes("UTF-8"));
+    assert.ok(encodings.includes("GB18030"));
+});

@@ -6,7 +6,7 @@ const { profile, newScene, integer } = require('./graph');
 const { runTool } = require('./tool');
 const { userError } = require('./messages');
 const manifest = 'tsc.project.json';
-const encodings = ['CP932', 'GBK', 'CP1251', 'UTF-8', 'GB18030', 'CP950', 'CP949', ...[1250, 1252, 1253, 1254, 1255, 1256, 1257, 1258].map(n => 'CP' + n)];
+const encodings = ['CP932', 'GBK', 'CP1251', 'GB18030', 'CP950', 'CP949', ...[1250, 1252, 1253, 1254, 1255, 1256, 1257, 1258].map(n => 'CP' + n)];
 function within(root, file) { const relative = path.relative(root, file); return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative)); }
 async function safePath(root, relative) {
     if (typeof relative !== 'string' || path.isAbsolute(relative)) throw new Error('Use a relative project path');
