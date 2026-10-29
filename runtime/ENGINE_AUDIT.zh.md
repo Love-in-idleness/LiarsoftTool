@@ -104,7 +104,7 @@ SevenBridge 的 `FindFirstFileA` 仅用于存档／建目录，不是资源预�
 SevenBridge 的 `0x43e450` 在绘制后把字符分类写入布局数组：`0` 为普通，`1` 为不可行首，`2` 为不可行末。
 `0x43e540–0x43e798` 比较 `SI`，分支分别汇入 `0x43e7cc`、`0x43e7b3`，普通路径为 `0x43e79a`。
 
-[native_kinsoku.cpp](src/native_kinsoku.cpp) 核对完整 ASCII／CP932 比较组、条件跳转及共同目标，
+[kinsoku_match.cpp](../src/kinsoku_match.cpp) 核对完整 ASCII／CP932 比较组、条件跳转及共同目标，
 支持直接比较和 `MOV EAX / CMP SI, AX` 形态。进程内桥接对齐调用栈，保存寄存器、标志与 FPU/SIMD 状态，
 恢复字形编号对应的 Unicode 字符，再按 [kinsoku.json](kinsoku.json) 分类。
 无法作为单个字符解码的原生组合继续使用原判断。没有识别到分类器时拒绝启用 Unicode。

@@ -8,7 +8,7 @@
 
 `ちんまい吸血姫体験版.exe`，SHA-256：
 `21db7a449d329fb6bb030b1c1cf4050b0f519a52bd19167ba0d27dcc4cd6740e`。
-以下是静态格式依据，不是原游戏运行验证。主程序的 EXE 转换入口已禁用。
+以下是静态格式依据，不是原游戏运行验证。EXE 编辑是需明确启用的[实验性功能](EXE_EDITOR.zh.md)，支持范围以编辑器检查结果为准。
 
 与 [Evermaiden 中文程序](EVERMAIDEN_ENGINE_AUDIT.zh.md)相比，PE 头、节布局、大小、编译时间及 PDB 标识相同。
 `.text` 仅有 10 个字体 charset 字节不同，但字符串、初始化数据和 PE 资源仍有差异，不能视为同一文件。

@@ -6,7 +6,7 @@
 
 A resource tool for CodeX RScript games: pack and unpack archives, convert images and audio,
 and extract, edit, and rebuild GSC scripts. It targets works by Liar-soft, raiL-soft, and related creators;
-support varies by game. Game EXE conversion is not available.
+support varies by game. EXE editing is experimental and off by default.
 
 To generate Ren'Py projects, use the separate [rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy) project.
 
@@ -53,6 +53,14 @@ GSC→TSC is experimental. Keep the original GSC and generated labels and metada
 Successful conversion does not establish compatibility with every engine version.
 See the [TSC reference](docs/GSC_OPCODE_REFERENCE.en.md) for commands.
 
+## EXE editor (experimental)
+
+Enable it in Preferences to use a separate page for font charsets, window titles, control prompts, scene captions and line-break rules.
+Long translations produce a separate EXE; unverified entries are read-only. Font charset changes do not change the Windows system locale.
+See the [EXE editor guide](docs/EXE_EDITOR.en.md); CLI inspection and editing options are listed by `liarsofttool -h`.
+
+UTF-8 is not a resource-encoding option. Text formats such as TSC and the runtime Unicode module retain UTF-8 support.
+
 ## Experimental runtime
 
 [RScript Runtime](runtime/README.en.md) provides a Windows loader, optional DLLs, loose-resource overrides, and UTF-8 adaptation.
@@ -85,3 +93,5 @@ LiarsoftTool is licensed under GPLv3. Third-party components retain their own li
 - [GStreamer](https://gstreamer.freedesktop.org/) — audio previews through GTK's media backend.
 - [libcurl](https://curl.se/libcurl/) — HTTPS update checks.
 - [uchardet](https://www.freedesktop.org/wiki/Software/uchardet/) — GSC encoding detection; [license notices](docs/THIRD_PARTY_UCHARDET_LICENSES.md). Statically linked, unmodified 0.0.8 [source](https://deb.debian.org/debian/pool/main/u/uchardet/uchardet_0.0.8.orig.tar.xz), used under GPLv2 or later.
+
+- [HDE32](https://github.com/TsudaKageyu/minhook/tree/v1.3.4/src/hde) — x86 instruction decoding for EXE editing; [license](third_party/hde32/LICENSE.txt).

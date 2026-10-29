@@ -4,6 +4,7 @@
 
 ## Использование и сборка
 
+- [Редактор EXE (экспериментальный)](EXE_EDITOR.ru.md)
 - [Обзор и работа с программой](../README.ru.md); справка CLI — `liarsofttool -h`.
 - [Сборка и упаковка](BUILDING.ru.md)
 - [Справочник TSC](GSC_OPCODE_REFERENCE.ru.md)

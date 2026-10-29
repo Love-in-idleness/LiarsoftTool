@@ -6,6 +6,7 @@
 
 ## Usage and builds
 
+- [EXE editor (experimental)](EXE_EDITOR.en.md)
 - [Overview and use](../README.en.md); CLI help: `liarsofttool -h`.
 - [Source builds and packaging](BUILDING.en.md)
 - [TSC command reference](GSC_OPCODE_REFERENCE.en.md)

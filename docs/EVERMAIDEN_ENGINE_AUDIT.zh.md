@@ -2,7 +2,7 @@
 
 [中文](EVERMAIDEN_ENGINE_AUDIT.zh.md) | [English](EVERMAIDEN_ENGINE_AUDIT.en.md) | [Русский](EVERMAIDEN_ENGINE_AUDIT.ru.md) | [日本語](EVERMAIDEN_ENGINE_AUDIT.ja.md)
 
-本页是文件格式与原程序的开发参考，结论限于标明的样本。涉及 EXE 的字体和禁则分析不表示主程序提供 EXE 转换；该入口已禁用。
+本页是文件格式与原程序的开发参考，结论限于标明的样本。EXE 编辑是需明确启用的[实验性功能](EXE_EDITOR.zh.md)，支持范围以编辑器检查结果为准。
 
 [返回文档目录](README.zh.md)
 

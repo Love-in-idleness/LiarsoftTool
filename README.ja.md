@@ -4,7 +4,7 @@
 
 CodeX RScript ゲームのリソースツールです。アーカイブの展開・再梱包、画像・音声の変換、
 GSC スクリプトの抽出・編集・再構築に対応します。Liar-soft、raiL-soft などの作品を対象とし、
-対応範囲はゲームによって異なります。ゲーム EXE の変換機能はありません。
+対応範囲はゲームによって異なります。EXE 編集は実験的機能で、既定では無効です。
 
 Ren'Py プロジェクトの生成には、独立した [rscript2renpy](https://github.com/Love-in-idleness/rscript2renpy) を使います。
 
@@ -49,6 +49,14 @@ GUI と CLI はどちらも既定で GSC を TSC に出力します。会話抽�
 GSC→TSC は実験的機能です。原 GSC と生成されたラベル・メタデータを残してください。
 変換成功は全エンジン版での互換性を保証しません。命令は [TSC 資料](docs/GSC_OPCODE_REFERENCE.ja.md)を参照してください。
 
+## EXE 編集（実験的）
+
+設定で有効にすると、専用ページでフォント文字セット、ウィンドウタイトル、確認・操作メッセージ、シーン名、禁則を編集できます。
+長い訳文にも対応して別の EXE を生成し、未検証の項目は読み取り専用です。フォント文字セットの変更は Windows のシステムロケールを変更しません。
+[EXE 編集ガイド](docs/EXE_EDITOR.ja.md)を参照してください。CLI の表示・編集引数は `liarsofttool -h` にあります。
+
+UTF-8 はリソースの文字コードとして選択できません。TSC などのテキスト形式と Runtime の Unicode モジュールは引き続き UTF-8 に対応します。
+
 ## 実験ランタイム
 
 [RScript Runtime](runtime/README.ja.md) は Windows ローダー、任意 DLL、非梱包素材の優先読込、UTF-8 対応を提供します。
@@ -81,3 +89,5 @@ LiarsoftTool は GPLv3 です。第三者のコンポーネントには、それ
 - [GStreamer](https://gstreamer.freedesktop.org/): GTK メディアバックエンドの音声プレビュー。
 - [libcurl](https://curl.se/libcurl/): HTTPS による更新確認。
 - [uchardet](https://www.freedesktop.org/wiki/Software/uchardet/): GSC の文字コード判定。[ライセンス原文](docs/THIRD_PARTY_UCHARDET_LICENSES.md)。変更のない 0.0.8 の[ソース](https://deb.debian.org/debian/pool/main/u/uchardet/uchardet_0.0.8.orig.tar.xz)を静的リンクし、GPLv2 以降の条件で利用します。
+
+- [HDE32](https://github.com/TsudaKageyu/minhook/tree/v1.3.4/src/hde) — EXE 編集用の x86 命令デコーダー。[ライセンス](third_party/hde32/LICENSE.txt)。

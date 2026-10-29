@@ -8,7 +8,7 @@
 
 `ちんまい吸血姫体験版.exe`, SHA-256:
 `21db7a449d329fb6bb030b1c1cf4050b0f519a52bd19167ba0d27dcc4cd6740e`.
-These are static format findings, not gameplay verification. The production EXE-conversion entry is disabled.
+These are static format findings, not gameplay verification. EXE editing is an explicitly enabled [experimental feature](EXE_EDITOR.en.md); the editor reports the supported operations.
 
 PE headers, sections, size, compile time, and PDB identity match the [Chinese Evermaiden program](EVERMAIDEN_ENGINE_AUDIT.en.md).
 Only ten font-charset bytes differ in `.text`, but strings, initial data, and PE resources also differ; they are not identical files.

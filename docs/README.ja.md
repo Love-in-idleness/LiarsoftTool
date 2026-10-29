@@ -6,6 +6,7 @@
 
 ## 利用とビルド
 
+- [EXE 編集（実験的）](EXE_EDITOR.ja.md)
 - [用途と使い方](../README.ja.md)。CLI のヘルプは `liarsofttool -h`。
 - [ソースビルドとパッケージ作成](BUILDING.ja.md)
 - [TSC 命令リファレンス](GSC_OPCODE_REFERENCE.ja.md)

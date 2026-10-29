@@ -2,7 +2,7 @@
 
 [中文](CANNONBALL_ENGINE_AUDIT.zh.md) | [English](CANNONBALL_ENGINE_AUDIT.en.md) | [Русский](CANNONBALL_ENGINE_AUDIT.ru.md) | [日本語](CANNONBALL_ENGINE_AUDIT.ja.md)
 
-This developer reference describes file formats and the identified native samples. Font and line-break analysis of EXEs does not imply EXE conversion is available; that production entry point is disabled.
+This developer reference describes file formats and the identified native samples. EXE editing is an explicitly enabled [experimental feature](EXE_EDITOR.en.md); the editor reports the supported operations.
 
 [Documentation](README.en.md) · [User guide](../README.en.md)
 

@@ -110,7 +110,7 @@ SevenBridge's `0x43e450` writes character classes to the layout array after draw
 `0` ordinary, `1` no line start, `2` no line end. `0x43e540–0x43e798` compares `SI`;
 branches converge at `0x43e7cc` and `0x43e7b3`, with the ordinary path at `0x43e79a`.
 
-[native_kinsoku.cpp](src/native_kinsoku.cpp) validates full ASCII/CP932 comparison groups,
+[kinsoku_match.cpp](../src/kinsoku_match.cpp) validates full ASCII/CP932 comparison groups,
 conditional jumps, and common targets, for immediate and `MOV EAX / CMP SI, AX` forms.
 The in-process bridge aligns the stack, saves registers, flags and FPU/SIMD state, restores the Unicode character from its glyph token,
 and uses [kinsoku.json](kinsoku.json). Native packed values that do not decode as one character retain

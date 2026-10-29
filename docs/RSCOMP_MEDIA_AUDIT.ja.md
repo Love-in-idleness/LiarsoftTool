@@ -2,7 +2,7 @@
 
 [中文](RSCOMP_MEDIA_AUDIT.zh.md) | [English](RSCOMP_MEDIA_AUDIT.en.md) | [Русский](RSCOMP_MEDIA_AUDIT.ru.md) | [日本語](RSCOMP_MEDIA_AUDIT.ja.md)
 
-形式と特定の原プログラムに関する開発資料です。EXE の字体・禁則解析は EXE 変換機能の提供を意味せず、製品側の入口は無効です。
+形式と特定の原プログラムに関する開発資料です。EXE 編集は明示的に有効にする[実験的機能](EXE_EDITOR.ja.md)です。対応する操作はエディターの解析結果で確認してください。
 
 [文書一覧](README.ja.md) · [利用ガイド](../README.ja.md)
 

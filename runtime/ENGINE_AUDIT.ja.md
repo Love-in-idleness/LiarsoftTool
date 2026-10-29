@@ -77,7 +77,7 @@ Forest parser0x438790は一/二byteを歩き、0x438836–0x438842で16-bit字�
 
 SevenBridge0x43e450は描画後layout配列に0普通/1行頭禁止/2行末禁止を記入。0x43e540–0x43e798がSIを比較し、0x43e7cc/0x43e7b3へ合流、普通0x43e79a。
 
-[native_kinsoku.cpp](src/native_kinsoku.cpp)はASCII/CP932全比較群、条件分岐、共通targetを確認し、即値型とMOV EAX/CMP SI,AX型を扱います。process内bridgeはstack整列、register/flags/FPU/SIMD保存、glyph tokenからUnicode復元、[kinsoku.json](kinsoku.json)分類。単字へ戻せないnative packed値は元分類を維持。認識できなければUnicode初期化失敗。ディスクEXEやTSC改行は変えません。
+[kinsoku_match.cpp](../src/kinsoku_match.cpp)はASCII/CP932全比較群、条件分岐、共通targetを確認し、即値型とMOV EAX/CMP SI,AX型を扱います。process内bridgeはstack整列、register/flags/FPU/SIMD保存、glyph tokenからUnicode復元、[kinsoku.json](kinsoku.json)分類。単字へ戻せないnative packed値は元分類を維持。認識できなければUnicode初期化失敗。ディスクEXEやTSC改行は変えません。
 
 これは文字別の始終禁則で、[Unicode UAX #14](https://www.unicode.org/reports/tr14/)全体ではありません。新形状は共有認識器とテストを拡張し、ゲームアドレス表を増やしません。
 

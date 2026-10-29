@@ -6,6 +6,7 @@
 
 ## 使用与构建
 
+- [EXE 编辑（实验性）](EXE_EDITOR.zh.md)
 - [项目介绍与使用](../README.zh.md)；命令行帮助运行 `liarsofttool -h`。
 - [源码构建与打包](BUILDING.zh.md)
 - [TSC 指令参考](GSC_OPCODE_REFERENCE.zh.md)
