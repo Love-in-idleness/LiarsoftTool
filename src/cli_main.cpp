@@ -1,4 +1,5 @@
 #include "conversion.h"
+#include "exe_editor.h"
 #include "encoding.h"
 #include "xflarchive.h"
 #include "update_check.h"
@@ -42,6 +43,16 @@ static void printUsage(const char* prog) {
               << "      --check-tsc        Check TSC inputs without writing GSC\n"
               << "      --inspect-tsc      Inspect one UTF-8 TSC as JSON; '-' reads stdin\n"
               << "      --diagnostics=json Machine-readable diagnostics for --check-tsc\n"
+              << "      --experimental-exe Enable experimental EXE editing (one explicit EXE)\n"
+              << "      --exe-show         Inspect charsets, text IDs and line-break rules; no writes\n"
+              << "      --exe-source-encoding <enc> Original embedded text encoding (default: infer)\n"
+              << "      --exe-set-text <id>=<text> Replace embedded text; repeat for multiple IDs\n"
+              << "      --exe-no-line-start <text> Replace characters forbidden at line start\n"
+              << "      --exe-no-line-end <text> Replace characters forbidden at line end\n"
+              << "      --exe-defaults     Apply target encoding rules and stock control translations\n"
+              << "      --exe-kinsoku <path> Read rule JSON instead of direct character sets\n"
+              << "                        EXE targets: cp932, gbk, cp950, cp949, cp1250-cp1258.\n"
+              << "                        Font charset does not change the Windows system locale.\n"
               << "  -h, --help            Show this help message\n\n"
               << "Conversion modes:\n"
               << "  .gsc  -> .tsc         Export structured TSC (default)\n"
@@ -62,6 +73,9 @@ static void printUsage(const char* prog) {
               << "\n"
               << "Supports wildcards: " << prog << " *.png\n\n"
               << "Examples:\n"
+              << "  " << prog << " --experimental-exe --exe-show game.exe\n"
+              << "  " << prog << " --experimental-exe --exe-source-encoding cp932 -e gbk --exe-defaults game.exe -o game.zh.exe\n"
+              << "  " << prog << " --experimental-exe --exe-set-text \"text:1234=Translated title\" game.exe\n"
               << "  " << prog << " --check-tsc --diagnostics=json -e cp932 scene.tsc\n"
               << "  " << prog << " scenario.gsc           # auto-detect input text encoding\n"
               << "  " << prog << " -e cp932 scenario.gsc\n"
@@ -291,6 +305,10 @@ static int runCli(int argc, char* argv[]) {
     bool checkUpdate = false;
     bool checkTsc = false, inspectTsc = false, jsonDiagnostics = false;
 
+    bool experimentalExe = false, exeShow = false, exeRequested = false, exeDefaults = false;
+    std::string exeSource = "auto", exeKinsoku;
+    liarsoft::ExeChanges exeChanges;
+    std::optional<std::string> exeNoStart, exeNoEnd;
     // Parse arguments
     int i = 1;
     while (i < argc) {
@@ -331,6 +349,38 @@ static int runCli(int argc, char* argv[]) {
             gscToTsc = false;
         } else if (arg == "--vorbis-in-wav") {
             vorbisInWav = true;
+        } else if (arg == "--experimental-exe") {
+            experimentalExe = true;
+        } else if (arg == "--exe-defaults") {
+            exeDefaults = true;
+            exeRequested = true;
+        } else if (arg == "--exe-show") {
+            exeShow = true;
+            exeRequested = true;
+        } else if (arg == "--exe-source-encoding" || arg == "--exe-set-text" ||
+                   arg == "--exe-no-line-start" || arg == "--exe-no-line-end" || arg == "--exe-kinsoku") {
+            exeRequested = true;
+            if (++i == argc) {
+                std::cerr << "Error: " << arg << " requires a value\n";
+                return 1;
+            }
+            const std::string value(argv[i]);
+            if (arg == "--exe-source-encoding")
+                exeSource = normalizeEncoding(value);
+            else if (arg == "--exe-kinsoku")
+                exeKinsoku = value;
+            else if (arg == "--exe-no-line-start")
+                exeNoStart = value;
+            else if (arg == "--exe-no-line-end")
+                exeNoEnd = value;
+            else {
+                const auto split = value.find('=');
+                if (split == std::string::npos || !split ||
+                    !exeChanges.texts.emplace(value.substr(0, split), value.substr(split + 1)).second) {
+                    std::cerr << "Error: --exe-set-text requires a unique id=text pair\n";
+                    return 1;
+                }
+            }
         } else if (arg == "--check-update") {
             checkUpdate = true;
         } else if (arg == "--check-tsc") {
@@ -349,12 +399,74 @@ static int runCli(int argc, char* argv[]) {
         ++i;
     }
 
-    try { liarsoft::validateResourceEncoding(encoding); }
-    catch (const std::exception& error) { std::cerr << "Error: " << error.what() << '\n'; return 1; }
+    try {
+        liarsoft::validateResourceEncoding(encoding);
+    } catch (const std::exception &error) {
+        std::cerr << "Error: " << error.what() << '\n';
+        return 1;
+    }
+    if (experimentalExe || exeRequested) {
+        if (!experimentalExe || inputs.size() != 1 || inspectTsc || checkTsc || checkUpdate ||
+            jsonDiagnostics || !referencePath.empty() || recursive || packOnly || unpackOnly || vorbisInWav ||
+            !gscToTsc || workers) {
+            std::cerr << "Error: EXE options require --experimental-exe and one EXE without other operation "
+                         "modes\n";
+            return 1;
+        }
+        if (!exeKinsoku.empty() && (exeNoStart || exeNoEnd)) {
+            std::cerr << "Error: --exe-kinsoku cannot be combined with direct rule sets\n";
+            return 1;
+        }
+        if (exeShow && (exeDefaults || !explicitOutput.empty() || encoding != "auto" ||
+                        !exeChanges.texts.empty() || exeNoStart || exeNoEnd || !exeKinsoku.empty())) {
+            std::cerr << "Error: --exe-show is read-only\n";
+            return 1;
+        }
+        try {
+            const auto source = fs::u8path(inputs[0]);
+            if (liarsoft::conversion::extension(source.u8string()) != ".exe")
+                throw std::runtime_error("EXE mode requires an explicit .exe input");
+            const auto doc = liarsoft::inspectExeFile(source, exeSource);
+            if (exeShow) {
+                std::cout << liarsoft::describeExe(doc);
+                return 0;
+            }
+            if (encoding != "auto")
+                exeChanges.encoding = encoding;
+            if (exeDefaults) {
+                auto defaults = liarsoft::defaultExeConfiguration(doc, encoding == "auto" ? doc.sourceEncoding
+                                                                                          : encoding);
+                for (const auto &[id, value] : exeChanges.texts)
+                    defaults.texts[id] = value;
+                exeChanges = std::move(defaults);
+            }
+            if (!exeKinsoku.empty())
+                exeChanges.rules = liarsoft::readExeRules(fs::u8path(exeKinsoku));
+            if (exeNoStart || exeNoEnd)
+                exeChanges.rules = liarsoft::ExeRules{exeNoStart.value_or(doc.rules.noLineStart),
+                                                      exeNoEnd.value_or(doc.rules.noLineEnd)};
+            if (exeChanges.encoding.empty() && exeChanges.texts.empty() && !exeChanges.rules)
+                throw std::runtime_error("Choose --exe-show or specify an EXE change");
+            auto output = explicitOutput.empty() ? source : fs::u8path(explicitOutput);
+            if (explicitOutput.empty())
+                output.replace_extension(".edited.exe");
+            liarsoft::saveEditedExe(source, output, doc, exeChanges);
+            std::cout << "EXE -> " << (exeChanges.encoding.empty() ? doc.sourceEncoding : exeChanges.encoding)
+                      << ": " << source.u8string() << " -> " << output.u8string() << '\n';
+            for (const auto &note : doc.notices)
+                std::cerr << "Warning: " << note << '\n';
+            return 0;
+        } catch (const std::exception &error) {
+            std::cerr << "Error: " << error.what() << '\n';
+            return 1;
+        }
+    }
     if (inspectTsc) {
-        if (inputs.size() != 1 || checkTsc || checkUpdate || !explicitOutput.empty() || !referencePath.empty() ||
-            recursive || packOnly || unpackOnly || vorbisInWav || !gscToTsc || workers) {
-            std::cerr << "Error: --inspect-tsc requires one input and cannot be combined with conversion options\n";
+        if (inputs.size() != 1 || checkTsc || checkUpdate || !explicitOutput.empty() ||
+            !referencePath.empty() || recursive || packOnly || unpackOnly || vorbisInWav || !gscToTsc ||
+            workers) {
+            std::cerr
+                << "Error: --inspect-tsc requires one input and cannot be combined with conversion options\n";
             return 1;
         }
         return inspectInput(inputs[0]);
@@ -466,14 +578,19 @@ static int runCli(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
-    // The new check API uses UTF-8 paths; existing conversion paths remain native.
+    // Structured operations and EXE editing use UTF-8 paths; legacy conversion paths remain native.
     bool checking = false;
     for (int i = 1; i < argc; ++i)
-        if (std::string(argv[i]) == "--check-tsc" || std::string(argv[i]) == "--inspect-tsc") checking = true;
+        if (std::string(argv[i]) == "--check-tsc" || std::string(argv[i]) == "--inspect-tsc" ||
+            std::string(argv[i]) == "--experimental-exe" || std::string(argv[i]).rfind("--exe-", 0) == 0)
+            checking = true;
     if (checking) {
         int count = 0;
-        auto** wide = CommandLineToArgvW(GetCommandLineW(), &count);
-        if (!wide) { std::cerr << "Cannot read Unicode command line\n"; return 1; }
+        auto **wide = CommandLineToArgvW(GetCommandLineW(), &count);
+        if (!wide) {
+            std::cerr << "Cannot read Unicode command line\n";
+            return 1;
+        }
         std::vector<std::string> arguments;
         for (int i = 0; i < count; ++i) {
             const int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide[i], -1, nullptr, 0, nullptr, nullptr);

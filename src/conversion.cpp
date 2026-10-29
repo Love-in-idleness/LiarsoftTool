@@ -6,7 +6,6 @@
 #include <memory>
 #include <stdexcept>
 
-// #include "exe_patch.h" // EXE conversion is disabled; retained for reference.
 #include "bmp_normalizer.h"
 #include "fileio.h"
 #include "encoding.h"
@@ -60,13 +59,7 @@ std::string guessOutput(const std::string& inputPath,
     if (ext == ".webp") return (base / (stem + ".lim")).string();
     if (ext == ".wav") return (base / (stem + ".ogg")).string();
     if (ext == ".ogg") return (base / (stem + ".wav")).string();
-#if 0 // EXE conversion is disabled.
-    if (ext == ".exe") {
-        const std::string suffix = encoding == "GBK" ? ".gbk.exe" :
-            encoding == "CP1251" ? ".cp1251.exe" : ".sjis.exe";
-        return (base / (stem + suffix)).string();
-    }
-#endif
+
     (void)encoding;
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return (base / (stem + ".wcg")).string();
@@ -88,7 +81,6 @@ std::string guessType(const std::string& path,
     if (ext == ".webp") return "WebP -> LIM";
     if (ext == ".wav") return "WAV -> OGG";
     if (ext == ".ogg") return "OGG -> WAV";
-    // if (ext == ".exe") return "EXE -> " + encoding;
     (void)encoding;
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
         return "IMG -> WCG";
@@ -188,10 +180,7 @@ ConversionResult convert(const std::string& inputPath,
         const auto data = liarsoft::wcgEncode(
             pixels.get(), static_cast<uint32_t>(width), static_cast<uint32_t>(height));
         liarsoft::writeFileIfChanged(outputPath, data);
-#if 0 // EXE conversion is disabled.
-    } else if (ext == ".exe") {
-        liarsoft::exeConvertFile(inputPath, outputPath, options.encoding);
-#endif
+
     } else {
         throw std::runtime_error("Unsupported format");
     }

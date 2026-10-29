@@ -281,3 +281,153 @@ msgstr "加入转换任务"
 
 msgid "Unknown type"
 msgstr "未知类型"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Detected font charsets:"
+msgstr "检测到的字体字符集："
+
+msgid "Discard"
+msgstr "放弃修改"
+
+msgid "EXE editor"
+msgstr "EXE 编辑"
+
+msgid "EXE editor (experimental)"
+msgstr "EXE 编辑（实验性）"
+
+msgid "EXE operation cancelled."
+msgstr "EXE 操作已取消。"
+
+msgid "Editable"
+msgstr "可编辑"
+
+msgid "Edited EXE saved. The source file is unchanged."
+msgstr "已保存编辑后的 EXE，原文件未修改。"
+
+msgid "Encoding"
+msgstr "编码"
+
+msgid "Experimental: writes a separate EXE; unsupported items remain read-only."
+msgstr "实验性功能：生成独立 EXE；不支持的条目保持只读。"
+
+msgid "Font charset and text encoding are separate. Matching Windows locale and fonts are still required."
+msgstr "字体字符集与文本编码相互独立，仍需匹配 Windows 区域设置与字体。"
+
+msgid "Font charset does not establish the Windows ANSI code page; use a matching system locale"
+msgstr "字体字符集不决定 Windows ANSI 代码页；请使用匹配的系统区域设置"
+
+msgid "Forbidden at line end"
+msgstr "行尾禁止字符"
+
+msgid "Forbidden at line start"
+msgstr "行首禁止字符"
+
+msgid "Infer text source encoding"
+msgstr "推断原文本编码"
+
+msgid "Inspecting EXE…"
+msgstr "正在检查 EXE…"
+
+msgid "Inspection complete. Changes are written only by Save as."
+msgstr "检查完成；点击“另存为”后才会写入修改。"
+
+msgid "Line-break rules"
+msgstr "行首尾禁则"
+
+msgid "Load line-break JSON"
+msgstr "载入禁则 JSON"
+
+msgid "No supported native line-break classifier"
+msgstr "未找到支持的原生禁则分类代码"
+
+msgid "No verified CreateFontA charset operands"
+msgstr "未找到已验证的 CreateFontA 字符集参数"
+
+msgid "No verified text reference"
+msgstr "未找到已验证的文本引用"
+
+msgid "Open EXE"
+msgstr "打开 EXE"
+
+msgid "Open a supported PE32/x86 RScript EXE to inspect it."
+msgstr "打开支持的 PE32/x86 RScript EXE 进行检查。"
+
+msgid "Please wait for the EXE save to finish."
+msgstr "请等待 EXE 保存完成。"
+
+msgid "Reinspect with source encoding"
+msgstr "使用原文本编码重新检查"
+
+msgid "Save EXE changes?"
+msgstr "保存 EXE 修改？"
+
+msgid "Save as…"
+msgstr "另存为…"
+
+msgid "Save completed before cancellation."
+msgstr "取消前保存已完成。"
+
+msgid "Save edited EXE"
+msgstr "保存编辑后的 EXE"
+
+msgid "Saving edited EXE…"
+msgstr "正在保存编辑后的 EXE…"
+
+msgid "Select the text source encoding"
+msgstr "请选择原文本编码"
+
+msgid "Signed executables cannot be edited"
+msgstr "不支持编辑已签名的 EXE"
+
+msgid "Target encoding"
+msgstr "目标编码"
+
+msgid "Text does not decode in the selected source encoding"
+msgstr "文本无法按所选原编码解码"
+
+msgid "Text source encoding"
+msgstr "原文本编码"
+
+msgid "Text source encoding is uncertain; select it explicitly"
+msgstr "原文本编码不确定，请明确选择"
+
+msgid "Text source encoding:"
+msgstr "原文本编码："
+
+msgid "The source EXE has not been modified."
+msgstr "原 EXE 尚未修改。"
+
+msgid "Unconfirmed"
+msgstr "待确认"
+
+msgid "Unverified or interior string reference"
+msgstr "存在未验证的引用或字符串内部引用"
+
+msgid "Some font charset arguments could not be verified"
+msgstr "部分字体字符集参数无法验证"
+
+msgid "Use target encoding default configuration"
+msgstr "使用目标编码的默认配置"
+
+msgid "Embedded text"
+msgstr "内嵌文字"
+
+msgid "No supported embedded text was found."
+msgstr "未找到可编辑的内嵌文字。"
+
+msgid "Window title (APINI)"
+msgstr "窗口标题（APINI）"
+
+msgid "Scene caption"
+msgstr "场景标题"
+
+msgid "Window text"
+msgstr "窗口文字"
+
+msgid "Control text"
+msgstr "控件文字"
+
+msgid "External RsInit configuration can override the embedded window title"
+msgstr "外部 RsInit 配置可能覆盖内嵌窗口标题"

@@ -281,3 +281,153 @@ msgstr "Добавить в задачи преобразования"
 
 msgid "Unknown type"
 msgstr "Неизвестный тип"
+
+msgid "Cancel"
+msgstr "Отмена"
+
+msgid "Detected font charsets:"
+msgstr "Найденные наборы символов шрифта:"
+
+msgid "Discard"
+msgstr "Отбросить"
+
+msgid "EXE editor"
+msgstr "Редактор EXE"
+
+msgid "EXE editor (experimental)"
+msgstr "Редактор EXE (экспериментальный)"
+
+msgid "EXE operation cancelled."
+msgstr "Операция с EXE отменена."
+
+msgid "Editable"
+msgstr "Можно редактировать"
+
+msgid "Edited EXE saved. The source file is unchanged."
+msgstr "Изменённый EXE сохранён. Исходный файл не изменён."
+
+msgid "Encoding"
+msgstr "Кодировка"
+
+msgid "Experimental: writes a separate EXE; unsupported items remain read-only."
+msgstr "Экспериментальная функция: создаёт отдельный EXE; неподдерживаемые элементы доступны только для чтения."
+
+msgid "Font charset and text encoding are separate. Matching Windows locale and fonts are still required."
+msgstr "Набор символов шрифта и кодировка текста — разные параметры. Нужны подходящие системная локаль Windows и шрифты."
+
+msgid "Font charset does not establish the Windows ANSI code page; use a matching system locale"
+msgstr "Набор символов шрифта не задаёт кодовую страницу Windows ANSI; используйте подходящую системную локаль"
+
+msgid "Forbidden at line end"
+msgstr "Запрещено в конце строки"
+
+msgid "Forbidden at line start"
+msgstr "Запрещено в начале строки"
+
+msgid "Infer text source encoding"
+msgstr "Определить исходную кодировку"
+
+msgid "Inspecting EXE…"
+msgstr "Проверка EXE…"
+
+msgid "Inspection complete. Changes are written only by Save as."
+msgstr "Проверка завершена. Изменения записываются только через «Сохранить как»."
+
+msgid "Line-break rules"
+msgstr "Правила переноса строк"
+
+msgid "Load line-break JSON"
+msgstr "Загрузить JSON правил переноса"
+
+msgid "No supported native line-break classifier"
+msgstr "Поддерживаемый встроенный классификатор переноса не найден"
+
+msgid "No verified CreateFontA charset operands"
+msgstr "Проверенные параметры набора символов CreateFontA не найдены"
+
+msgid "No verified text reference"
+msgstr "Проверенные ссылки на текст не найдены"
+
+msgid "Open EXE"
+msgstr "Открыть EXE"
+
+msgid "Open a supported PE32/x86 RScript EXE to inspect it."
+msgstr "Откройте поддерживаемый EXE RScript формата PE32/x86."
+
+msgid "Please wait for the EXE save to finish."
+msgstr "Дождитесь окончания сохранения EXE."
+
+msgid "Reinspect with source encoding"
+msgstr "Повторить проверку с исходной кодировкой"
+
+msgid "Save EXE changes?"
+msgstr "Сохранить изменения EXE?"
+
+msgid "Save as…"
+msgstr "Сохранить как…"
+
+msgid "Save completed before cancellation."
+msgstr "Сохранение завершилось до отмены."
+
+msgid "Save edited EXE"
+msgstr "Сохранить изменённый EXE"
+
+msgid "Saving edited EXE…"
+msgstr "Сохранение изменённого EXE…"
+
+msgid "Select the text source encoding"
+msgstr "Выберите исходную кодировку текста"
+
+msgid "Signed executables cannot be edited"
+msgstr "Редактирование подписанных EXE не поддерживается"
+
+msgid "Target encoding"
+msgstr "Целевая кодировка"
+
+msgid "Text does not decode in the selected source encoding"
+msgstr "Текст не декодируется в выбранной исходной кодировке"
+
+msgid "Text source encoding"
+msgstr "Исходная кодировка текста"
+
+msgid "Text source encoding is uncertain; select it explicitly"
+msgstr "Исходная кодировка не определена; выберите её явно"
+
+msgid "Text source encoding:"
+msgstr "Исходная кодировка текста:"
+
+msgid "The source EXE has not been modified."
+msgstr "Исходный EXE не изменён."
+
+msgid "Unconfirmed"
+msgstr "Не подтверждено"
+
+msgid "Unverified or interior string reference"
+msgstr "Непроверенная ссылка или ссылка внутрь строки"
+
+msgid "Some font charset arguments could not be verified"
+msgstr "Некоторые параметры набора символов шрифта не удалось проверить"
+
+msgid "Use target encoding default configuration"
+msgstr "Применить настройки целевой кодировки по умолчанию"
+
+msgid "Embedded text"
+msgstr "Встроенный текст"
+
+msgid "No supported embedded text was found."
+msgstr "Поддерживаемый встроенный текст не найден."
+
+msgid "Window title (APINI)"
+msgstr "Заголовок окна (APINI)"
+
+msgid "Scene caption"
+msgstr "Название сцены"
+
+msgid "Window text"
+msgstr "Текст окна"
+
+msgid "Control text"
+msgstr "Текст элемента управления"
+
+msgid "External RsInit configuration can override the embedded window title"
+msgstr "Внешние настройки RsInit могут заменить встроенный заголовок окна"

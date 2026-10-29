@@ -261,3 +261,153 @@ msgstr "変換タスクに追加"
 
 msgid "Unknown type"
 msgstr "不明な形式"
+
+msgid "Cancel"
+msgstr "キャンセル"
+
+msgid "Detected font charsets:"
+msgstr "検出したフォント文字セット："
+
+msgid "Discard"
+msgstr "変更を破棄"
+
+msgid "EXE editor"
+msgstr "EXE 編集"
+
+msgid "EXE editor (experimental)"
+msgstr "EXE 編集（実験的）"
+
+msgid "EXE operation cancelled."
+msgstr "EXE 操作をキャンセルしました。"
+
+msgid "Editable"
+msgstr "編集可能"
+
+msgid "Edited EXE saved. The source file is unchanged."
+msgstr "編集済み EXE を保存しました。元のファイルは変更していません。"
+
+msgid "Encoding"
+msgstr "文字コード"
+
+msgid "Experimental: writes a separate EXE; unsupported items remain read-only."
+msgstr "実験的機能：別の EXE を生成します。未対応の項目は読み取り専用です。"
+
+msgid "Font charset and text encoding are separate. Matching Windows locale and fonts are still required."
+msgstr "フォント文字セットとテキストの文字コードは別の設定です。対応する Windows のシステムロケールとフォントが必要です。"
+
+msgid "Font charset does not establish the Windows ANSI code page; use a matching system locale"
+msgstr "フォント文字セットは Windows の ANSI コードページを変更しません。対応するシステムロケールを使用してください"
+
+msgid "Forbidden at line end"
+msgstr "行末禁則文字"
+
+msgid "Forbidden at line start"
+msgstr "行頭禁則文字"
+
+msgid "Infer text source encoding"
+msgstr "元の文字コードを推定"
+
+msgid "Inspecting EXE…"
+msgstr "EXE を解析中…"
+
+msgid "Inspection complete. Changes are written only by Save as."
+msgstr "解析が完了しました。「名前を付けて保存」でのみ変更を書き込みます。"
+
+msgid "Line-break rules"
+msgstr "禁則処理"
+
+msgid "Load line-break JSON"
+msgstr "禁則 JSON を読み込む"
+
+msgid "No supported native line-break classifier"
+msgstr "対応するネイティブ禁則分類コードが見つかりません"
+
+msgid "No verified CreateFontA charset operands"
+msgstr "検証済みの CreateFontA 文字セット引数が見つかりません"
+
+msgid "No verified text reference"
+msgstr "検証済みのテキスト参照がありません"
+
+msgid "Open EXE"
+msgstr "EXE を開く"
+
+msgid "Open a supported PE32/x86 RScript EXE to inspect it."
+msgstr "対応する PE32/x86 形式の RScript EXE を開いてください。"
+
+msgid "Please wait for the EXE save to finish."
+msgstr "EXE の保存が完了するまでお待ちください。"
+
+msgid "Reinspect with source encoding"
+msgstr "指定した元の文字コードで再解析"
+
+msgid "Save EXE changes?"
+msgstr "EXE の変更を保存しますか？"
+
+msgid "Save as…"
+msgstr "名前を付けて保存…"
+
+msgid "Save completed before cancellation."
+msgstr "キャンセル前に保存が完了しました。"
+
+msgid "Save edited EXE"
+msgstr "編集済み EXE を保存"
+
+msgid "Saving edited EXE…"
+msgstr "編集済み EXE を保存中…"
+
+msgid "Select the text source encoding"
+msgstr "元のテキストの文字コードを選択してください"
+
+msgid "Signed executables cannot be edited"
+msgstr "署名済み EXE は編集できません"
+
+msgid "Target encoding"
+msgstr "出力文字コード"
+
+msgid "Text does not decode in the selected source encoding"
+msgstr "選択した元の文字コードではテキストをデコードできません"
+
+msgid "Text source encoding"
+msgstr "元のテキストの文字コード"
+
+msgid "Text source encoding is uncertain; select it explicitly"
+msgstr "元の文字コードが不明です。明示的に選択してください"
+
+msgid "Text source encoding:"
+msgstr "元のテキストの文字コード："
+
+msgid "The source EXE has not been modified."
+msgstr "元の EXE は変更していません。"
+
+msgid "Unconfirmed"
+msgstr "未確認"
+
+msgid "Unverified or interior string reference"
+msgstr "未検証の参照または文字列内部への参照があります"
+
+msgid "Some font charset arguments could not be verified"
+msgstr "一部のフォント文字セット引数を検証できませんでした"
+
+msgid "Use target encoding default configuration"
+msgstr "出力文字コードの既定の設定を使用"
+
+msgid "Embedded text"
+msgstr "埋め込みテキスト"
+
+msgid "No supported embedded text was found."
+msgstr "対応する埋め込みテキストが見つかりません。"
+
+msgid "Window title (APINI)"
+msgstr "ウィンドウタイトル（APINI）"
+
+msgid "Scene caption"
+msgstr "シーン名"
+
+msgid "Window text"
+msgstr "ウィンドウのテキスト"
+
+msgid "Control text"
+msgstr "コントロールのテキスト"
+
+msgid "External RsInit configuration can override the embedded window title"
+msgstr "外部の RsInit 設定により埋め込みウィンドウタイトルが上書きされる場合があります"

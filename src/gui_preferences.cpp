@@ -21,6 +21,7 @@ Preferences loadPreferences() {
     auto* key = g_key_file_new();
     GError* error = nullptr;
     if (g_key_file_load_from_file(key, settingsPath().c_str(), G_KEY_FILE_NONE, &error)) {
+        result.experimentalExe = g_key_file_get_boolean(key, "Interface", "ExperimentalExe", nullptr);
         result.theme = g_key_file_get_uint64(key, "Interface", "Theme", nullptr);
         auto* language = g_key_file_get_string(key, "Interface", "Language", nullptr);
         if (language) { result.language = language; g_free(language); }
@@ -40,6 +41,7 @@ Preferences loadPreferences() {
 
 void savePreferences(const Preferences& preferences) {
     auto* key = g_key_file_new();
+    g_key_file_set_boolean(key, "Interface", "ExperimentalExe", preferences.experimentalExe);
     g_key_file_set_uint64(key, "Interface", "Theme", preferences.theme);
     g_key_file_set_string(key, "Interface", "Language", preferences.language.c_str());
     auto* text = g_key_file_to_data(key, nullptr, nullptr);

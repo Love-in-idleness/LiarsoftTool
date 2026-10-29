@@ -30,6 +30,11 @@ gboolean tick(gpointer) {
                 require(gdk_texture_save_to_png(texture, destination), "window capture failed");
                 g_object_unref(texture); gsk_render_node_unref(node); g_object_unref(paintable);
             }
+            require(!ui.preferences.experimentalExe && !adw_view_stack_page_get_visible(ui.exePage), "EXE editor enabled by default");
+            gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle), TRUE);
+            require(adw_view_stack_page_get_visible(ui.exePage) && liarsoft::gui::loadPreferences().experimentalExe, "EXE editor preference not saved");
+            gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle), FALSE);
+            require(!adw_view_stack_page_get_visible(ui.exePage) && !liarsoft::gui::loadPreferences().experimentalExe, "EXE editor preference not cleared");
             require(options().encoding == "auto" && options().gscToTsc && !options().recursive &&
                 !options().unpackOnly && !active(ui.packOnly) && !options().vorbisInWav &&
                 options().workers == 0, "conversion defaults changed");
@@ -119,6 +124,9 @@ int main(int argc, char** argv) {
             language == "ja" ? "設定" : "Preferences";
         require(language == (std::string(argv[1]).compare(0, 2, "ja") == 0 ? "ja" :
             std::string(argv[1]) == "fr_FR" ? "en" : argv[1]), "system language detection failed");
+        const std::string exeExpected = language == "ru" ? "Редактор EXE" : language == "zh_CN" ? "EXE 编辑" :
+            language == "ja" ? "EXE 編集" : "EXE editor";
+        require(_("EXE editor") == exeExpected, "EXE editor translation not loaded");
         if (_("Preferences") != expected) {
             std::cerr << "language=" << language << " locale=" << std::setlocale(LC_MESSAGES, nullptr)
                       << " catalogs=" << bindtextdomain("liarsofttool", nullptr)

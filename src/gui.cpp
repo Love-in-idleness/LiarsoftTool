@@ -2,6 +2,7 @@
 #include "gui_common.h"
 #include "gui_preferences.h"
 #include "gui_browser.h"
+#include "gui_exe_editor.h"
 #include "conversion.h"
 #include "encoding.h"
 #include "xflarchive.h"
@@ -25,6 +26,9 @@ struct Gui {
     GtkWidget *content, *list, *convert, *status, *progress, *browser = nullptr;
     GtkWidget *encoding, *reference, *output, *recursive, *packOnly, *unpackOnly, *txt, *vorbis, *workers;
     GtkWidget *preferencesButton, *updateButton;
+    GtkWidget *exeEditor = nullptr, *exeToggle = nullptr;
+    AdwViewStackPage* exePage = nullptr;
+    bool changingExperimental = false;
     AdwDialog* preferencesDialog = nullptr;
     AdwAlertDialog* alert = nullptr;
     liarsoft::gui::Preferences preferences;
@@ -113,8 +117,12 @@ static void sensitive() {
 }
 static void busy(bool value) { ui.busy = value; sensitive(); }
 static gboolean closeWindow(GtkWindow*, gpointer) {
-    const bool working = ui.busy || liarsoft::gui::resourceBrowserWriting(ui.browser);
+    const bool working = ui.busy || liarsoft::gui::resourceBrowserWriting(ui.browser) || liarsoft::gui::exeEditorWriting(ui.exeEditor);
     if (working) gtk_label_set_text(GTK_LABEL(ui.status), _("Please wait for the operation to finish."));
+    if (!working && liarsoft::gui::exeEditorDirty(ui.exeEditor)) {
+        liarsoft::gui::leaveExeEditor(ui.exeEditor, [] { gtk_window_destroy(ui.window); });
+        return TRUE;
+    }
     return working;
 }
 static liarsoft::conversion::ConversionOptions options() {
@@ -342,6 +350,24 @@ static void buildPreferences() {
     ui.encoding = gtk_drop_down_new(G_LIST_MODEL(encodings), nullptr);
     addRow(group, _("Resource encoding"), ui.encoding);
     gtk_widget_set_tooltip_text(ui.encoding, _("Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."));
+    ui.exeToggle = check(group, _("EXE editor (experimental)"));
+    gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle), ui.preferences.experimentalExe);
+    g_signal_connect(ui.exeToggle,"toggled",reinterpret_cast<GCallback>(+[](GtkCheckButton* toggle,gpointer) {
+        if (ui.changingExperimental) return;
+        const bool enabled = gtk_check_button_get_active(toggle);
+        auto apply = [enabled] {
+            ui.preferences.experimentalExe = enabled;
+            if (ui.exePage) adw_view_stack_page_set_visible(ui.exePage, enabled);
+            if (!enabled && ui.exeEditor && adw_view_stack_get_visible_child(ADW_VIEW_STACK(ui.content)) == ui.exeEditor)
+                adw_view_stack_set_visible_child_name(ADW_VIEW_STACK(ui.content),"tasks");
+            ui.changingExperimental = true; gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle),enabled); ui.changingExperimental = false;
+            savePreferences();
+        };
+        if (!enabled) {
+            ui.changingExperimental = true; gtk_check_button_set_active(toggle, TRUE); ui.changingExperimental = false;
+            liarsoft::gui::leaveExeEditor(ui.exeEditor, apply);
+        } else apply();
+    }),nullptr);
     ui.recursive = check(group, _("Recursive"));
     ui.packOnly = check(group, _("Pack only"));
     ui.unpackOnly = check(group, _("Unpack only"));
@@ -433,6 +459,9 @@ static void activate(GtkApplication* app, gpointer) {
         adw_view_stack_set_visible_child_name(ADW_VIEW_STACK(ui.content), "tasks");
     });
     adw_view_stack_add_titled(ADW_VIEW_STACK(ui.content), ui.browser, "resources", _("Resources"));
+    ui.exeEditor = liarsoft::gui::createExeEditor(ui.window);
+    ui.exePage = adw_view_stack_add_titled(ADW_VIEW_STACK(ui.content), ui.exeEditor, "exe", _("EXE editor"));
+    adw_view_stack_page_set_visible(ui.exePage, ui.preferences.experimentalExe);
     auto* switcher = adw_view_switcher_new();
     adw_view_switcher_set_stack(ADW_VIEW_SWITCHER(switcher), ADW_VIEW_STACK(ui.content));
     adw_header_bar_set_title_widget(header, switcher);

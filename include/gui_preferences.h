@@ -4,6 +4,7 @@
 namespace liarsoft::gui {
 struct Preferences {
     unsigned theme = 0;
+    bool experimentalExe = false;
     std::string language;
 };
 Preferences loadPreferences();

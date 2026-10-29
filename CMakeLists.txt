@@ -161,6 +161,7 @@ if(BUILD_GUI)
         src/gui_main.cpp
         src/gui.cpp
         src/gui_browser.cpp
+        src/gui_exe_editor.cpp
         src/gui_common.cpp
     )
     target_link_libraries(liarsofttool-gui PRIVATE liarsofttool_gui_preferences liarsofttool_updates)
@@ -230,9 +231,11 @@ if(BUILD_TESTING)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_tests_properties(exe_patch PROPERTIES ENVIRONMENT "LD_PRELOAD=$<TARGET_FILE:fileio_faults>")
     endif()
-    add_test(NAME exe_conversion_disabled COMMAND ${CMAKE_COMMAND}
-        -DTOOL=$<TARGET_FILE:liarsofttool> -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/exe_disabled_data
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/exe_disabled_test.cmake)
+    add_test(NAME exe_experimental_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:liarsofttool> -DFIXTURE=$<TARGET_FILE:exe_patch_test>
+        "-DEMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR}"
+        -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/exe_editor_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/exe_editor_cli.cmake)
 
     add_executable(gsc_decompiler_test tests/gsc_decompiler_test.cpp)
     add_test(NAME gsc_decompiler COMMAND gsc_decompiler_test)
@@ -260,8 +263,10 @@ if(BUILD_TESTING)
             -DXGETTEXT=${XGETTEXT} -DMSGCMP=${MSGCMP}
             -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} -DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/gui_translations.cmake)
-        add_executable(gui_smoke_test tests/gui_smoke_test.cpp src/gui_common.cpp src/gui_browser.cpp)
+        add_executable(gui_smoke_test tests/gui_smoke_test.cpp src/gui_common.cpp src/gui_browser.cpp src/gui_exe_editor.cpp)
         add_executable(gui_browser_test tests/gui_browser_test.cpp src/gui_common.cpp)
+        add_executable(gui_exe_editor_test tests/gui_exe_editor_test.cpp)
+        target_link_libraries(gui_exe_editor_test PRIVATE liarsofttool_gui_preferences liarsofttool_core)
         target_link_libraries(gui_browser_test PRIVATE liarsofttool_gui_preferences "${VORBISENC_LIBRARY}")
         add_dependencies(gui_browser_test gui_translations)
         target_link_libraries(gui_smoke_test PRIVATE liarsofttool_gui_preferences liarsofttool_updates)
@@ -278,16 +283,19 @@ if(BUILD_TESTING)
         if(WIN32)
             add_test(NAME gui_smoke COMMAND gui_smoke_test)
             add_test(NAME gui_browser COMMAND gui_browser_test)
+            add_test(NAME gui_exe_editor COMMAND gui_exe_editor_test)
         else()
             find_program(XVFB_RUN xvfb-run)
             if(XVFB_RUN)
                 add_test(NAME gui_smoke COMMAND ${XVFB_RUN} -a $<TARGET_FILE:gui_smoke_test>)
                 add_test(NAME gui_browser COMMAND ${XVFB_RUN} -a $<TARGET_FILE:gui_browser_test>)
+                add_test(NAME gui_exe_editor COMMAND ${XVFB_RUN} -a $<TARGET_FILE:gui_exe_editor_test>)
             endif()
         endif()
         if(TEST gui_smoke)
             set_tests_properties(gui_smoke PROPERTIES TIMEOUT 30)
             set_tests_properties(gui_browser PROPERTIES TIMEOUT 35)
+            set_tests_properties(gui_exe_editor PROPERTIES TIMEOUT 35)
         endif()
     endif()
 
