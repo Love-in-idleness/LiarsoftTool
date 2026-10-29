@@ -25,7 +25,10 @@ if(RSCRIPT_BUILD_GAME_MODULES AND NOT TARGET liarsofttool_core)
     find_library(VORBIS_LIBRARY vorbis REQUIRED)
     find_library(OGG_LIBRARY ogg REQUIRED)
     add_library(liarsofttool_core STATIC
+        ${LIARSOFT_ROOT}/src/exe_patch.cpp
+        ${LIARSOFT_ROOT}/src/exe_editor.cpp
         ${LIARSOFT_ROOT}/src/kinsoku.cpp
+        ${LIARSOFT_ROOT}/third_party/hde32/hde32.cpp
         ${LIARSOFT_ROOT}/src/pe_image.cpp
         ${LIARSOFT_ROOT}/src/kinsoku_match.cpp
         ${LIARSOFT_ROOT}/src/bigendian.cpp ${LIARSOFT_ROOT}/src/encoding.cpp
@@ -137,7 +140,9 @@ if(BUILD_TESTING)
         target_link_libraries(runtime_unicode_test PRIVATE rscript_unicode)
         add_executable(runtime_native_kinsoku_test tests/native_kinsoku_test.cpp)
         target_link_libraries(runtime_native_kinsoku_test PRIVATE rscript_native_kinsoku)
-        foreach(target runtime_resource_test runtime_unicode_test runtime_native_kinsoku_test)
+        add_executable(runtime_exe_editor_test "${LIARSOFT_ROOT}/tests/exe_patch_test.cpp")
+        target_link_libraries(runtime_exe_editor_test PRIVATE liarsofttool_core)
+        foreach(target runtime_resource_test runtime_unicode_test runtime_native_kinsoku_test runtime_exe_editor_test)
             if(MINGW)
                 target_link_options(${target} PRIVATE -static)
             endif()

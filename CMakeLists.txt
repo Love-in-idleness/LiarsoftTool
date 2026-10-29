@@ -136,7 +136,9 @@ add_library(liarsofttool_core STATIC
     src/lim_decoder.cpp
     src/lwg_decoder.cpp
     src/wav_ogg.cpp
-    # src/exe_patch.cpp # EXE conversion is disabled in production builds.
+    src/exe_patch.cpp
+    src/exe_editor.cpp
+    third_party/hde32/hde32.cpp
     src/stb_impl.cpp
     src/stb_image_impl.cpp
 )
@@ -176,6 +178,7 @@ endif()
 install(TARGETS liarsofttool DESTINATION bin)
 install(FILES docs/THIRD_PARTY_AUDIO_LICENSES.md docs/THIRD_PARTY_UCHARDET_LICENSES.md
     DESTINATION share/doc/LiarsoftTool)
+install(FILES third_party/hde32/LICENSE.txt DESTINATION share/doc/LiarsoftTool RENAME HDE32-LICENSE.txt)
 if(BUILD_GUI)
     install(TARGETS liarsofttool-gui DESTINATION bin)
 endif()
@@ -222,8 +225,11 @@ if(BUILD_TESTING)
     add_executable(wav_ogg_test tests/wav_ogg_test.cpp)
     add_test(NAME wav_ogg COMMAND wav_ogg_test)
 
-    add_executable(exe_patch_test tests/exe_patch_test.cpp src/exe_patch.cpp)
+    add_executable(exe_patch_test tests/exe_patch_test.cpp)
     add_test(NAME exe_patch COMMAND exe_patch_test)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set_tests_properties(exe_patch PROPERTIES ENVIRONMENT "LD_PRELOAD=$<TARGET_FILE:fileio_faults>")
+    endif()
     add_test(NAME exe_conversion_disabled COMMAND ${CMAKE_COMMAND}
         -DTOOL=$<TARGET_FILE:liarsofttool> -DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/exe_disabled_data
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/exe_disabled_test.cmake)

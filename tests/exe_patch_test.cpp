@@ -1,322 +1,304 @@
-#include "exe_patch.h"
-
-#include <array>
-#include <cstdio>
-#include <fstream>
-#include <iterator>
+#include "exe_editor.h"
+#include "exe_editor_fixture.h"
+#include "fileio.h"
+#include "pe_image.h"
+#include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
 #include <stdexcept>
-#include <string>
-#include <vector>
-
-namespace {
-
-void require(bool condition) {
-    if (!condition) throw std::runtime_error("EXE patch regression failed");
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
+using namespace liarsoft;
+namespace fs = std::filesystem;
+void require(bool ok, const char *message) {
+    if (!ok)
+        throw std::runtime_error(message);
 }
-
-const std::vector<uint8_t> kPattern1Prefix = {
-    0x6A,0x00,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x68
-};
-
-using KinsokuTable = std::array<uint16_t, 50>;
-
-const KinsokuTable kCp932Kinsoku = {
-    0x8140,0x8141,0x8142,0x8143,0x8144,0x8148,0x8149,0x815B,
-    0x8160,0x8163,0x816A,0x816C,0x816E,0x8170,0x8172,0x8174,
-    0x8176,0x8178,0x817A,0x8166,0x8168,0x82C1,0x829F,0x82A1,
-    0x82A3,0x82A5,0x82A7,0x82E1,0x82E3,0x82E5,0x8340,0x8342,
-    0x8344,0x8346,0x8348,0x8383,0x8385,0x8387,
-    0x8165,0x8167,0x8169,0x816B,0x816D,0x816F,0x8171,0x8173,
-    0x8175,0x8177,0x8179,0x814A
-};
-
-const KinsokuTable kGbkKinsoku = {
-    0xA1A1,0xA1A2,0xA1A3,0xA3AC,0xA3AE,0xA3BF,0xA3A1,0xA1AB,
-    0xA1AD,0xA3A9,0xA1B3,0xA3DD,0xA3FD,0xA1B5,0xA1B7,0xA1B9,
-    0xA1BB,0xA1BF,0xA1AF,0xA1B1,0xA3BA,0xA3BB,0xA3A5,0xA1A4,
-    0xA1A8,0xA1A9,0xA1BD,0xA1E6,0xA1E3,0xA1E4,0xA1E5,0xA1EB,
-    0x003A,0x003B,0x0025,0xFFFF,0xFFFF,0xFFFF,
-    0xA1AE,0xA1B0,0xA3A8,0xA1B2,0xA3DB,0xA3FB,0xA1B4,0xA1B6,
-    0xA1B8,0xA1BA,0xA1BE,0xA1BC
-};
-
-const KinsokuTable kCp1251Kinsoku = {
-    0xFFBB,0xFF93,0xFF94,0xFF92,0xFF85,0x003A,0x003B,0x0025,
-    0xFF89,0xFFB0,0xFF96,0xFF97,0x002D,0xFFA0,0xFF99,0xFFAE,
-    0x8000,0x8000,0x8000,0x8000,0x8000,0x8000,0x8000,0x8000,
-    0x8000,0x8000,0x8000,0x8000,0x8000,0x8000,0x8000,0x8000,
-    0x8000,0x8000,0x8000,0x8000,0x8000,0x8000,
-    0xFFAB,0xFF84,0xFF91,0x0028,0x005B,0x007B,0xFFB9,0xFFA7,
-    0x0024,0xFF88,0x8000,0x8000
-};
-
-void appendCmp(std::vector<uint8_t>& data, uint16_t value, bool nearJump) {
-    const uint8_t prefix[] = {
-        0x66, 0x81, 0xFE, static_cast<uint8_t>(value),
-        static_cast<uint8_t>(value >> 8)
-    };
-    data.insert(data.end(), std::begin(prefix), std::end(prefix));
-    if (nearJump) {
-        const uint8_t jump[] = {0x0F,0x84,0x00,0x00,0x00,0x00};
-        data.insert(data.end(), std::begin(jump), std::end(jump));
-    } else {
-        const uint8_t jump[] = {0x74,0x00};
-        data.insert(data.end(), std::begin(jump), std::end(jump));
-    }
-}
-
-void appendKinsoku(std::vector<uint8_t>& data, const KinsokuTable& table,
-                    bool extended) {
-    for (size_t i = 0; i < 38; ++i) appendCmp(data, table[i], true);
-    if (extended) {
-        appendCmp(data, 0x213F, true);
-        appendCmp(data, 0x3F21, true);
-        appendCmp(data, 0x2121, true);
-    }
-    for (size_t i = 38; i < table.size(); ++i)
-        appendCmp(data, table[i], false);
-}
-
-void appendRegisterCmp(std::vector<uint8_t>& data, uint16_t value,
-                       bool nearJump) {
-    const uint8_t load[] = {0xB8, static_cast<uint8_t>(value),
-        static_cast<uint8_t>(value >> 8), 0x00, 0x00, 0x66, 0x3B, 0xF0};
-    data.insert(data.end(), std::begin(load), std::end(load));
-    if (nearJump) {
-        const uint8_t jump[] = {0x0F,0x84,0x11,0x22,0x33,0x44};
-        data.insert(data.end(), std::begin(jump), std::end(jump));
-    } else {
-        const uint8_t jump[] = {0x74,0x55};
-        data.insert(data.end(), std::begin(jump), std::end(jump));
-    }
-}
-
-void appendRegisterKinsoku(std::vector<uint8_t>& data,
-                           const KinsokuTable& table, bool extended) {
-    for (size_t i = 0; i < 38; ++i)
-        appendRegisterCmp(data, table[i], true);
-    if (extended) {
-        appendRegisterCmp(data, 0x213F, true);
-        appendRegisterCmp(data, 0x3F21, true);
-        // The engine has already loaded BX with 0x2121. Keep this comparison.
-        const uint8_t extra[] = {0x66,0x3B,0xF3,0x0F,0x84,0x11,0x22,0x33,0x44};
-        data.insert(data.end(), std::begin(extra), std::end(extra));
-    }
-    for (size_t i = 38; i < table.size(); ++i)
-        appendRegisterCmp(data, table[i], i < (extended ? 40u : 39u));
-}
-
-void appendPattern1(std::vector<uint8_t>& data, uint8_t charset) {
-    data.insert(data.end(), kPattern1Prefix.begin(), kPattern1Prefix.end());
-    const uint8_t tail[] = {charset,0x00,0x00,0x00,0x6A,0x00,0x6A,0x00};
-    data.insert(data.end(), std::begin(tail), std::end(tail));
-}
-
-void appendPattern2(std::vector<uint8_t>& data, uint8_t charset) {
-    const uint8_t pattern[] = {0xDA, 0x68, charset};
-    data.insert(data.end(), std::begin(pattern), std::end(pattern));
-}
-
-std::vector<uint8_t> interleavedFont(uint8_t charset) {
-    return {
-        0x6A,0x00,0x6A,0x00,0x8B,0x35,0x24,0x80,0x4C,0x00,
-        0xF7,0xD8,0x6A,0x00,0x6A,0x00,0x68,charset,0x00,0x00,0x00,
-        0x6A,0x00,0x6A,0x00,0x53,0x1B,0xC0,0x25,0xBC,0x02,0x00,0x00,
-        0x50,0x6A,0x00,0x6A,0x00,0x6A,0x00,0x57,0x89,0x45,0xB4,0xFF,0xD6
-    };
-}
-
-std::vector<uint8_t> makeRegisterFixture(const KinsokuTable& table,
-                                        uint8_t charset) {
-    std::vector<uint8_t> data;
-    appendPattern2(data, charset);
-    appendRegisterKinsoku(data, table, false);
-    data.push_back(0x90);
-    appendRegisterKinsoku(data, table, true);
-    return data;
-}
-
-std::vector<std::vector<uint8_t>> scheduledFonts(uint8_t charset) {
-    return {
-        {0x55,0x55,0x55,0x55,0x68,charset,0,0,0,0x55,0x55,0x55,
-         0x68,0xBC,0x02,0,0,0x55,0x55,0x55,0x6A,0x0E,0x8B,0xF8,
-         0xFF,0x15,0x24,0x30,0x47,0},
-        {0x6A,0,0x6A,0,0x6A,0,0xF7,0xDF,0x6A,0,0x68,charset,0,0,0,
-         0x1B,0xFF,0x6A,0,0x81,0xE7,0xBC,0x02,0,0,0x6A,0,0x51,0x57,
-         0x6A,0,0x81,0xE5,0xFF,0xFF,0,0,0x6A,0,0x6A,0,0x55,
-         0xFF,0x15,0x24,0x60,0x47,0},
-        {0x6A,0,0x6A,0,0x6A,0,0xF7,0xDF,0x6A,0,0x68,charset,0,0,0,
-         0x1B,0xFF,0x6A,0,0x81,0xE7,0xBC,0x02,0,0,0x6A,0,0x51,0x57,
-         0x6A,0,0x81,0xE3,0xFF,0xFF,0,0,0x6A,0,0x6A,0,0x53,
-         0xFF,0x15,0x24,0x30,0x47,0},
-        {0x53,0x8B,0x4C,0x24,0x5C,0x53,0x53,0xF7,0xD8,0x53,
-         0x68,charset,0,0,0,0x1B,0xC0,0x53,0x53,0x25,0xBC,0x02,0,0,
-         0x52,0x50,0x53,0x53,0x81,0xE1,0xFF,0xFF,0,0,0x53,0x51,
-         0xFF,0x15,0x24,0x30,0x47,0},
-        {0x6A,0,0x8B,0x4C,0x24,0x58,0x6A,0,0x6A,0,0xF7,0xD8,0x6A,0,
-         0x68,charset,0,0,0,0x1B,0xC0,0x6A,0,0x6A,0,0x25,0xBC,0x02,0,0,
-         0x52,0x50,0x6A,0,0x6A,0,0x81,0xE1,0xFF,0xFF,0,0,0x6A,0,0x51,
-         0xFF,0x15,0x24,0x60,0x47,0},
-        // Khime 1.8.5 computes SBB EDI, EDI before pushing the charset.
-        {0x6A,0,0x6A,0,0xF7,0xDF,0x6A,0,0x6A,0,0x1B,0xFF,
-         0x68,charset,0,0,0,0x6A,0,0x81,0xE7,0xBC,0x02,0,0,
-         0x6A,0,0x55,0x57,0x6A,0,0x81,0xE3,0xFF,0xFF,0,0,
-         0x6A,0,0x6A,0,0x53,0xFF,0x15,0x2C,0x30,0x46,0},
-        // The known-zero register in its EAX weight path is EBP, not EBX.
-        {0x55,0x8B,0x4C,0x24,0x5C,0x55,0x55,0xF7,0xD8,0x55,
-         0x68,charset,0,0,0,0x1B,0xC0,0x55,0x55,0x25,0xBC,0x02,0,0,
-         0x52,0x50,0x55,0x55,0x81,0xE1,0xFF,0xFF,0,0,0x55,0x51,
-         0xFF,0x15,0x2C,0x30,0x46,0}
-    };
-}
-
-std::vector<uint8_t> makeKinsokuFixture(const KinsokuTable& table,
-                                        uint8_t charset) {
-    std::vector<uint8_t> data = {0x4D,0x5A,0x90};
-    appendPattern2(data, charset);
-    data.push_back(0x90);
-    appendKinsoku(data, table, false);
-    data.push_back(0x90);
-    appendKinsoku(data, table, true);
-    return data;
-}
-
-std::vector<uint8_t> readFile(const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-}
-
-void writeFile(const std::string& path, const std::vector<uint8_t>& data) {
-    std::ofstream out(path, std::ios::binary);
-    out.write(reinterpret_cast<const char*>(data.data()), data.size());
-}
-
-} // namespace
-
-int main() {
-    std::vector<uint8_t> mixed = {0x4D, 0x5A, 0x00};
-    appendPattern1(mixed, 0x80);
-    mixed.push_back(0x90);
-    appendPattern2(mixed, 0x86);
-    mixed.push_back(0x90);
-    appendPattern1(mixed, 0xCC);
-
-    auto normalized = mixed;
-    for (uint8_t source : {0x80, 0x86, 0xCC})
-        normalized = liarsoft::exeConvertEncoding(normalized, source, 0xCC);
-    auto expected = std::vector<uint8_t>{0x4D, 0x5A, 0x00};
-    appendPattern1(expected, 0xCC);
-    expected.push_back(0x90);
-    appendPattern2(expected, 0xCC);
-    expected.push_back(0x90);
-    appendPattern1(expected, 0xCC);
-    require(normalized == expected);
-
-    const auto optimizedFont = interleavedFont(0x80);
-    require(liarsoft::exeConvertEncoding(optimizedFont, 0x80, 0x86) ==
-            interleavedFont(0x86));
-    for (size_t size = 0; size < optimizedFont.size(); ++size) {
-        const std::vector<uint8_t> truncated(optimizedFont.begin(),
-                                              optimizedFont.begin() + size);
-        require(liarsoft::exeConvertEncoding(truncated, 0x80, 0x86) == truncated);
-    }
-    auto notFont = optimizedFont;
-    notFont.back() = 0xD7; // Different call register: not the observed font path.
-    require(liarsoft::exeConvertEncoding(notFont, 0x80, 0x86) == notFont);
-
-    const auto scheduled932 = scheduledFonts(0x80);
-    const auto scheduledGbk = scheduledFonts(0x86);
-    const auto scheduled1251 = scheduledFonts(0xCC);
-    for (size_t i = 0; i < scheduled932.size(); ++i) {
-        const auto& font = scheduled932[i];
-        require(liarsoft::exeConvertEncoding(font, 0x80, 0x86) == scheduledGbk[i]);
-        require(liarsoft::exeConvertEncoding(scheduledGbk[i], 0x86, 0xCC) == scheduled1251[i]);
-        require(liarsoft::exeConvertEncoding(scheduled1251[i], 0xCC, 0x80) == font);
-        for (size_t size = 0; size < font.size(); ++size) {
-            const std::vector<uint8_t> truncated(font.begin(), font.begin() + size);
-            require(liarsoft::exeConvertEncoding(truncated, 0x80, 0x86) == truncated);
-        }
-        auto altered = font;
-        altered[font.size() - 5] = 0x16; // Not CALL [IAT].
-        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
-        altered = font;
-        altered[0] ^= 1; // Wrong argument/register shape.
-        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
-    }
-
-    const auto cp932 = makeKinsokuFixture(kCp932Kinsoku, 0x80);
-    const auto gbk = makeKinsokuFixture(kGbkKinsoku, 0x86);
-    const auto cp1251 = makeKinsokuFixture(kCp1251Kinsoku, 0xCC);
-    require(liarsoft::exeConvertEncoding(cp932, 0x80, 0x86) == gbk);
-    require(liarsoft::exeConvertEncoding(gbk, 0x86, 0x80) == cp932);
-    require(liarsoft::exeConvertEncoding(cp932, 0x80, 0xCC) == cp1251);
-    require(liarsoft::exeConvertEncoding(cp1251, 0xCC, 0x80) == cp932);
-
-    const auto register932 = makeRegisterFixture(kCp932Kinsoku, 0x80);
-    const auto registerGbk = makeRegisterFixture(kGbkKinsoku, 0x86);
-    const auto register1251 = makeRegisterFixture(kCp1251Kinsoku, 0xCC);
-    require(liarsoft::exeConvertEncoding(register932, 0x80, 0x86) == registerGbk);
-    require(liarsoft::exeConvertEncoding(registerGbk, 0x86, 0xCC) == register1251);
-    require(liarsoft::exeConvertEncoding(register1251, 0xCC, 0x80) == register932);
-
-    for (bool extended : {false, true}) {
-        std::vector<uint8_t> table;
-        appendRegisterKinsoku(table, kCp932Kinsoku, extended);
-        // Incomplete or altered tables must not be partially patched.
-        for (size_t size = 0; size < table.size(); ++size) {
-            const std::vector<uint8_t> truncated(table.begin(), table.begin() + size);
-            require(liarsoft::exeConvertEncoding(truncated, 0x80, 0x86) == truncated);
-        }
-        auto altered = table;
-        altered[1] ^= 1;
-        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
-        altered = table;
-        altered[3] = 1; // MOV EAX must contain a zero-extended 16-bit constant.
-        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
-        altered = table;
-        altered[9] = 0x85; // JNE instead of JE is not this known classifier.
-        require(liarsoft::exeConvertEncoding(altered, 0x80, 0x86) == altered);
-    }
-
-    const std::string input = "exe_patch_test_input.bin";
-    const std::string output = "exe_patch_test_output.bin";
-    const std::string unsupported = "exe_patch_test_unsupported.bin";
-    std::remove(input.c_str());
-    std::remove(output.c_str());
-    std::remove(unsupported.c_str());
-
-    writeFile(input, mixed);
-    liarsoft::exeConvertFile(input, output, "CP1251");
-    require(readFile(output) == expected);
-
-    writeFile(input, optimizedFont);
-    liarsoft::exeConvertFile(input, output, "CP1251");
-    require(readFile(output) == interleavedFont(0xCC));
-
-    for (size_t i = 0; i < scheduled932.size(); ++i) {
-        writeFile(input, scheduled932[i]);
-        liarsoft::exeConvertFile(input, output, "CP1251");
-        require(readFile(output) == scheduled1251[i]);
-    }
-
-    // A patched font charset does not imply that punctuation tables were patched.
-    auto mixedRegister = register932;
-    mixedRegister[2] = 0x86;
-    writeFile(input, mixedRegister);
-    liarsoft::exeConvertFile(input, output, "GBK");
-    require(readFile(output) == registerGbk);
-
-    writeFile(unsupported, {0x4D, 0x5A, 0x00});
-    bool rejected = false;
+template <class F> void reject(F operation) {
     try {
-        liarsoft::exeConvertFile(unsupported, output, "GBK");
-    } catch (const std::runtime_error&) {
-        rejected = true;
+        operation();
+    } catch (const std::exception &) {
+        return;
     }
-    require(rejected);
-
-    std::remove(input.c_str());
-    std::remove(output.c_str());
-    std::remove(unsupported.c_str());
-    return 0;
+    throw std::runtime_error("Unsafe EXE operation was accepted");
+}
+#if defined(_WIN32) && !defined(_WIN64)
+std::array<uint32_t, 14> fontArguments{};
+uint32_t WINAPI captureFont(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5,
+                            uint32_t a6, uint32_t a7, uint32_t a8, uint32_t a9, uint32_t a10, uint32_t a11,
+                            uint32_t a12, uint32_t a13) {
+    fontArguments = {a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13};
+    return 0x12345678;
+}
+void execute(const std::vector<uint8_t> &bytes) {
+    runtime::PeImage image(bytes);
+    auto *memory =
+        static_cast<uint8_t *>(VirtualAlloc(nullptr, image.size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    require(memory, "Cannot allocate test image");
+    for (const auto &s : image.sections)
+        std::memcpy(memory + s.rva, bytes.data() + s.offset, s.rawSize);
+    const auto doc = inspectExe(bytes);
+    const auto fontCallback = uint32_t(reinterpret_cast<uintptr_t>(&captureFont));
+    for (const auto &font : doc.fontBridges)
+        std::memcpy(memory + font.slot, &fontCallback, 4);
+    DWORD old;
+    require(VirtualProtect(memory, image.size, PAGE_EXECUTE_READ, &old), "Cannot protect test image");
+    using Classifier = uint32_t(WINAPI *)(uint32_t);
+    auto function = reinterpret_cast<Classifier>(memory + 0x1400);
+    require(function(';') == 1 && function('(') == 2 && function('X') == 0,
+            "Generated classifier result is incorrect");
+    using FontCall = decltype(&captureFont);
+    for (const auto &font : doc.fontBridges) {
+        auto call = reinterpret_cast<FontCall>(memory + font.target);
+        require(call(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14) == 0x12345678,
+                "Font bridge return value differs");
+        for (unsigned n = 0; n < 14; ++n)
+            require(fontArguments[n] == (n == 8 ? font.charset : n + 1),
+                    "Font bridge changed another argument");
+    }
+    VirtualFree(memory, 0, MEM_RELEASE);
+}
+#endif
+int main(int argc, char **argv) {
+    if (argc == 2) {
+        const auto root = fs::u8path(argv[1]);
+        fs::create_directories(root);
+        writePathIfChanged(root / "game.exe", editorFixture().bytes);
+        return 0;
+    }
+    const auto root = fs::temp_directory_path() /
+                      fs::u8path("exe 中文 Русский " +
+                                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    try {
+        fs::create_directories(root);
+        for (bool optimized : {false, true}) {
+            const auto original = editorFixture(optimized);
+            const auto doc = inspectExe(original.bytes);
+            require(doc.sourceEncoding == "CP932" && doc.charsets == std::vector<uint8_t>{128} &&
+                        doc.fontOperands.size() == 1,
+                    "Font charset analysis differs");
+            require(doc.texts.size() == 2 && doc.texts[0].editable && doc.texts[0].references.size() == 2,
+                    "Shared prompt references missing");
+            require(doc.classifiers.size() == 1, "Native classifier missing");
+            ExeChanges change;
+            change.texts[doc.texts[0].id] = "A much longer confirmation message that must survive relocation "
+                                            "and reopening without truncation: %s";
+            const auto edited = editExe(doc, change);
+            const auto reopened = inspectExe(edited);
+            require(reopened.texts.size() == 2 &&
+                        std::any_of(reopened.texts.begin(), reopened.texts.end(),
+                                    [&](const auto &t) { return t.text == change.texts.begin()->second; }),
+                    "Long translation not restored");
+            require(
+                std::equal(original.bytes.begin() + 0x3400, original.bytes.end(), edited.begin() + 0x3400),
+                "Overlay was changed");
+            require(!reopened.expandedRules, "Text-only edit unexpectedly changed classifier code");
+            require(editExe(reopened, {}) == edited, "Unchanged EXE was rewritten");
+            change.texts[doc.texts[0].id] = "missing placeholder";
+            reject([&] { editExe(doc, change); });
+            change.texts.clear();
+            change.texts["unknown"] = "text";
+            reject([&] { editExe(doc, change); });
+            change.texts.clear();
+            change.rules = defaultExeRules("CP932");
+            const auto expanded = editExe(doc, change);
+            const auto expandedDoc = inspectExe(expanded);
+            require(expandedDoc.expandedRules && expandedDoc.rules.noLineStart == change.rules->noLineStart,
+                    "Expanded rules were not restored");
+            require(editExe(expandedDoc, change) == expanded, "Identical expanded rules changed the file");
+            ExeChanges second;
+            second.texts[expandedDoc.texts[0].id] = "changed %s";
+            const auto twice = inspectExe(editExe(expandedDoc, second));
+            require(twice.expandedRules, "Repeated editing lost rules");
+            auto invalid = expanded;
+            const runtime::PeImage saved(invalid);
+            const auto owned = std::find_if(saved.sections.begin(), saved.sections.end(),
+                                            [](const auto &s) { return s.name == ".ltool"; });
+            require(owned != saved.sections.end(), "New section missing");
+            invalid[owned->offset + 8] = 42;
+            reject([&] { inspectExe(invalid); });
+            for (const auto &encoding : exeEncodings()) {
+                ExeChanges request;
+                request.encoding = encoding;
+                request.rules = ExeRules{";", "("};
+                for (const auto &item : doc.texts)
+                    request.texts[item.id] = item.text.find("%s") != std::string::npos ? "save %s" : "OK";
+                const auto next = editExe(doc, request);
+                const auto result = inspectExe(next);
+                require(result.sourceEncoding == encoding && result.rules.noLineStart == ";" &&
+                            result.rules.noLineEnd == "(",
+                        "Legacy target encoding or rules differ");
+#if defined(_WIN32) && !defined(_WIN64)
+                execute(next);
+#endif
+            }
+            for (const auto *encoding : {"UTF-8", "65001", "GB18030"}) {
+                ExeChanges request;
+                request.encoding = encoding;
+                reject([&] { editExe(doc, request); });
+            }
+            change.rules = ExeRules{";", ";"};
+            reject([&] { editExe(doc, change); });
+            change.rules = ExeRules{std::string(1, '\0'), ""};
+            reject([&] { editExe(doc, change); });
+            change.rules = ExeRules{u8"😀", ""};
+            reject([&] { editExe(doc, change); });
+            reject([&] { inspectExe(original.bytes, "UTF-8"); });
+            unsigned polls = 0;
+            reject([&] { inspectExe(original.bytes, "auto", [&] { return ++polls > 2; }); });
+        }
+        for (bool getter : {false, true}) {
+            const auto fixture = expandedEditorFixture(getter);
+            const auto doc = inspectExe(fixture.bytes, "CP932");
+            require(doc.fontsComplete && doc.fontCalls == 1 &&
+                        doc.fontOperands.size() + doc.fontBridges.size() == 1,
+                    "Font argument getter was not handled");
+            require(doc.texts.size() == 7, "Embedded title/scene/text fields missing");
+            auto changes = defaultExeConfiguration(doc, "GBK");
+            require(changes.texts.at("text:3340") == u8"确认", "Default stock prompt translation missing");
+            changes.texts["text:3506"] = u8"中文游戏标题";
+            changes.texts["text:3806"] = u8"中文场景标题";
+            changes.texts["text:33a0"] = "English text";
+            changes.texts["text:33e0"] = std::string(100, 'T');
+            const auto edited = editExe(doc, changes);
+            const auto next = inspectExe(edited);
+            require(next.sourceEncoding == "GBK" && next.texts.size() == 7, "Expanded text did not reopen");
+            require(std::any_of(next.texts.begin(), next.texts.end(),
+                                [](const auto &t) { return t.text == "English text"; }),
+                    "ASCII translation disappeared");
+            require(editExe(next, {}) == edited, "Reopened extended EXE was not stable");
+            if (getter) {
+                require(next.fontBridges.size() == 1 && next.fontBridges[0].charset == 134,
+                        "Saved font bridge missing");
+#if defined(_WIN32) && !defined(_WIN64)
+                execute(edited);
+#endif
+                auto altered = edited;
+                runtime::PeImage image(altered);
+                const auto at = size_t(image.range(next.fontBridges[0].target, 1) - image.bytes().data());
+                altered[at] ^= 1;
+                reject([&] { inspectExe(altered); });
+            }
+            changes.texts["text:3506"] = std::string(31, 'X');
+            reject([&] { editExe(doc, changes); });
+            changes.texts.erase("text:3506");
+            changes.texts["text:3806"] = std::string(52, 'X');
+            reject([&] { editExe(doc, changes); });
+            changes.texts.erase("text:3806");
+            changes.texts["text:33a0"] = std::string(100, 'X');
+            reject([&] { editExe(doc, changes); });
+            for (const auto &enc : exeEncodings()) {
+                auto defaults = defaultExeConfiguration(doc, enc);
+                require(defaults.encoding == enc && defaults.rules.has_value(),
+                        "Default configuration incomplete");
+                for (const auto &[id, text] : defaults.texts)
+                    convertEncoding(text, "UTF-8", enc, true);
+            }
+        }
+        for (bool bx : {false, true}) {
+            const auto fixture = editorFixture(true, true, bx);
+            const auto doc = inspectExe(fixture.bytes);
+            require(doc.classifiers.size() == 1 && doc.classifiers[0].packedPairs == (bx ? 3u : 1u),
+                    "Packed ASCII classifier variant missing");
+            ExeChanges request;
+            request.rules = ExeRules{";", "("};
+            const auto result = editExe(doc, request);
+            require(inspectExe(result).classifiers[0].packedPairs == (bx ? 3u : 1u),
+                    "Packed ASCII behavior was lost");
+#if defined(_WIN32) && !defined(_WIN64)
+            execute(result);
+#endif
+        }
+        auto pointers = editorFixture();
+        std::fill(pointers.bytes.begin() + pointers.file(0x1000),
+                  pointers.bytes.begin() + pointers.file(0x1200), 0xcc);
+        pointers.put(0x98 + 16, 0x1800);
+        pointers.put(pointers.file(0x3380), 0x403300);
+        const std::vector<uint8_t> pointerCall{0xff, 0x35, 0x80, 0x33, 0x40, 0, 0x68, 0x40, 0x33,
+                                               0x40, 0,    0xe8, 0,    0,    0, 0,    0xc3};
+        std::copy(pointerCall.begin(), pointerCall.end(), pointers.bytes.begin() + pointers.file(0x1800));
+        pointers.put(pointers.file(0x180c), uint32_t(0x1200 - 0x1810));
+        const auto pointerDoc = inspectExe(pointers.bytes, "CP932");
+        require(pointerDoc.texts.size() == 2 && pointerDoc.texts[0].editable,
+                "Verified prompt pointer table was not recognized");
+        ExeChanges pointerChange;
+        pointerChange.texts[pointerDoc.texts[0].id] = "table translation %s";
+        require(inspectExe(editExe(pointerDoc, pointerChange)).texts.size() == 2,
+                "Pointer-table translation did not reopen");
+        auto raw = editorFixture();
+        raw.put(raw.file(0x3380), 0x403300);
+        auto readOnly = inspectExe(raw.bytes);
+        require(!readOnly.texts[0].editable, "Unverified pointer was treated as a safe reference");
+        ExeChanges request;
+        request.texts[readOnly.texts[0].id] = "change %s";
+        reject([&] { editExe(readOnly, request); });
+        raw = editorFixture();
+        raw.put(0x98 + 96 + 4 * 8, 0x3400);
+        raw.put(0x98 + 96 + 4 * 8 + 4, 0x100);
+        const auto signedDoc = inspectExe(raw.bytes);
+        require(!signedDoc.writable, "Signed image is writable");
+        reject([&] { editExe(signedDoc, {}); });
+        raw = editorFixture();
+        raw.put(0x178 + 40 + 20, 0x400);
+        reject([&] { inspectExe(raw.bytes); });
+        raw = editorFixture();
+        raw.put(0x98 + 60, 0x1c8);
+        const auto noHeader = inspectExe(raw.bytes);
+        request = {};
+        request.texts[noHeader.texts[0].id] = "changed %s";
+        reject([&] { editExe(noHeader, request); });
+        const auto fixture = editorFixture();
+        const auto doc = inspectExe(fixture.bytes);
+        request = {};
+        request.texts[doc.texts[0].id] = "saved %s";
+        const auto source = root / "original.exe", output = root / "output.exe";
+        writePathIfChanged(source, fixture.bytes);
+        reject([&] { saveEditedExe(source, source, doc, request); });
+        fs::create_hard_link(source, output);
+        reject([&] { saveEditedExe(source, output, doc, request); });
+        fs::remove(output);
+#ifndef _WIN32
+        fs::create_symlink(source, output);
+        reject([&] { saveEditedExe(source, output, doc, request); });
+        fs::remove(output);
+#endif
+        const std::vector<uint8_t> keep{'K', 'E', 'E', 'P'};
+        writePathIfChanged(output, keep);
+        fs::permissions(output, fs::perms::owner_read);
+        reject([&] { saveEditedExe(source, output, doc, request); });
+        require(readFile(output) == keep, "Failed save damaged previous output");
+        fs::permissions(output, fs::perms::owner_read | fs::perms::owner_write);
+#ifdef __linux__
+        if (std::getenv("LD_PRELOAD"))
+            for (const auto *fault : {"write", "close", "replace"}) {
+                setenv("LIARSOFT_TEST_IO_FAILURE", fault, 1);
+                reject([&] { saveEditedExe(source, output, doc, request); });
+                unsetenv("LIARSOFT_TEST_IO_FAILURE");
+                require(readFile(output) == keep, "Fault damaged output");
+            }
+#endif
+        saveEditedExe(source, output, doc, request);
+        const auto time = fs::last_write_time(output);
+        saveEditedExe(source, output, doc, request);
+        require(fs::last_write_time(output) == time, "Repeated build rewrote unchanged output");
+        auto modified = fixture.bytes;
+        modified.back() ^= 1;
+        writePathIfChanged(source, modified);
+        reject([&] { saveEditedExe(source, output, doc, request); });
+        for (size_t length : {size_t(0), size_t(64), size_t(0x100), size_t(0x2450)})
+            reject([&] { inspectExe({fixture.bytes.begin(), fixture.bytes.begin() + length}); });
+        fs::remove_all(root);
+        std::cout << "EXE editing: references, long text, encodings, expanded rules, re-editing, "
+                     "cancellation and safe writes passed\n";
+        return 0;
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << '\n';
+        std::error_code ignored;
+        fs::permissions(root / "output.exe", fs::perms::owner_all, ignored);
+        fs::remove_all(root, ignored);
+        return 1;
+    }
 }

@@ -40,6 +40,8 @@ cp "$root"/README*.md "$root"/AGENTS*.md "$root/image.png" "$root/COPYING" "$des
 mkdir -p "$destination/docs"
 cp "$root"/docs/*.md "$destination/docs/"
 mkdir -p "$destination/share/doc/LiarsoftTool"
+mkdir -p "$destination/licenses"
+cp "$root/third_party/hde32/LICENSE.txt" "$destination/licenses/HDE32-LICENSE.txt"
 cp "$root/docs/THIRD_PARTY_AUDIO_LICENSES.md" "$root/docs/THIRD_PARTY_UCHARDET_LICENSES.md" "$destination/share/doc/LiarsoftTool/"
 
 mapfile -d '' queue < <(find "$destination" -type f \( -iname '*.exe' -o -iname '*.dll' \) -print0)
