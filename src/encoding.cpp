@@ -18,10 +18,17 @@ namespace liarsoft {
 
 const std::vector<std::string>& supportedEncodings() {
     static const std::vector<std::string> names = {
-        "CP932", "GBK", "CP1251", "UTF-8", "GB18030", "CP950", "CP949",
+        "CP932", "GBK", "CP1251", "GB18030", "CP950", "CP949",
         "CP1250", "CP1252", "CP1253", "CP1254", "CP1255", "CP1256", "CP1257", "CP1258"
     };
     return names;
+}
+
+void validateResourceEncoding(const std::string& encoding) {
+    const auto name = normalizeEncodingName(encoding);
+    const auto& names = supportedEncodings();
+    if (name != "auto" && std::find(names.begin(), names.end(), name) == names.end())
+        throw std::runtime_error("Unsupported resource encoding: " + encoding);
 }
 
 std::string normalizeEncodingName(const std::string& encoding) {

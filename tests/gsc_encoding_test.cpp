@@ -39,7 +39,6 @@ int main(int argc, char** argv) {
             {"CP950", "今天的天氣很好，我們一起走進安靜的森林。遠處傳來了鳥兒的聲音，她打開窗戶望著藍色的天空。他們正在討論這個故事裡面發生的事情。"},
             {"CP1251", "Сегодня была хорошая погода. Мы вместе гуляли по тихому лесу и слушали пение птиц. Она открыла окно и посмотрела на голубое небо. История только начинается."},
             {"CP949", "오늘은 날씨가 아주 좋습니다. 우리는 함께 조용한 숲속을 걸어가며 새들의 노랫소리를 들었습니다. 그녀는 창문을 열고 푸른 하늘을 바라보았습니다."},
-            {"UTF-8", "日本語と中文とРусскийを含む文章です。文字の内容を正しく表示してください。"},
             {"GB18030", "今天的天气很好，我们一起走进安静的森林。远处传来了鸟儿的声音。这个字符需要四个字节才能正确编码：𠀀。"},
         };
         for (const auto& [encoding, text] : samples) {
@@ -60,6 +59,12 @@ int main(int argc, char** argv) {
             }
         }
         const auto ascii = gsc("hello", "CP932");
+        rejects([&] { detectGscEncoding(gsc("日本語と中文とРусскийを含む文章です。", "UTF-8")); });
+        for (const auto* alias : {"UTF-8", "utf8", "65001", "cp65001"}) {
+            rejects([&] { validateResourceEncoding(alias); });
+            auto options = conversion::ConversionOptions{}; options.encoding = alias;
+            rejects([&] { conversion::convert("unused.gsc", "unused.tsc", options); });
+        }
         require(detectGscEncoding(ascii) == "CP932", "ASCII fallback changed");
         require(detectGscEncoding(restoreGscFromTsc(
             ";@gsc-byte-format modern-36\n;@gsc-schema modern\n*end\n")) == "CP932", "Empty script detection");

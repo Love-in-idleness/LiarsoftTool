@@ -46,6 +46,7 @@ std::string format(const std::vector<uint8_t>& data, const std::string& name) {
 }
 ResourcePreview decodeResourcePreview(const std::vector<uint8_t>& data, const std::string& name,
                                      const std::string& encoding) {
+    validateResourceEncoding(encoding);
     ResourcePreview result;
     result.format = format(data, name);
     if (result.format.empty()) return result;

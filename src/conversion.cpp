@@ -108,6 +108,7 @@ bool isSupported(const std::string& path) {
 ConversionResult convert(const std::string& inputPath,
                                  const std::string& outputPath,
                                  const ConversionOptions& options) {
+    validateResourceEncoding(options.encoding);
     if (options.workers > liarsoft::MaxConversionWorkers)
         throw std::runtime_error("Worker count must be between 0 and 64");
     const std::string ext = extension(inputPath);

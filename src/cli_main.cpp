@@ -26,7 +26,7 @@ static void printUsage(const char* prog) {
               << "Usage: " << prog << " [options] <input...> [output]\n\n"
               << "Options:\n"
               << "  -e, --encoding <enc>  Text encoding (default: auto detects GSC input)\n"
-              << "                        Supported: auto, cp932, gbk, gb18030, big5/cp950, cp949, cp1250-cp1258, utf-8\n"
+              << "                        Supported: auto, cp932, gbk, gb18030, big5/cp950, cp949, cp1250-cp1258\n"
               << "                        Choose an explicit encoding for packing/GSC output.\n"
               << "                        Auto uses CP932 for archive names and other legacy text.\n"
               << "  -r, --reference <path> Reference GSC file for TXT injection\n"
@@ -349,6 +349,8 @@ static int runCli(int argc, char* argv[]) {
         ++i;
     }
 
+    try { liarsoft::validateResourceEncoding(encoding); }
+    catch (const std::exception& error) { std::cerr << "Error: " << error.what() << '\n'; return 1; }
     if (inspectTsc) {
         if (inputs.size() != 1 || checkTsc || checkUpdate || !explicitOutput.empty() || !referencePath.empty() ||
             recursive || packOnly || unpackOnly || vorbisInWav || !gscToTsc || workers) {

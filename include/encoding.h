@@ -24,6 +24,9 @@ std::string normalizeEncodingName(const std::string& encoding);
 /// Encoding choices shared by conversion and resource-preview interfaces.
 const std::vector<std::string>& supportedEncodings();
 
+/// Validate a public resource encoding; UTF-8 remains an internal text format.
+void validateResourceEncoding(const std::string& encoding);
+
 } // namespace liarsoft
 
 #endif

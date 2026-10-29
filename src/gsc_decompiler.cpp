@@ -1262,7 +1262,7 @@ std::string detectGscEncoding(const std::vector<uint8_t>& data,
     if (!nonAscii)
         return report("CP932", "ASCII-only text; original encoding cannot be determined.");
     if (valid("UTF-8"))
-        return report("UTF-8", "Valid UTF-8 text; override manually if the text looks wrong.");
+        throw std::runtime_error("UTF-8 GSC resources are not supported; keep UTF-8 text in TSC instead");
 
     std::unique_ptr<uchardet, decltype(&uchardet_delete)> detector(uchardet_new(), uchardet_delete);
     if (!detector || uchardet_handle_data(detector.get(), sample.data(), sample.size()))
