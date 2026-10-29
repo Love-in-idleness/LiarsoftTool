@@ -52,17 +52,16 @@ int main() {
                 "A substantially longer GUI translation, including the original format placeholder %s");
         require(exeEditorDirty(widget), "Prompt changes did not mark editor dirty");
         select(e->target, "GBK");
-        std::function<GtkWidget *(GtkWidget *)> findDefaults = [&](GtkWidget *w) -> GtkWidget * {
+        std::function<GtkWidget *(GtkWidget *, const char *)> findButton = [&](GtkWidget *w, const char *label) -> GtkWidget * {
             if (GTK_IS_BUTTON(w) && gtk_button_get_label(GTK_BUTTON(w)) &&
-                std::string(gtk_button_get_label(GTK_BUTTON(w))) ==
-                    "Use target encoding default configuration")
+                std::string(gtk_button_get_label(GTK_BUTTON(w))) == label)
                 return w;
             for (auto *c = gtk_widget_get_first_child(w); c; c = gtk_widget_get_next_sibling(c))
-                if (auto *found = findDefaults(c))
+                if (auto *found = findButton(c, label))
                     return found;
             return nullptr;
         };
-        auto *defaults = findDefaults(widget);
+        auto *defaults = findButton(widget, "Use target encoding default configuration");
         require(defaults, "Default configuration button missing");
         const auto custom = text(e->translations[0]);
         g_signal_emit_by_name(defaults, "clicked");
@@ -73,12 +72,16 @@ int main() {
         leaveExeEditor(widget, [&] { left = true; });
         require(e->leaveDialog && !left, "Unsaved changes did not prompt");
         wait([&] { return gtk_widget_get_mapped(GTK_WIDGET(e->leaveDialog)); }, "cancel dialog mapped");
-        adw_dialog_force_close(ADW_DIALOG(e->leaveDialog));
+        auto *cancel = findButton(GTK_WIDGET(e->leaveDialog), "Cancel");
+        require(cancel, "Cancel response button missing");
+        g_signal_emit_by_name(cancel, "clicked");
         wait([&] { return !e->leaveDialog; }, "cancel response");
         require(!left && exeEditorDirty(widget), "Cancel discarded changes");
         leaveExeEditor(widget, [&] { left = true; });
         wait([&] { return gtk_widget_get_mapped(GTK_WIDGET(e->leaveDialog)); }, "discard dialog mapped");
-        g_signal_emit_by_name(e->leaveDialog, "response", "discard");
+        auto *discard = findButton(GTK_WIDGET(e->leaveDialog), "Discard");
+        require(discard, "Discard response button missing");
+        g_signal_emit_by_name(discard, "clicked");
         wait([&] { return left; }, "discard response");
         require(!exeEditorDirty(widget), "Discard did not clear unsaved state");
         setText(e->translations[0], "Saved by the GUI with format %s");
