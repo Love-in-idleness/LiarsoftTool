@@ -23,7 +23,6 @@ function editor(source) {
         DiagnosticSeverity: { Error: 0, Warning: 1 },
         languages: { createDiagnosticCollection: () => ({ ...disposable, set: (uri, value) => entries.set(uri.toString(), value), delete: uri => entries.delete(uri.toString()) }) },
         window: {
-            registerCustomEditorProvider: () => disposable,
             activeTextEditor: { document: doc },
             createOutputChannel: () => ({ ...disposable, appendLine: text => logs.push(text), show() {} }),
             showWarningMessage: async text => { warnings.push(text); return replies.shift(); },
@@ -39,6 +38,16 @@ function editor(source) {
     const context = { subscriptions: [] }; activate(context, vscode);
     return { commands, events, entries, doc, config, vscode, warnings, errors, replies, logs, context };
 }
+test('only text-editor commands are exposed and activated', async () => {
+    const e = editor(path.join(await temporary, 'text-only.tsc'));
+    const manifest = require('../package.json');
+    const commands = ['liarsofttool.checkTsc', 'liarsofttool.compileTsc'];
+    assert.deepEqual(Object.keys(e.commands), commands);
+    assert.deepEqual(manifest.contributes.commands.map(item => item.command), commands);
+    assert.deepEqual(manifest.activationEvents, ['onLanguage:codex-tsc']);
+    assert.equal(manifest.contributes.customEditors, undefined);
+    for (const item of e.context.subscriptions) item.dispose();
+});
 test('Problems, save prompts, compilation, missing tool and workspace trust', async () => {
     const source = path.join(await temporary, '中文 scenario.tsc');
     const e = editor(source); await e.doc.save();

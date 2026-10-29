@@ -1,3 +1,5 @@
+// Graphical editor bundling is disabled with its extension entry point.
+/*
 const fs = require('node:fs/promises');
 const path = require('node:path');
 require('esbuild').build({ entryPoints: ['webview/editor.jsx'], bundle: true, outdir: 'dist', metafile: true,
@@ -19,3 +21,4 @@ require('esbuild').build({ entryPoints: ['webview/editor.jsx'], bundle: true, ou
     }
     await fs.writeFile('dist/THIRD_PARTY_LICENSES.txt', notices.join('\n\n--------------------\n\n'));
 }).catch(error => { console.error(error); process.exit(1); });
+*/

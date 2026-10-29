@@ -50,8 +50,8 @@ GSC→TSC 为实验性功能。保留原 GSC 和自动生成的标签、元数�
 
 ## VS Code 插件
 
-本分支包含实验性的 [CodeX TSC 插件](tsc-vscode/README.zh.md)，用于高亮、检查、编译和图形化剧情创作。
-支持 SevenBridge 与 Forest 配置；插件单独构建为 VSIX，不随主程序安装，也未合入 `master`。
+本分支包含实验性的 [CodeX TSC 插件](tsc-vscode/README.zh.md)，用于 TSC 语法高亮、错误检查和 GSC 编译。
+插件单独构建为 VSIX，不随主程序安装，也未合入 `master`。
 
 ## 帮助与文档
 

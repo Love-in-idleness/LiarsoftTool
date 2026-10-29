@@ -55,8 +55,8 @@ See the [TSC reference](docs/GSC_OPCODE_REFERENCE.en.md) for commands.
 
 ## VS Code extension
 
-This branch includes the experimental [CodeX TSC extension](tsc-vscode/README.en.md) for highlighting, checking, compiling, and graphical story authoring.
-It provides SevenBridge and Forest profiles. Build its VSIX separately; it is not installed with the main program or merged into `master`.
+This branch includes the experimental [CodeX TSC extension](tsc-vscode/README.en.md) for TSC syntax highlighting, error checking and GSC compilation.
+Build its VSIX separately; it is not installed with the main program or merged into `master`.
 
 ## Help and documentation
 

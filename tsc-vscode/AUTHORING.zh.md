@@ -2,6 +2,8 @@
 
 [中文](AUTHORING.zh.md) | [English](AUTHORING.en.md) | [Русский](AUTHORING.ru.md) | [日本語](AUTHORING.ja.md)
 
+图形化编辑入口目前停用。本文记录保留的实现；运行图形测试工具前需恢复编辑入口与前端打包。插件现有用法见 [README](README.zh.md)。
+
 [使用说明](README.zh.md)
 
 ## 源码契约
@@ -58,7 +60,7 @@ Forest 配置保留 `legacy-28 / early`；gosub 只有场景号，bgm_on 末尾�
 ## 验证边界
 
 Node 测试覆盖源码保留、Unicode、条件/选择、原生事件、路径保护、构建失败和预览偏移；
-`test/host.js` 用实际 VS Code 扩展宿主检查诊断、图形页、SevenBridge 构建与源码切换。
+`test/host.js` 用实际 VS Code 扩展宿主检查诊断与 GSC 编译。
 `test/browser.js` 通过真实 provider 与本机编译器驱动前端，素材和脚本均为隔离测试数据。
 不把这些检查等同原游戏游玩；原生 Windows 路径、实际文字效果和完整故事仍需人工验收。
 

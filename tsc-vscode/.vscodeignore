@@ -4,3 +4,8 @@ webview/**
 build.js
 package-lock.json
 **/*.vsix
+dist/**
+src/authoring.js
+src/graph.js
+src/project.js
+src/preview.js

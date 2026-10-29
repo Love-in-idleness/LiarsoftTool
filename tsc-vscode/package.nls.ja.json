@@ -1,5 +1,5 @@
 {
-  "description": "Forest/SevenBridge 向けの TSC グラフ編集、構文強調、検証と GSC コンパイル。",
+  "description": "TSC の構文強調、エラーチェックと GSC コンパイル。",
   "graph": "シナリオグラフを開く", "newProject": "TSC プロジェクトを新規作成", "newScene": "シーンを新規作成", "buildProject": "TSC プロジェクトをビルド",
   "importAsset": "素材を追加", "addVariable": "名前付き変数を追加", "addCharacter": "キャラクターを追加", "projectSettings": "プロジェクト設定を開く",
   "trust": "制限モードでは構文強調のみ利用できます。検証とコンパイルにはワークスペースの信頼が必要です。",

@@ -33,6 +33,7 @@ async function run() {
     assert.equal(vscode.languages.getDiagnostics(doc.uri).length, 0);
     await vscode.commands.executeCommand('liarsofttool.compileTsc');
     assert.equal((await fs.readFile(path.join(directory, '中文 path', 'output', 'scene.gsc'))).readUInt32LE(4), 36);
+    /* Graphical authoring is disabled.
     const resources = path.join(directory, 'resources'); await fs.mkdir(resources, { recursive: true });
     const project = await require('../src/project').createProject(path.join(directory, 'sevenbridge-' + process.pid), 'sevenbridge', resources, 2001);
     const scene = vscode.Uri.file(path.join(project.root, 'scr', '2001.tsc'));
@@ -42,6 +43,7 @@ async function run() {
     assert.equal((await fs.readFile(path.join(project.root, 'build', 'scr', '2001.gsc'))).readUInt32LE(4), 36);
     await vscode.commands.executeCommand('vscode.openWith', scene, 'default');
     assert(vscode.window.activeTextEditor.document.uri.toString() === scene.toString());
-    console.log('OK: actual VS Code extension host, diagnostics, compilation, SevenBridge graph/build/source switch; language=' + language);
+    */
+    console.log('OK: actual VS Code extension host, diagnostics, compilation; language=' + language);
 }
 module.exports = { run };

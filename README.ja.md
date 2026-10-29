@@ -51,8 +51,8 @@ GSC→TSC は実験的機能です。原 GSC と生成されたラベル・メ�
 
 ## VS Code 拡張
 
-このブランチにはハイライト、検査、コンパイル、物語のグラフィカル編集用の実験的な [CodeX TSC 拡張](tsc-vscode/README.ja.md)があります。
-SevenBridge と Forest のプロファイルを提供します。VSIX は別途ビルドし、主プログラムに同梱されず、`master` にも未統合です。
+このブランチにはTSC の構文強調、エラーチェックと GSC コンパイル用の実験的な [CodeX TSC 拡張](tsc-vscode/README.ja.md)があります。
+VSIX は別途ビルドし、主プログラムに同梱されず、`master` にも未統合です。
 
 ## ヘルプと資料
 

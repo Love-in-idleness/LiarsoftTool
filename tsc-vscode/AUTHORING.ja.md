@@ -2,6 +2,8 @@
 
 [中文](AUTHORING.zh.md) | [English](AUTHORING.en.md) | [Русский](AUTHORING.ru.md) | [日本語](AUTHORING.ja.md)
 
+グラフィカル編集は無効です。本資料は保存されている実装を説明します。グラフィカルテストツールを使うには編集機能とフロントエンドのビルドを戻してください。利用できる機能は [README](README.ja.md) を参照してください。
+
 [利用案内](README.ja.md)
 
 ## ソースの扱い
@@ -55,7 +57,7 @@ Forest は `legacy-28 / early` を保持し、gosub はシーン番号のみ、b
 ## 検証の範囲
 
 Node テストはソース保持、Unicode、条件・選択、イベント、パス保護、失敗時のビルドとプレビュー座標を確認します。
-`test/host.js` は実際の VS Code で診断、グラフ、SevenBridge ビルド、ソースへの切り替えを検証します。
+`test/host.js` は実際の VS Code で診断と GSC コンパイルを検証します。
 `test/browser.js` は本物の provider とコンパイラーを隔離したテストデータで動かします。
 ゲームの通しプレイではありません。ネイティブ Windows のパス、実際の文字組みと物語全体は手動確認が必要です。
 

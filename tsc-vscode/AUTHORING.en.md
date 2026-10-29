@@ -2,6 +2,8 @@
 
 [中文](AUTHORING.zh.md) | [English](AUTHORING.en.md) | [Русский](AUTHORING.ru.md) | [日本語](AUTHORING.ja.md)
 
+Graphical editing is disabled. This reference describes the retained implementation; restore the editor entry point and frontend build before using graphical test tools. See the [README](README.en.md) for available extension features.
+
 [User guide](README.en.md)
 
 ## Source contract
@@ -55,7 +57,7 @@ Evidence: Forest's original 0000/2100 and the core early layout.
 ## Verification boundary
 
 Node tests cover source preservation, Unicode, conditions/choices, events, path protection, failed builds and preview offsets.
-`test/host.js` checks diagnostics, the graph, SevenBridge build and source switching in the real VS Code extension host.
+`test/host.js` checks diagnostics and GSC compilation in the real VS Code extension host.
 `test/browser.js` drives the real provider/compiler with isolated test data.
 These checks are not game playthroughs. Native Windows paths, actual typography and complete story behavior still need manual acceptance.
 

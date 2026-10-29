@@ -18,8 +18,7 @@
   "main": "./src/extension.js",
   "l10n": "./l10n",
   "activationEvents": [
-    "onLanguage:codex-tsc",
-    "onCustomEditor:liarsofttool.graph"
+    "onLanguage:codex-tsc"
   ],
   "extensionKind": [
     "workspace"
@@ -32,14 +31,6 @@
     "virtualWorkspaces": false
   },
   "contributes": {
-    "customEditors": [
-      {
-        "viewType": "liarsofttool.graph",
-        "displayName": "%graph%",
-        "selector": [{ "filenamePattern": "*.tsc" }],
-        "priority": "option"
-      }
-    ],
     "languages": [
       {
         "id": "codex-tsc",
@@ -72,15 +63,7 @@
         "title": "%compile%",
         "category": "CodeX TSC",
         "enablement": "isWorkspaceTrusted"
-      },
-      { "command": "liarsofttool.newTscProject", "title": "%newProject%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted" },
-      { "command": "liarsofttool.newTscScene", "title": "%newScene%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted" },
-      { "command": "liarsofttool.editTscGraph", "title": "%graph%", "category": "CodeX TSC" },
-      { "command": "liarsofttool.buildTscProject", "title": "%buildProject%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted" },
-      { "command": "liarsofttool.importTscAsset", "title": "%importAsset%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted" },
-      { "command": "liarsofttool.addTscVariable", "title": "%addVariable%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted" },
-      { "command": "liarsofttool.addTscCharacter", "title": "%addCharacter%", "category": "CodeX TSC", "enablement": "isWorkspaceTrusted" },
-      { "command": "liarsofttool.tscProjectSettings", "title": "%projectSettings%", "category": "CodeX TSC" }
+      }
     ],
     "configuration": {
       "title": "CodeX TSC",
