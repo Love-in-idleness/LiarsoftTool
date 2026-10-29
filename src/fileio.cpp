@@ -62,7 +62,7 @@ namespace {
 
 // Returns true when the file at `path` exists and its binary content is
 // exactly `data[0..size)`.
-bool fileMatches(const std::string& path, const uint8_t* data, size_t size) {
+bool fileMatches(const std::filesystem::path& path, const uint8_t* data, size_t size) {
     std::ifstream in(path, std::ios::binary);
     if (!in) return false;
 
@@ -85,7 +85,7 @@ bool fileMatches(const std::string& path, const uint8_t* data, size_t size) {
     return true;
 }
 
-void installFile(const std::string& path, const uint8_t* data, size_t size) {
+void installFile(const std::filesystem::path& path, const uint8_t* data, size_t size) {
     namespace fs = std::filesystem;
     fs::path target(path);
     // Follow existing symlinks like the previous stream writer.
@@ -95,22 +95,22 @@ void installFile(const std::string& path, const uint8_t* data, size_t size) {
         if (!fs::is_regular_file(status) ||
             (status.permissions() & (fs::perms::owner_write | fs::perms::group_write |
                                      fs::perms::others_write)) == fs::perms::none)
-            throw std::runtime_error("Cannot write file: " + path);
+            throw std::runtime_error("Cannot write file: " + path.u8string());
         // Replacement must not bypass the target's existing write permissions/ACL.
 #ifdef _WIN32
         const auto probe = CreateFileW(target.c_str(), GENERIC_WRITE,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (probe == INVALID_HANDLE_VALUE)
-            throw std::system_error(GetLastError(), std::system_category(), "Cannot write: " + path);
+            throw std::system_error(GetLastError(), std::system_category(), "Cannot write: " + path.u8string());
         if (!CloseHandle(probe))
-            throw std::system_error(GetLastError(), std::system_category(), "Cannot close: " + path);
+            throw std::system_error(GetLastError(), std::system_category(), "Cannot close: " + path.u8string());
 #else
         const int probe = ::open(target.c_str(), O_WRONLY);
         if (probe < 0)
-            throw std::system_error(errno, std::generic_category(), "Cannot write: " + path);
+            throw std::system_error(errno, std::generic_category(), "Cannot write: " + path.u8string());
         if (::close(probe) != 0)
-            throw std::system_error(errno, std::generic_category(), "Cannot close: " + path);
+            throw std::system_error(errno, std::generic_category(), "Cannot close: " + path.u8string());
 #endif
     }
     static std::atomic<uint64_t> sequence{0};
@@ -128,9 +128,9 @@ void installFile(const std::string& path, const uint8_t* data, size_t size) {
 #endif
         if (fd >= 0) break;
         if (errno != EEXIST)
-            throw std::system_error(errno, std::generic_category(), "Cannot create temporary file for: " + path);
+            throw std::system_error(errno, std::generic_category(), "Cannot create temporary file for: " + path.u8string());
     }
-    if (fd < 0) throw std::runtime_error("Cannot create temporary file for: " + path);
+    if (fd < 0) throw std::runtime_error("Cannot create temporary file for: " + path.u8string());
     FILE* output = nullptr;
     try {
         // Apply existing permissions before any content reaches the temporary file.
@@ -140,18 +140,18 @@ void installFile(const std::string& path, const uint8_t* data, size_t size) {
 #else
         output = fdopen(fd, "wb");
 #endif
-        if (!output) throw std::system_error(errno, std::generic_category(), "Cannot open temporary stream: " + path);
+        if (!output) throw std::system_error(errno, std::generic_category(), "Cannot open temporary stream: " + path.u8string());
         fd = -1; // The stream owns the descriptor.
         if ((size && std::fwrite(data, 1, size, output) != size) || std::fflush(output) != 0)
-            throw std::system_error(errno, std::generic_category(), "Failed to write: " + path);
+            throw std::system_error(errno, std::generic_category(), "Failed to write: " + path.u8string());
         const auto closed = std::fclose(output);
         output = nullptr;
         if (closed != 0)
-            throw std::system_error(errno, std::generic_category(), "Failed to close: " + path);
+            throw std::system_error(errno, std::generic_category(), "Failed to close: " + path.u8string());
 #ifdef _WIN32
         // Same-volume replacement only: never fall back to copy/delete.
         if (!MoveFileExW(temporary.c_str(), target.c_str(), MOVEFILE_REPLACE_EXISTING))
-            throw std::system_error(GetLastError(), std::system_category(), "Failed to replace: " + path);
+            throw std::system_error(GetLastError(), std::system_category(), "Failed to replace: " + path.u8string());
 #else
         fs::rename(temporary, target);
 #endif
@@ -183,6 +183,12 @@ bool writeFileIfChanged(const std::string& path, const uint8_t* data, size_t siz
 
 bool writeFileIfChanged(const std::string& path, const std::vector<uint8_t>& data) {
     return writeFileIfChanged(path, data.data(), data.size());
+}
+
+bool writePathIfChanged(const std::filesystem::path& path, const std::vector<uint8_t>& data) {
+    if (fileMatches(path, data.data(), data.size())) return false;
+    installFile(path, data.data(), data.size());
+    return true;
 }
 
 bool writeTextFileIfChanged(const std::string& path, const std::string& text) {

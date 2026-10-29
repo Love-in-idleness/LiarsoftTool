@@ -26,6 +26,9 @@ bool writeFileIfChanged(const std::string& path, const uint8_t* data, size_t siz
 /// Convenience overload for byte buffers.
 bool writeFileIfChanged(const std::string& path, const std::vector<uint8_t>& data);
 
+/// Unicode filesystem-path variant, without converting paths through Windows ACP.
+bool writePathIfChanged(const std::filesystem::path& path, const std::vector<uint8_t>& data);
+
 /// Text-mode variant: like writeFileIfChanged, but the content is written in
 /// text mode (on Windows every '\n' becomes "\r\n", matching a plain
 /// std::ofstream) and the comparison accounts for that translation, so

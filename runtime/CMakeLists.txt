@@ -10,7 +10,7 @@ set(LIARSOFT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
 option(RSCRIPT_BUILD_GAME_MODULES "Build the resource and text modules" ON)
 set(RSCRIPT_WINE "" CACHE FILEPATH "Wine executable for Windows cross-built tests")
 include_directories(include src "${LIARSOFT_ROOT}/include")
-add_library(rscript_kinsoku STATIC src/kinsoku.cpp)
+add_library(rscript_kinsoku STATIC "${LIARSOFT_ROOT}/src/kinsoku.cpp")
 configure_file(kinsoku.json kinsoku.json COPYONLY)
 
 if(RSCRIPT_BUILD_GAME_MODULES AND NOT TARGET liarsofttool_core)
@@ -25,6 +25,9 @@ if(RSCRIPT_BUILD_GAME_MODULES AND NOT TARGET liarsofttool_core)
     find_library(VORBIS_LIBRARY vorbis REQUIRED)
     find_library(OGG_LIBRARY ogg REQUIRED)
     add_library(liarsofttool_core STATIC
+        ${LIARSOFT_ROOT}/src/kinsoku.cpp
+        ${LIARSOFT_ROOT}/src/pe_image.cpp
+        ${LIARSOFT_ROOT}/src/kinsoku_match.cpp
         ${LIARSOFT_ROOT}/src/bigendian.cpp ${LIARSOFT_ROOT}/src/encoding.cpp
         ${LIARSOFT_ROOT}/src/fileio.cpp ${LIARSOFT_ROOT}/src/gscfile.cpp
         ${LIARSOFT_ROOT}/src/transfile.cpp
@@ -57,15 +60,15 @@ if(RSCRIPT_BUILD_GAME_MODULES)
     target_link_libraries(rscript_native_kinsoku PUBLIC rscript_unicode rscript_kinsoku)
 endif()
 
-add_library(rscript_pe STATIC src/pe_image.cpp)
 if(RSCRIPT_BUILD_GAME_MODULES)
-    target_link_libraries(rscript_pe PUBLIC liarsofttool_core)
+    add_library(rscript_pe INTERFACE)
+    target_link_libraries(rscript_pe INTERFACE liarsofttool_core)
     target_link_libraries(rscript_unicode PUBLIC rscript_pe)
     if(WIN32)
         target_link_libraries(rscript_unicode PUBLIC bcrypt)
     endif()
 else()
-    target_sources(rscript_pe PRIVATE ${LIARSOFT_ROOT}/src/fileio.cpp)
+    add_library(rscript_pe STATIC "${LIARSOFT_ROOT}/src/pe_image.cpp" "${LIARSOFT_ROOT}/src/fileio.cpp")
 endif()
 add_library(rscript_preflight STATIC src/preflight.cpp)
 target_link_libraries(rscript_preflight PUBLIC rscript_pe rscript_kinsoku)

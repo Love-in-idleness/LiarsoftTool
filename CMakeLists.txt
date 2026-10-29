@@ -117,6 +117,9 @@ endif()
 
 # Compile the conversion core once for the CLI, GUI and test executables.
 add_library(liarsofttool_core STATIC
+    src/pe_image.cpp
+    src/kinsoku.cpp
+    src/kinsoku_match.cpp
     src/archive_index.cpp
     src/resource_preview.cpp
     src/conversion.cpp

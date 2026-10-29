@@ -56,6 +56,12 @@ PeImage::PeImage(std::vector<uint8_t> bytes) : bytes_(std::move(bytes)) {
                 section.rva < uint64_t(prior.rva) + std::max(prior.rawSize, prior.virtualSize) &&
                 prior.rva < uint64_t(section.rva) + span)
                 throw std::runtime_error("Overlapping PE sections");
+        if (section.rawSize && section.offset < headers_)
+            throw std::runtime_error("PE section overlaps file headers");
+        for (const auto& prior : sections)
+            if (section.rawSize && prior.rawSize && section.offset < uint64_t(prior.offset) + prior.rawSize &&
+                prior.offset < uint64_t(section.offset) + section.rawSize)
+                throw std::runtime_error("Overlapping PE file sections");
         sections.push_back(std::move(section));
     }
 }
