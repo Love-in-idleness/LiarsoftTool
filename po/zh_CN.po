@@ -91,14 +91,8 @@ msgstr "最新版本"
 msgid "Output directory"
 msgstr "输出目录"
 
-msgid "Reference GSC"
-msgstr "参考 GSC"
-
 msgid "Select input"
 msgstr "选择输入"
-
-msgid "Preferences"
-msgstr "首选项"
 
 msgid "Appearance and language"
 msgstr "外观与语言"
@@ -157,9 +151,6 @@ msgstr "与输入相同"
 msgid "Choose…"
 msgstr "选择…"
 
-msgid "Reference GSC for TXT"
-msgstr "TXT 导入参考 GSC"
-
 msgid "Check for updates"
 msgstr "检查更新"
 
@@ -180,9 +171,6 @@ msgstr "清空"
 
 msgid "Convert all"
 msgstr "全部转换"
-
-msgid "Could not read preferences"
-msgstr "无法读取首选项"
 
 msgid "Resources"
 msgstr "资源浏览"
@@ -431,3 +419,24 @@ msgstr "控件文字"
 
 msgid "External RsInit configuration can override the embedded window title"
 msgstr "外部 RsInit 配置可能覆盖内嵌窗口标题"
+
+msgid "Experimental features"
+msgstr "实验性功能"
+
+msgid "TXT imports use the same-name GSC in the TXT file's folder."
+msgstr "TXT 导入自动使用同目录下的同名 GSC 文件。"
+
+msgid "Settings"
+msgstr "设置"
+
+msgid "Help"
+msgstr "帮助"
+
+msgid "Report an issue"
+msgstr "问题反馈"
+
+msgid "User guide"
+msgstr "软件使用说明"
+
+msgid "Could not read settings"
+msgstr "无法读取设置"

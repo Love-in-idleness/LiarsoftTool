@@ -6,7 +6,7 @@ Edit font charsets, embedded text and line-break rules in recognized CodeX RScri
 
 ## Use
 
-Enable **EXE editor (experimental)** in Preferences and open the **EXE editor** page.
+Enable **EXE editor (experimental)** in Settings under Experimental features and open the **EXE editor** page.
 
 1. Open an EXE and confirm its text source encoding. Reinspect with an explicit encoding if the text is garbled or uncertain. A `gbk` filename or font charset does not prove that the embedded text was converted.
 2. Select the target encoding. Edit identified window titles, control prompts, error messages and scene captions. Originals remain visible; entries with unverified references are read-only.

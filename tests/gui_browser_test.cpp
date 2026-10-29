@@ -49,7 +49,18 @@ gboolean step(gpointer) {
     try {
         require(std::chrono::steady_clock::now() - started < std::chrono::seconds(25), "browser timed out");
         if (!root) return G_SOURCE_CONTINUE;
-        if (stage == 0) { openPath(b, directory / fs::u8path("资源 archive.xfl")); stage = 1; }
+        if (stage == 0) {
+            auto* home=g_file_new_for_path(g_get_home_dir());
+            for (auto kind:{DialogKind::File,DialogKind::Folder}) {
+                auto* dialog=resourceDialog(kind);
+                require(g_file_equal(gtk_file_dialog_get_initial_folder(dialog),home),"Preview chooser does not start in the home directory");
+                g_object_unref(dialog);
+            }
+            auto* exportDialog=resourceDialog(DialogKind::Export);
+            require(!gtk_file_dialog_get_initial_folder(exportDialog),"Opening location leaked into export");
+            g_object_unref(exportDialog);g_object_unref(home);
+            openPath(b, directory / fs::u8path("资源 archive.xfl")); stage = 1;
+        }
         else if (stage == 1 && b->nodes.size() == 2) {
             require(b->history.size() == 1 && !b->selected, "archive should only read its index");
             enter(0); stage = 2;

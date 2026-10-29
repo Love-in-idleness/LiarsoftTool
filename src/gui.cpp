@@ -24,10 +24,10 @@ struct Job {
 struct Gui {
     GtkWindow* window = nullptr;
     GtkWidget *content, *list, *convert, *status, *progress, *browser = nullptr;
-    GtkWidget *encoding, *reference, *output, *recursive, *packOnly, *unpackOnly, *txt, *vorbis, *workers;
-    GtkWidget *preferencesButton, *updateButton;
+    GtkWidget *encoding, *output, *recursive, *packOnly, *unpackOnly, *txt, *vorbis, *workers;
+    GtkWidget *preferencesButton, *updateButton, *conversionOptions, *navigation;
     GtkWidget *exeEditor = nullptr, *exeToggle = nullptr;
-    AdwViewStackPage* exePage = nullptr;
+    GtkStackPage* exePage = nullptr;
     bool changingExperimental = false;
     AdwDialog* preferencesDialog = nullptr;
     AdwAlertDialog* alert = nullptr;
@@ -69,6 +69,7 @@ static GtkWidget* button(const char* text, GCallback callback, gpointer data = n
     g_signal_connect(widget, "clicked", callback, data);
     return widget;
 }
+static void openLink(const std::string& uri);
 static void report(const char* heading, const std::string& details, bool releases = false) {
     auto* dialog = adw_alert_dialog_new(heading, nullptr);
     ui.alert = ADW_ALERT_DIALOG(dialog);
@@ -96,17 +97,26 @@ static void report(const char* heading, const std::string& details, bool release
             gdk_clipboard_set_text(gtk_widget_get_clipboard(GTK_WIDGET(ui.window)), text);
             g_free(text);
         } else if (std::string(response) == "releases") {
-            GError* error = nullptr;
-            if (!g_app_info_launch_default_for_uri(liarsoft::LatestReleaseUrl, nullptr, &error)) {
-                const std::string message = error->message;
-                g_error_free(error);
-                post([message] { report(_("Could not open the link"), message); });
-            }
+            openLink(liarsoft::LatestReleaseUrl);
         }
         ui.alert = nullptr;
     }), nullptr);
     adw_dialog_present(dialog, GTK_WIDGET(ui.window));
 }
+static void openLink(const std::string& uri) {
+    GError* error = nullptr;
+    if (!g_app_info_launch_default_for_uri(uri.c_str(), nullptr, &error)) {
+        const std::string message = error->message;
+        g_error_free(error);
+        post([message] { report(_("Could not open the link"), message); });
+    }
+}
+static std::string userGuideUrl() {
+    const auto language = liarsoft::gui::effectiveLanguage(ui.preferences.language);
+    return "https://github.com/Love-in-idleness/LiarsoftTool/blob/master/README." +
+        (language == "zh_CN" ? std::string("zh") : language) + ".md";
+}
+constexpr const char* FeedbackUrl = "https://github.com/Love-in-idleness/LiarsoftTool/issues/new/choose";
 static void inputError(const std::exception& error) { report(_("Operation failed"), display(error.what())); }
 static void sensitive() {
     gtk_widget_set_sensitive(ui.content, !ui.busy);
@@ -127,7 +137,7 @@ static gboolean closeWindow(GtkWindow*, gpointer) {
 }
 static liarsoft::conversion::ConversionOptions options() {
     const auto index = gtk_drop_down_get_selected(GTK_DROP_DOWN(ui.encoding));
-    return {index ? liarsoft::supportedEncodings().at(index - 1) : "auto", path(ui.reference),
+    return {index ? liarsoft::supportedEncodings().at(index - 1) : "auto", {},
         active(ui.recursive), !active(ui.txt), active(ui.unpackOnly), active(ui.vorbis),
         static_cast<unsigned>(gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(ui.workers)))};
 }
@@ -248,11 +258,11 @@ static void checkUpdate() {
         });
     } catch (const std::exception& error) { busy(false); inputError(error); }
 }
-enum class Choose { Files, Folder, Output, Reference };
+enum class Choose { Files, Folder, Output };
 static void choose(Choose purpose) {
     auto* dialog = gtk_file_dialog_new();
     gtk_file_dialog_set_title(dialog, purpose == Choose::Output ? _("Output directory") :
-        purpose == Choose::Reference ? _("Reference GSC") : _("Select input"));
+        _("Select input"));
     auto* context = new Choose(purpose);
     auto callback = +[](GObject* object, GAsyncResult* result, gpointer data) {
         const auto purpose = *static_cast<Choose*>(data);
@@ -273,23 +283,20 @@ static void choose(Choose purpose) {
                     append(G_FILE(g_list_model_get_item(files, i)));
                 g_object_unref(files);
             }
-        } else if (purpose == Choose::Reference)
-            append(gtk_file_dialog_open_finish(dialog, result, &error));
-        else append(gtk_file_dialog_select_folder_finish(dialog, result, &error));
+        } else append(gtk_file_dialog_select_folder_finish(dialog, result, &error));
         if (error) {
             if (!g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED) &&
                 !g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) report(_("Operation failed"), error->message);
             g_error_free(error);
         }
         if (!paths.empty()) {
-            if (purpose == Choose::Output || purpose == Choose::Reference)
-                gtk_editable_set_text(GTK_EDITABLE(purpose == Choose::Output ? ui.output : ui.reference), paths[0].c_str());
+            if (purpose == Choose::Output)
+                gtk_editable_set_text(GTK_EDITABLE(ui.output), paths[0].c_str());
             else addFiles(paths);
         }
         g_object_unref(object);
     };
     if (purpose == Choose::Files) gtk_file_dialog_open_multiple(dialog, ui.window, nullptr, callback, context);
-    else if (purpose == Choose::Reference) gtk_file_dialog_open(dialog, ui.window, nullptr, callback, context);
     else gtk_file_dialog_select_folder(dialog, ui.window, nullptr, callback, context);
 }
 static void theme() {
@@ -318,7 +325,7 @@ static GtkWidget* check(AdwPreferencesGroup* group, const char* title) {
 static void buildPreferences() {
     ui.preferencesDialog = ADW_DIALOG(adw_preferences_dialog_new());
     g_object_ref_sink(ui.preferencesDialog);
-    adw_dialog_set_title(ui.preferencesDialog, _("Preferences"));
+    adw_dialog_set_title(ui.preferencesDialog, _("Settings"));
     auto* page = adw_preferences_page_new();
     adw_preferences_dialog_add(ADW_PREFERENCES_DIALOG(ui.preferencesDialog), ADW_PREFERENCES_PAGE(page));
     auto* group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
@@ -342,14 +349,8 @@ static void buildPreferences() {
         ui.preferences.language = values[gtk_drop_down_get_selected(GTK_DROP_DOWN(object))]; savePreferences();
     }), nullptr);
     group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
-    adw_preferences_group_set_title(group, _("Conversion"));
+    adw_preferences_group_set_title(group, _("Experimental features"));
     adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), group);
-    auto* encodings = gtk_string_list_new(nullptr);
-    gtk_string_list_append(encodings, _("Auto (GSC input)"));
-    for (const auto& encoding : liarsoft::supportedEncodings()) gtk_string_list_append(encodings, encoding.c_str());
-    ui.encoding = gtk_drop_down_new(G_LIST_MODEL(encodings), nullptr);
-    addRow(group, _("Resource encoding"), ui.encoding);
-    gtk_widget_set_tooltip_text(ui.encoding, _("Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."));
     ui.exeToggle = check(group, _("EXE editor (experimental)"));
     gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle), ui.preferences.experimentalExe);
     g_signal_connect(ui.exeToggle,"toggled",reinterpret_cast<GCallback>(+[](GtkCheckButton* toggle,gpointer) {
@@ -357,9 +358,9 @@ static void buildPreferences() {
         const bool enabled = gtk_check_button_get_active(toggle);
         auto apply = [enabled] {
             ui.preferences.experimentalExe = enabled;
-            if (ui.exePage) adw_view_stack_page_set_visible(ui.exePage, enabled);
-            if (!enabled && ui.exeEditor && adw_view_stack_get_visible_child(ADW_VIEW_STACK(ui.content)) == ui.exeEditor)
-                adw_view_stack_set_visible_child_name(ADW_VIEW_STACK(ui.content),"tasks");
+            if (ui.exePage) gtk_stack_page_set_visible(ui.exePage, enabled);
+            if (!enabled && ui.exeEditor && gtk_stack_get_visible_child(GTK_STACK(ui.content)) == ui.exeEditor)
+                gtk_stack_set_visible_child_name(GTK_STACK(ui.content),"tasks");
             ui.changingExperimental = true; gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle),enabled); ui.changingExperimental = false;
             savePreferences();
         };
@@ -368,6 +369,32 @@ static void buildPreferences() {
             liarsoft::gui::leaveExeEditor(ui.exeEditor, apply);
         } else apply();
     }),nullptr);
+    group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
+    adw_preferences_group_set_title(group, _("Help"));
+    adw_preferences_page_add(ADW_PREFERENCES_PAGE(page), group);
+    auto* help = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+    ui.updateButton = button(_("Check for updates"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) {
+        adw_dialog_close(ui.preferencesDialog);
+        checkUpdate();
+    }));
+    gtk_box_append(GTK_BOX(help), ui.updateButton);
+    gtk_box_append(GTK_BOX(help), button(_("Report an issue"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) {
+        openLink(FeedbackUrl);
+    })));
+    gtk_box_append(GTK_BOX(help), button(_("User guide"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) {
+        openLink(userGuideUrl());
+    })));
+    adw_preferences_group_add(group, help);
+}
+static GtkWidget* buildConversionOptions() {
+    auto* group = ADW_PREFERENCES_GROUP(adw_preferences_group_new());
+    adw_preferences_group_set_title(group, _("Conversion"));
+    auto* encodings = gtk_string_list_new(nullptr);
+    gtk_string_list_append(encodings, _("Auto (GSC input)"));
+    for (const auto& encoding : liarsoft::supportedEncodings()) gtk_string_list_append(encodings, encoding.c_str());
+    ui.encoding = gtk_drop_down_new(G_LIST_MODEL(encodings), nullptr);
+    addRow(group, _("Resource encoding"), ui.encoding);
+    gtk_widget_set_tooltip_text(ui.encoding, _("Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."));
     ui.recursive = check(group, _("Recursive"));
     ui.packOnly = check(group, _("Pack only"));
     ui.unpackOnly = check(group, _("Unpack only"));
@@ -378,14 +405,14 @@ static void buildPreferences() {
     ui.output = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(ui.output), _("Same as input"));
     addRow(group, _("Output directory"), ui.output, button(_("Choose…"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { choose(Choose::Output); })));
-    ui.reference = gtk_entry_new();
-    addRow(group, _("Reference GSC for TXT"), ui.reference, button(_("Choose…"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { choose(Choose::Reference); })));
-    for (auto* widget : {ui.output, ui.reference})
-        g_signal_connect(widget, "changed", reinterpret_cast<GCallback>(+[](GtkEditable*, gpointer) { updateOutputs(); }), nullptr);
+    g_signal_connect(ui.output, "changed", reinterpret_cast<GCallback>(+[](GtkEditable*, gpointer) { updateOutputs(); }), nullptr);
+    adw_preferences_group_set_description(group, _("TXT imports use the same-name GSC in the TXT file's folder."));
     for (auto* widget : {ui.unpackOnly, ui.txt})
         g_signal_connect(widget, "toggled", reinterpret_cast<GCallback>(+[](GtkCheckButton*, gpointer) { updateOutputs(); }), nullptr);
     g_signal_connect(ui.encoding, "notify::selected", reinterpret_cast<GCallback>(+[](GObject*, GParamSpec*, gpointer) { updateOutputs(); }), nullptr);
+    return GTK_WIDGET(group);
 }
+
 static void activate(GtkApplication* app, gpointer) {
     if (ui.window) { gtk_window_present(ui.window); return; }
     ui.window = GTK_WINDOW(adw_application_window_new(app));
@@ -394,11 +421,9 @@ static void activate(GtkApplication* app, gpointer) {
     g_signal_connect(ui.window, "close-request", G_CALLBACK(closeWindow), nullptr);
     auto* toolbar = ADW_TOOLBAR_VIEW(adw_toolbar_view_new());
     auto* header = ADW_HEADER_BAR(adw_header_bar_new());
-    ui.preferencesButton = button(_("Preferences"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) {
+    ui.preferencesButton = button(_("Settings"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) {
         if (!ui.busy) adw_dialog_present(ui.preferencesDialog, GTK_WIDGET(ui.window));
     }));
-    ui.updateButton = button(_("Check for updates"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { checkUpdate(); }));
-    adw_header_bar_pack_start(header, ui.updateButton);
     adw_header_bar_pack_end(header, ui.preferencesButton);
     adw_toolbar_view_add_top_bar(toolbar, GTK_WIDGET(header));
     adw_application_window_set_content(ADW_APPLICATION_WINDOW(ui.window), GTK_WIDGET(toolbar));
@@ -420,11 +445,8 @@ static void activate(GtkApplication* app, gpointer) {
         sensitive();
     })));
     gtk_box_append(GTK_BOX(actions), button(_("Clear"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { clearFiles(); })));
-    auto* spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0); gtk_widget_set_hexpand(spacer, TRUE);
-    gtk_box_append(GTK_BOX(actions), spacer);
     ui.convert = button(_("Convert all"), reinterpret_cast<GCallback>(+[](GtkButton*, gpointer) { convert(); }));
     gtk_widget_add_css_class(ui.convert, "suggested-action");
-    gtk_box_append(GTK_BOX(actions), ui.convert);
     gtk_box_append(GTK_BOX(ui.content), actions);
     auto* scroll = gtk_scrolled_window_new();
     gtk_widget_set_vexpand(scroll, TRUE);
@@ -434,6 +456,8 @@ static void activate(GtkApplication* app, gpointer) {
     gtk_box_append(GTK_BOX(ui.content), scroll);
     ui.progress = gtk_progress_bar_new();
     gtk_box_append(GTK_BOX(ui.content), ui.progress);
+    gtk_widget_set_halign(ui.convert, GTK_ALIGN_END);
+    gtk_box_append(GTK_BOX(ui.content), ui.convert);
     ui.status = label(_("Ready"));
     gtk_box_append(GTK_BOX(ui.content), ui.status);
     auto* drop = gtk_drop_target_new(GDK_TYPE_FILE_LIST, GDK_ACTION_COPY);
@@ -448,23 +472,34 @@ static void activate(GtkApplication* app, gpointer) {
     }), nullptr);
     gtk_widget_add_controller(ui.content, GTK_EVENT_CONTROLLER(drop));
     buildPreferences();
-    auto* tasks = ui.content;
-    g_object_ref(tasks);
+    auto* queue = ui.content;
+    g_object_ref(queue);
     adw_toolbar_view_set_content(toolbar, nullptr);
-    ui.content = adw_view_stack_new();
-    adw_view_stack_add_titled(ADW_VIEW_STACK(ui.content), tasks, "tasks", _("Conversion tasks"));
-    g_object_unref(tasks);
+    margins(queue, 0);
+    gtk_widget_set_hexpand(queue, TRUE);
+    auto* tasks = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 18);
+    margins(tasks, 18);
+    gtk_box_append(GTK_BOX(tasks), queue);
+    g_object_unref(queue);
+    auto* settings = gtk_scrolled_window_new();
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(settings), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(settings, 380, -1);
+    ui.conversionOptions = buildConversionOptions();
+    gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(settings), ui.conversionOptions);
+    gtk_box_append(GTK_BOX(tasks), settings);
+    ui.content = gtk_stack_new();
+    gtk_stack_add_titled(GTK_STACK(ui.content), tasks, "tasks", _("Conversion tasks"));
     ui.browser = liarsoft::gui::createResourceBrowser(ui.window, GTK_DROP_DOWN(ui.encoding), +[](const std::string& file) {
         addFiles({file});
-        adw_view_stack_set_visible_child_name(ADW_VIEW_STACK(ui.content), "tasks");
+        gtk_stack_set_visible_child_name(GTK_STACK(ui.content), "tasks");
     });
-    adw_view_stack_add_titled(ADW_VIEW_STACK(ui.content), ui.browser, "resources", _("Resources"));
+    gtk_stack_add_titled(GTK_STACK(ui.content), ui.browser, "resources", _("Resources"));
     ui.exeEditor = liarsoft::gui::createExeEditor(ui.window);
-    ui.exePage = adw_view_stack_add_titled(ADW_VIEW_STACK(ui.content), ui.exeEditor, "exe", _("EXE editor"));
-    adw_view_stack_page_set_visible(ui.exePage, ui.preferences.experimentalExe);
-    auto* switcher = adw_view_switcher_new();
-    adw_view_switcher_set_stack(ADW_VIEW_SWITCHER(switcher), ADW_VIEW_STACK(ui.content));
-    adw_header_bar_set_title_widget(header, switcher);
+    ui.exePage = gtk_stack_add_titled(GTK_STACK(ui.content), ui.exeEditor, "exe", _("EXE editor"));
+    gtk_stack_page_set_visible(ui.exePage, ui.preferences.experimentalExe);
+    ui.navigation = gtk_stack_switcher_new();
+    gtk_stack_switcher_set_stack(GTK_STACK_SWITCHER(ui.navigation), GTK_STACK(ui.content));
+    adw_header_bar_set_title_widget(header, ui.navigation);
     adw_toolbar_view_set_content(toolbar, ui.content);
     theme(); sensitive();
     gtk_window_present(ui.window);
@@ -478,10 +513,12 @@ int runGui(int argc, char* argv[]) {
     std::string settingsError;
     try { ui.preferences = liarsoft::gui::loadPreferences(); }
     catch (const std::exception& error) { settingsError = error.what(); }
+    // GTK initializes the process locale; apply the selected language afterwards.
+    adw_init();
     liarsoft::gui::initializeTranslations(liarsoft::gui::effectiveLanguage(ui.preferences.language), argv[0]);
     auto* app = adw_application_new("io.github.LiarsoftTool", G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app, "activate", G_CALLBACK(activate), nullptr);
-    if (!settingsError.empty()) post([settingsError] { report(_("Could not read preferences"), settingsError); });
+    if (!settingsError.empty()) post([settingsError] { report(_("Could not read settings"), settingsError); });
     const int result = g_application_run(G_APPLICATION(app), argc, argv);
     if (ui.worker.joinable()) ui.worker.join();
     if (ui.preferencesDialog) { g_object_unref(ui.preferencesDialog); ui.preferencesDialog = nullptr; }

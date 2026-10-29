@@ -91,14 +91,8 @@ msgstr "Последняя версия"
 msgid "Output directory"
 msgstr "Каталог вывода"
 
-msgid "Reference GSC"
-msgstr "Исходный GSC"
-
 msgid "Select input"
 msgstr "Выберите файлы"
-
-msgid "Preferences"
-msgstr "Параметры"
 
 msgid "Appearance and language"
 msgstr "Оформление и язык"
@@ -128,7 +122,7 @@ msgid "Resource encoding"
 msgstr "Кодировка ресурсов"
 
 msgid "Auto (GSC input)"
-msgstr "Авто (входной GSC)"
+msgstr "Авто (GSC)"
 
 msgid "Auto detects GSC input. Choose an explicit encoding for packing or GSC output. Archive names and other legacy text use CP932 in auto mode."
 msgstr "Авто определяет кодировку входного GSC. Для упаковки или создания GSC выберите конкретную кодировку. Имена в архивах и прочий устаревший текст в режиме авто используют CP932."
@@ -157,9 +151,6 @@ msgstr "Рядом с исходным файлом"
 msgid "Choose…"
 msgstr "Выбрать…"
 
-msgid "Reference GSC for TXT"
-msgstr "Исходный GSC для TXT"
-
 msgid "Check for updates"
 msgstr "Проверить обновления"
 
@@ -180,9 +171,6 @@ msgstr "Очистить"
 
 msgid "Convert all"
 msgstr "Преобразовать всё"
-
-msgid "Could not read preferences"
-msgstr "Не удалось прочитать параметры"
 
 msgid "Resources"
 msgstr "Ресурсы"
@@ -431,3 +419,24 @@ msgstr "Текст элемента управления"
 
 msgid "External RsInit configuration can override the embedded window title"
 msgstr "Внешние настройки RsInit могут заменить встроенный заголовок окна"
+
+msgid "Experimental features"
+msgstr "Экспериментальные функции"
+
+msgid "TXT imports use the same-name GSC in the TXT file's folder."
+msgstr "Для импорта TXT используется одноимённый GSC в той же папке."
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Help"
+msgstr "Помощь"
+
+msgid "Report an issue"
+msgstr "Сообщить о проблеме"
+
+msgid "User guide"
+msgstr "Руководство пользователя"
+
+msgid "Could not read settings"
+msgstr "Не удалось прочитать настройки"

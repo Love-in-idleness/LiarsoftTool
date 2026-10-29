@@ -32,6 +32,7 @@ Japanese usually uses CP932 and Chinese patches GBK. GSC compilation, packing, a
 ## Browsing and previews
 
 Resource browsing opens folders, XFL, LWG, and nested archives without unpacking them first.
+The file and folder pickers start in your home directory.
 Select an entry to view images, play audio, read text, display GSC as read-only TSC, or inspect paged hexadecimal bytes.
 Images support zoom and transparent backgrounds; audio supports pause, seeking, and volume.
 Change encoding for garbled text; TSC always uses UTF-8.
@@ -39,14 +40,16 @@ Change encoding for garbled text; TSC always uses UTF-8.
 Browsing does not modify inputs. Export raw bytes does not convert formats.
 To convert an archive entry, export it first and add it to Conversion tasks.
 
-Preferences hold conversion options, system/light/dark themes, and interface language.
+Conversion options are directly available on the right of the Conversion tasks page.
+Settings contains system/light/dark themes, interface language, a separate Experimental features group,
+and actions for update checks, issue reporting and the user guide.
 The UI supports Chinese, English, Russian, and Japanese, defaulting to the system language.
 A manual language change takes effect after restart.
 Update checks are manual and open the release page; no automatic download or installation occurs.
 
 ## Editing scripts
 
-- TXT: enter translations after `>` and rebuild using the original GSC as a reference.
+- TXT: enter translations after `>`. The GUI uses the same-name `.gsc` beside the TXT, such as `scene.gsc` for `scene.txt`.
 - TSC: edit complete commands and text, then compile with the target game's encoding. TSC itself is UTF-8.
 
 GSC→TSC is experimental. Keep the original GSC and generated labels and metadata.
@@ -55,7 +58,7 @@ See the [TSC reference](docs/GSC_OPCODE_REFERENCE.en.md) for commands.
 
 ## EXE editor (experimental)
 
-Enable it in Preferences to use a separate page for font charsets, window titles, control prompts, scene captions and line-break rules.
+Enable it in Settings under Experimental features to use a separate page for font charsets, window titles, control prompts, scene captions and line-break rules.
 Long translations produce a separate EXE; unverified entries are read-only. Font charset changes do not change the Windows system locale.
 See the [EXE editor guide](docs/EXE_EDITOR.en.md); CLI inspection and editing options are listed by `liarsofttool -h`.
 

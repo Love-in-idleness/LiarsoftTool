@@ -328,10 +328,19 @@ void openPath(Browser* b, const fs::path& file) {
     catch (const std::exception& error) { gtk_label_set_text(GTK_LABEL(b->status), message(error).c_str()); }
 }
 enum class DialogKind { File, Folder, Export };
-void chooseResource(Browser* b, DialogKind kind) {
-    if (kind == DialogKind::Export && (!b->selected || !b->selected->source || b->writes)) return;
+GtkFileDialog* resourceDialog(DialogKind kind) {
     auto* dialog = gtk_file_dialog_new();
     gtk_file_dialog_set_title(dialog, kind == DialogKind::Export ? B_("Export original bytes") : B_("Open resource"));
+    if (kind != DialogKind::Export) {
+        auto* home = g_file_new_for_path(g_get_home_dir());
+        gtk_file_dialog_set_initial_folder(dialog, home);
+        g_object_unref(home);
+    }
+    return dialog;
+}
+void chooseResource(Browser* b, DialogKind kind) {
+    if (kind == DialogKind::Export && (!b->selected || !b->selected->source || b->writes)) return;
+    auto* dialog = resourceDialog(kind);
     struct Context { GtkWidget* root; DialogKind kind; std::optional<Node> node; };
     auto* context = new Context{GTK_WIDGET(g_object_ref(b->root)), kind, b->selected};
     if (kind == DialogKind::Export) gtk_file_dialog_set_initial_name(dialog, fs::u8path(b->selected->name).filename().u8string().c_str());

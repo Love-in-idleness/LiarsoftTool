@@ -94,14 +94,8 @@ msgstr "最新"
 msgid "Output directory"
 msgstr "出力ディレクトリ"
 
-msgid "Reference GSC"
-msgstr "参照 GSC"
-
 msgid "Select input"
 msgstr "入力を選択"
-
-msgid "Preferences"
-msgstr "設定"
 
 msgid "Appearance and language"
 msgstr "外観と言語"
@@ -160,9 +154,6 @@ msgstr "入力と同じ場所"
 msgid "Choose…"
 msgstr "選択…"
 
-msgid "Reference GSC for TXT"
-msgstr "TXT の参照 GSC"
-
 msgid "Check for updates"
 msgstr "更新を確認"
 
@@ -183,9 +174,6 @@ msgstr "一覧を消去"
 
 msgid "Convert all"
 msgstr "すべて変換"
-
-msgid "Could not read preferences"
-msgstr "設定を読み込めませんでした"
 
 msgid "Resources"
 msgstr "リソース"
@@ -411,3 +399,24 @@ msgstr "コントロールのテキスト"
 
 msgid "External RsInit configuration can override the embedded window title"
 msgstr "外部の RsInit 設定により埋め込みウィンドウタイトルが上書きされる場合があります"
+
+msgid "Experimental features"
+msgstr "実験的機能"
+
+msgid "TXT imports use the same-name GSC in the TXT file's folder."
+msgstr "TXT の読み込みには同じフォルダー内の同名 GSC を使用します。"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "Help"
+msgstr "ヘルプ"
+
+msgid "Report an issue"
+msgstr "不具合を報告"
+
+msgid "User guide"
+msgstr "使い方"
+
+msgid "Could not read settings"
+msgstr "設定を読み込めませんでした"

@@ -1,6 +1,8 @@
 // Exercise production callbacks, with isolated configuration and no player data.
 #include "../src/gui.cpp"
 #include "fileio.h"
+#include "gsc_decompiler.h"
+#include "gscfile.h"
 #include <chrono>
 #include <filesystem>
 #include <stdexcept>
@@ -17,6 +19,11 @@ gboolean tick(gpointer) {
     try {
         require(std::chrono::steady_clock::now() - started < std::chrono::seconds(20), "GUI timeout");
         if (!ui.window) return G_SOURCE_CONTINUE;
+        if (const auto* language=g_getenv("LIARSOFT_GUI_TEST_LANGUAGE")) {
+            const std::string expected=std::string(language)=="zh_CN"?"设置":std::string(language)=="ru"?"Настройки":std::string(language)=="ja"?"設定":"Settings";
+            require(_("Settings")==expected,"GTK initialization reset the selected interface language");
+        }
+
         const auto input = directory / "scene.tsc";
         if (stage == 0) {
             if (const char* destination = g_getenv("LIARSOFT_GUI_CAPTURE")) {
@@ -30,11 +37,31 @@ gboolean tick(gpointer) {
                 require(gdk_texture_save_to_png(texture, destination), "window capture failed");
                 g_object_unref(texture); gsk_render_node_unref(node); g_object_unref(paintable);
             }
-            require(!ui.preferences.experimentalExe && !adw_view_stack_page_get_visible(ui.exePage), "EXE editor enabled by default");
+            require(GTK_IS_STACK_SWITCHER(ui.navigation), "Navigation should use text-only tabs");
+            std::function<void(GtkWidget*)> noIcons=[&](GtkWidget* w) {
+                require(!GTK_IS_IMAGE(w) || !gtk_widget_get_visible(w), "Navigation has a placeholder icon");
+                for (auto* c=gtk_widget_get_first_child(w);c;c=gtk_widget_get_next_sibling(c)) noIcons(c);
+            };
+            noIcons(ui.navigation);
+            require(std::string(gtk_button_get_label(GTK_BUTTON(ui.preferencesButton)))==_("Settings"),"Settings button name differs");
+            require(gtk_widget_get_ancestor(ui.updateButton,ADW_TYPE_PREFERENCES_GROUP) &&
+                !gtk_widget_is_ancestor(ui.updateButton,GTK_WIDGET(ui.window)),"Update action is outside Settings");
+            require(std::string(FeedbackUrl)=="https://github.com/Love-in-idleness/LiarsoftTool/issues/new/choose","Feedback link is incorrect");
+            require(gtk_widget_is_ancestor(ui.encoding,ui.conversionOptions) &&
+                gtk_widget_is_ancestor(ui.conversionOptions,GTK_WIDGET(ui.window)) &&
+                !gtk_widget_is_ancestor(ui.encoding,GTK_WIDGET(ui.preferencesDialog)),
+                "Conversion options are not on the main page");
+            auto* experimental=gtk_widget_get_ancestor(ui.exeToggle,ADW_TYPE_PREFERENCES_GROUP);
+            require(experimental && std::string(adw_preferences_group_get_title(ADW_PREFERENCES_GROUP(experimental)))==_("Experimental features") &&
+                !gtk_widget_is_ancestor(ui.exeToggle,ui.conversionOptions),
+                "EXE switch belongs in its own preferences group");
+            require(options().referencePath.empty(), "GUI must use same-folder TXT references");
+            require(!ui.preferences.experimentalExe && !gtk_stack_page_get_visible(ui.exePage), "EXE editor enabled by default");
             gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle), TRUE);
-            require(adw_view_stack_page_get_visible(ui.exePage) && liarsoft::gui::loadPreferences().experimentalExe, "EXE editor preference not saved");
+            noIcons(ui.navigation);
+            require(gtk_stack_page_get_visible(ui.exePage) && liarsoft::gui::loadPreferences().experimentalExe, "EXE editor preference not saved");
             gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.exeToggle), FALSE);
-            require(!adw_view_stack_page_get_visible(ui.exePage) && !liarsoft::gui::loadPreferences().experimentalExe, "EXE editor preference not cleared");
+            require(!gtk_stack_page_get_visible(ui.exePage) && !liarsoft::gui::loadPreferences().experimentalExe, "EXE editor preference not cleared");
             require(options().encoding == "auto" && options().gscToTsc && !options().recursive &&
                 !options().unpackOnly && !active(ui.packOnly) && !options().vorbisInWav &&
                 options().workers == 0, "conversion defaults changed");
@@ -52,6 +79,10 @@ gboolean tick(gpointer) {
             }
             for (auto language : {"en", "ru", "zh_CN", "ja", ""}) {
                 ui.preferences.language = language; savePreferences();
+                if (std::string(language)!="") {
+                    const auto code=std::string(language)=="zh_CN"?"zh":language;
+                    require(userGuideUrl()==std::string("https://github.com/Love-in-idleness/LiarsoftTool/blob/master/README.")+code+".md","Wrong user guide language");
+                }
                 require(liarsoft::gui::loadPreferences().language == language, "language not saved");
             }
             adw_dialog_present(ui.preferencesDialog, GTK_WIDGET(ui.window));
@@ -64,14 +95,22 @@ gboolean tick(gpointer) {
             gtk_check_button_set_active(GTK_CHECK_BUTTON(ui.unpackOnly), FALSE);
             require(ui.jobs[0].output == (directory / "image.wcg").string(), "BMP packing output");
             clearFiles();
-            addFiles({display(input.string())});
+            addFiles({display(input.string()),display((directory/"one/scene.txt").string()),
+                display((directory/"two/scene.txt").string())});
             g_signal_emit_by_name(ui.convert, "clicked");
             require(ui.busy && !gtk_widget_get_sensitive(ui.content) && closeWindow(nullptr, nullptr), "worker does not lock edits/close");
             clearFiles(); addFiles({display(input.string())});
-            require(ui.jobs.size() == 1, "queue changed during conversion");
+            require(ui.jobs.size() == 3, "queue changed during conversion");
             stage = 1;
         } else if (!ui.busy && stage == 1) {
             require(std::filesystem::exists(directory / "scene.gsc"), "conversion produced no GSC");
+            for (auto name:{"one","two"}) {
+                const auto result=liarsoft::GscFile::fromFile((directory/name/"scene.gsc").string(),"CP932");
+                const std::string expected=std::string("translated-")+name;
+                require(std::find(result.strings.begin(),result.strings.end(),expected)!=result.strings.end(),
+                    "TXT import used the wrong reference or failed");
+            }
+
             require(std::string(gtk_label_get_text(GTK_LABEL(ui.jobs[0].status))) == _("OK"), "conversion status");
             require(gtk_widget_get_sensitive(ui.content) && !ui.worker.joinable() && !closeWindow(nullptr, nullptr), "worker not joined/unlocked");
 
@@ -120,23 +159,33 @@ int main(int argc, char** argv) {
             liarsoft::gui::initializeTranslations(language, executable.c_str());
             require(fs::last_write_time(catalog) == modified, "unchanged catalog was rewritten");
         }
-        const std::string expected = language == "ru" ? "Параметры" : language == "zh_CN" ? "首选项" :
-            language == "ja" ? "設定" : "Preferences";
+        const std::string expected = language == "ru" ? "Настройки" : language == "zh_CN" ? "设置" :
+            language == "ja" ? "設定" : "Settings";
         require(language == (std::string(argv[1]).compare(0, 2, "ja") == 0 ? "ja" :
             std::string(argv[1]) == "fr_FR" ? "en" : argv[1]), "system language detection failed");
         const std::string exeExpected = language == "ru" ? "Редактор EXE" : language == "zh_CN" ? "EXE 编辑" :
             language == "ja" ? "EXE 編集" : "EXE editor";
         require(_("EXE editor") == exeExpected, "EXE editor translation not loaded");
-        if (_("Preferences") != expected) {
+        if (_("Settings") != expected) {
             std::cerr << "language=" << language << " locale=" << std::setlocale(LC_MESSAGES, nullptr)
                       << " catalogs=" << bindtextdomain("liarsofttool", nullptr)
-                      << " actual=" << _("Preferences") << " expected=" << expected << '\n';
+                      << " actual=" << _("Settings") << " expected=" << expected << '\n';
             require(false, "gettext language selection failed");
         }
         fs::remove_all(directory); return 0;
     }
+    if (const auto* language=g_getenv("LIARSOFT_GUI_TEST_LANGUAGE")) {
+        liarsoft::gui::Preferences preferences;preferences.language=language;
+        liarsoft::gui::savePreferences(preferences);
+    }
     liarsoft::writeTextFileIfChanged((directory / "scene.tsc").string(),
         ";@gsc-byte-format modern-36\n;@gsc-schema modern\n*end\n");
+    for (auto name:{"one","two"}) {
+        fs::create_directories(directory/name);
+        const std::string source=";@gsc-byte-format modern-36\n;@gsc-schema modern\n*TXT 0 0 0 0 \"\" \"original\" 0\n*end\n";
+        liarsoft::writeFileIfChanged((directory/name/"scene.gsc").string(),liarsoft::restoreGscFromTsc(source,"CP932"));
+        liarsoft::writeTextFileIfChanged((directory/name/"scene.txt").string(),std::string("#original\n>translated-")+name+"\n");
+    }
     g_timeout_add(10, tick, nullptr);
     const int result = runGui(argc, argv);
     fs::remove_all(directory);
