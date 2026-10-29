@@ -10,7 +10,7 @@
 
 1. 安装 VS Code 1.74 或更新版，以及本分支的 LiarsoftTool；编辑器需要其 `--inspect-tsc` 接口。
 2. 在扩展菜单选择“从 VSIX 安装”，打开本地生成的 VSIX。
-3. 在设置中搜索 `liarsofttool`，填写已安装程序的路径。插件不会自动下载编译器。
+3. 在设置中搜索 `liarsofttool.path`，填写 LiarsoftTool 命令行程序的完整路径：Windows 为 `liarsofttool.exe`，Linux 为 `liarsofttool`。
 
 操作需要信任工作区。远程工作区中的编译器也应安装在远程端。
 受限模式只提供源码高亮，不运行工具。菜单、编辑面板和插件提示跟随 VS Code 的中文、日语、英语或俄语设置；其他语言回退为英语。

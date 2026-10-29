@@ -10,7 +10,7 @@ The extension lives on `codex/tsc-vscode`, not the Marketplace. It does not gene
 
 1. Install VS Code 1.74 or newer and LiarsoftTool from this branch; the editor requires its `--inspect-tsc` interface.
 2. Choose **Install from VSIX** in Extensions and open the locally built VSIX.
-3. Search settings for `liarsofttool` and set the installed executable path. The extension never downloads a compiler.
+3. Search settings for `liarsofttool.path` and enter the full path to the LiarsoftTool command-line program: `liarsofttool.exe` on Windows or `liarsofttool` on Linux.
 
 Operations require Workspace Trust. In a remote workspace, install the compiler on the remote host too.
 Restricted Mode provides source highlighting only. Menus, editor panels and extension messages follow VS Code's Chinese, Japanese, English or Russian setting; other languages fall back to English.

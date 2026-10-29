@@ -4,7 +4,7 @@
   "importAsset": "素材を追加", "addVariable": "名前付き変数を追加", "addCharacter": "キャラクターを追加", "projectSettings": "プロジェクト設定を開く",
   "trust": "制限モードでは構文強調のみ利用できます。検証とコンパイルにはワークスペースの信頼が必要です。",
   "check": "保存済みファイルを検証", "compile": "保存済みファイルを GSC にコンパイル",
-  "path": "インストール済み LiarsoftTool。PATH にない場合は絶対パスを指定してください。自動ダウンロードはしません。",
-  "encoding": "検証とコンパイルに使用するゲームの出力エンコーディングです。TSC ソースは UTF-8 です。",
-  "output": "GSC 出力先。絶対パスまたは TSC からの相対パス。空欄では TSC の隣に出力し、既存 GSC を置換する場合があります。"
+  "path": "LiarsoftTool コマンドラインプログラムの絶対パスを入力します。例：C:\\Tools\\LiarsoftTool\\liarsofttool.exe または /usr/local/bin/liarsofttool。",
+  "encoding": "GSC の文字コードです。対象のゲームで使用する文字コードを選択してください。",
+  "output": "コンパイルした GSC の保存先です。相対パスは TSC のあるフォルダーを基準にします。空欄では同じフォルダーに保存し、既存の同名ファイルを上書きする場合があります。"
 }
