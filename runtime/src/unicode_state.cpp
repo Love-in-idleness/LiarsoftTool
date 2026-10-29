@@ -1,6 +1,7 @@
 #include "unicode_state.h"
 #include "pe_image.h"
 #include "archive_index.h"
+#include "resource_provider.h"
 #include "fileio.h"
 #include <algorithm>
 #include <cctype>
@@ -41,15 +42,21 @@ void archive(const ResourceSource& source, const std::string& name, GlyphTokens&
         } catch (const std::exception& error) { report(callbacks, label, error); }
     }
 }
-void scripts(const fs::path& root, GlyphTokens& tokens, const ScanCallbacks& callbacks) {
+void scripts(const fs::path& root, GlyphTokens& tokens, const ScanCallbacks& callbacks, bool overrides) {
     for (const auto& item : fs::recursive_directory_iterator(root)) {
         const auto name = item.path().u8string();
         if (callbacks.progress) callbacks.progress(name);
         try {
             if (!item.is_regular_file()) continue;
             const auto ext = extension(item.path());
-            if (ext == ".gsc") reserveNativeGsc(readFile(item.path()), tokens);
-            else if (ext == ".xfl") archive(ResourceSource(item.path()), name, tokens, callbacks, 0);
+            if (ext == ".gsc") {
+                // A shadowed legacy file is not CP932 input to the Unicode renderer.
+                if (overrides) {
+                    const auto selected = selectResource(root, item.path().lexically_relative(root), ResourceKind::Script);
+                    if (selected && extension(*selected) == ".tsc") continue;
+                }
+                reserveNativeGsc(readFile(item.path()), tokens);
+            } else if (ext == ".xfl") archive(ResourceSource(item.path()), name, tokens, callbacks, 0);
         } catch (const std::exception& error) { report(callbacks, name, error); }
     }
 }
@@ -60,7 +67,7 @@ void reserveOriginalText(const fs::path& game, const fs::path& root, GlyphTokens
     const auto original = fs::canonical(fs::absolute(game).parent_path());
     for (const auto& directory : {original, fs::canonical(root)}) {
         if (directory != original && fs::equivalent(directory, original)) continue;
-        try { scripts(directory, tokens, callbacks); }
+        try { scripts(directory, tokens, callbacks, directory != original); }
         catch (const std::exception& error) { report(callbacks, directory.u8string(), error); }
         if (directory == original && fs::equivalent(root, original)) break;
     }

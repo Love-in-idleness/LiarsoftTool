@@ -165,6 +165,7 @@ int main() {
             return liarsoft::restoreGscFromTsc(script(liarsoft::convertEncoding(nativeText(low), "CP932", "UTF-8", true)), "CP932");
         };
         write(options.game.parent_path() / "original.gsc", nativeScript(0x40));
+        write(options.game.parent_path() / "original.tsc", script(u8"简"));
         liarsoft::XflArchive nested; nested.encoding = "CP932";
         nested.entries = {{"inside.gsc", nativeScript(0x41)}};
         liarsoft::XflArchive outer; outer.encoding = "CP932";
@@ -175,6 +176,28 @@ int main() {
         GlyphTokens scanned;
         reserveOriginalText(options.game, options.root, scanned);
         require(scanned.measure({}).reserved == 3, "Startup scanner missed native reserved slots");
+        // The provider chooses TSC over a same-name legacy override, including mixed-case names.
+        write(options.root / "shadowed.gsc", nativeScript(0x43));
+        write(options.root / "SHADOWED.TSC", script(u8"简"));
+        write(options.root / "fallback.gsc", nativeScript(0x44));
+        GlyphTokens selected;
+        reserveOriginalText(options.game,options.root,selected);
+        require(selected.measure({}).reserved==4,"Shadowed GSC consumed glyph slots or a live GSC was skipped");
+        require(selected.encode(u8"简")!=nativeText(0x44),"Unicode allocation collided with an active legacy override");
+        // Unused malformed GSC must not prevent the valid TSC replacement from loading.
+        write(options.root / "shadowed.gsc", "unused malformed legacy bytes");
+        GlyphTokens malformedShadow;
+        reserveOriginalText(options.game,options.root,malformedShadow);
+        require(malformedShadow.measure({}).reserved==4,"Ignored malformed GSC changed native reservations");
+        // Retain reservations in historical dictionaries instead of reinterpreting old saves.
+        GlyphTokens historyReservations;
+        historyReservations.reserveNative(nativeText(0x43));
+        const auto existing=dictionaryBytes("reservation history",historyReservations);
+        GlyphTokens withHistory;
+        restoreDictionary(existing,"reservation history",withHistory);
+        reserveOriginalText(options.game,options.root,withHistory);
+        require(withHistory.measure({}).reserved==5,"Native history reservations were discarded");
+
         write(options.game.parent_path() / "damaged.xfl", "broken archive");
         report = checkCompatibility(options, true);
         require(!report.complete && !report.ok() && !report.capacityKnown, "Incomplete reservation scan reported success");

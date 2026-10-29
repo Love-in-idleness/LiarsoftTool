@@ -92,6 +92,9 @@ Japanese, and Russian text. Supplementary characters such as emoji and general c
 Distinct characters outside CP932 share at most 1880 glyph-mapping slots; slots already used by the original game
 reduce the available capacity. Install fonts containing the required characters: successful resource loading does not ensure glyph coverage.
 
+Reservation scanning follows override selection: a loose GSC shadowed by a same-name TSC in the override directory does not consume native reservation slots.
+Original game scripts, EXE static data and historical dictionary reservations remain protected; existing glyph assignments are not reused to create space.
+
 ### Line-breaking rules
 
 When Unicode is enabled, the launcher reads [kinsoku.json](kinsoku.json) beside its own EXE.
