@@ -10,7 +10,7 @@ void require(bool ok, const char *message) {
     if (!ok)
         throw std::runtime_error(message);
 }
-template <class F> void wait(F condition) {
+template <class F> void wait(F condition, const char *phase) {
     for (unsigned n = 0; n < 2000; ++n) {
         while (g_main_context_iteration(nullptr, FALSE)) {
         }
@@ -18,7 +18,7 @@ template <class F> void wait(F condition) {
             return;
         g_usleep(10000);
     }
-    throw std::runtime_error("EXE GUI timeout");
+    throw std::runtime_error(std::string("EXE GUI timeout: ") + phase);
 }
 int main() {
     const auto root =
@@ -44,7 +44,7 @@ int main() {
         writePathIfChanged(other, modified);
         analyse(e, source, "auto");
         analyse(e, other, "CP932");
-        wait([&] { return e->document.has_value(); });
+        wait([&] { return e->document.has_value(); }, "analysis");
         require(e->document->bytes == modified && e->document->texts.size() == 2,
                 "Stale EXE analysis replaced current data");
         require(!exeEditorDirty(widget), "Loaded EXE marked dirty");
@@ -72,12 +72,14 @@ int main() {
         bool left = false;
         leaveExeEditor(widget, [&] { left = true; });
         require(e->leaveDialog && !left, "Unsaved changes did not prompt");
+        wait([&] { return gtk_widget_get_mapped(GTK_WIDGET(e->leaveDialog)); }, "cancel dialog mapped");
         adw_dialog_force_close(ADW_DIALOG(e->leaveDialog));
-        wait([&] { return !e->leaveDialog; });
+        wait([&] { return !e->leaveDialog; }, "cancel response");
         require(!left && exeEditorDirty(widget), "Cancel discarded changes");
         leaveExeEditor(widget, [&] { left = true; });
+        wait([&] { return gtk_widget_get_mapped(GTK_WIDGET(e->leaveDialog)); }, "discard dialog mapped");
         g_signal_emit_by_name(e->leaveDialog, "response", "discard");
-        wait([&] { return left; });
+        wait([&] { return left; }, "discard response");
         require(!exeEditorDirty(widget), "Discard did not clear unsaved state");
         setText(e->translations[0], "Saved by the GUI with format %s");
         setText(e->start, ";");
@@ -85,7 +87,7 @@ int main() {
         require(changes(e).rules.has_value(), "Rule edits did not enter the shared request");
         save(e, output);
         require(exeEditorWriting(widget), "GUI save is not asynchronous");
-        wait([&] { return !exeEditorWriting(widget) && !exeEditorDirty(widget); });
+        wait([&] { return !exeEditorWriting(widget) && !exeEditorDirty(widget); }, "save");
         const auto saved = inspectExeFile(output);
         require(saved.expandedRules && saved.rules.noLineStart == ";", "GUI did not save expanded rules");
         require(readFile(other) == modified && readFile(source) == fixture.bytes, "GUI changed input EXE");
